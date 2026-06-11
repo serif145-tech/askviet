@@ -172,12 +172,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <div id="chat">
   <div class="chat-header">
     <div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span id="myFlagEmoji" style="font-size:22px">🇹🇷</span>
-        <span style="color:var(--muted);font-size:14px">→</span>
-        <span id="theirFlagEmoji" style="font-size:22px">🇻🇳</span>
-      </div>
-      <div class="chat-title" id="chatTitle" style="display:none"></div>
+      <div class="chat-title" id="chatTitle">🇹🇷 → 🇻🇳</div>
       <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
       <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
         <span class="model-badge active" id="myModelBadge">-</span>
@@ -313,13 +308,7 @@ function start(role) {
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
 
-  // Bayrakları güncelle
-  try{
-    const myFlag = document.getElementById('myFlagEmoji');
-    const theirFlag = document.getElementById('theirFlagEmoji');
-    if(myFlag) myFlag.textContent = role === 'tr' ? '🇹🇷' : '🇻🇳';
-    if(theirFlag) theirFlag.textContent = role === 'tr' ? '🇻🇳' : '🇹🇷';
-  }catch(e){}
+
 
   try{
     const ct=document.getElementById('chatTitle');
