@@ -136,32 +136,33 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   </div>
 
   <div class="setup-card">
-    <div class="setup-label">Model</div>
-    <select class="model-select" id="modelSelect">
-      <optgroup label="OpenAI">
-        <option value="openai:gpt-4o">GPT-4o</option>
-        <option value="openai:gpt-4o-mini">GPT-4o-mini</option>
-      </optgroup>
-      <optgroup label="Google">
-        <option value="gemini:gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
-      </optgroup>
-    </select>
+    <div id="modelArea">
+      <div class="setup-label">Model</div>
+      <select class="model-select" id="modelSelect">
+        <optgroup label="OpenAI">
+          <option value="openai:gpt-4o">GPT-4o</option>
+          <option value="openai:gpt-4o-mini">GPT-4o-mini</option>
+        </optgroup>
+        <optgroup label="Google">
+          <option value="gemini:gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+        </optgroup>
+      </select>
+    </div>
 
-    <div class="setup-label" id="apiLabel">OpenAI API Key</div>
+    <div class="setup-label">OpenAI API Key</div>
     <div class="paste-row">
-      <input class="setup-input" type="password" id="apiKeyInput" placeholder="sk- veya AI...">
+      <input class="setup-input" type="password" id="apiKeyInput" placeholder="sk-...">
       <button class="paste-btn" onclick="pasteKey()">📋 Yapıştır</button>
     </div>
-  </div>
 
-  <div id="ttsKeyArea" style="display:none;width:100%;max-width:340px;background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border);flex-direction:column;gap:12px">
-    <div class="setup-label">Seslendirme için OpenAI Key</div>
+    <div class="setup-label">Gemini API Key</div>
     <div class="paste-row">
-      <input class="setup-input" type="password" id="ttsKeyInput" placeholder="sk-...">
-      <button class="paste-btn" onclick="pasteTtsKey()">📋 Yapıştır</button>
+      <input class="setup-input" type="password" id="geminiKeyInput" placeholder="AIza...">
+      <button class="paste-btn" onclick="pasteGeminiKey()">📋 Yapıştır</button>
     </div>
   </div>
-  <div class="role-cards">
+
+    <div class="role-cards">
     <div class="role-card tr-card" onclick="start('tr')">
       <div class="role-flag">🇹🇷</div>
       <div class="role-name">Türkçe taraf</div>
@@ -242,6 +243,13 @@ function checkPw() {
     document.getElementById('pwscreen').style.display = 'none';
     document.getElementById('setup').style.display = 'flex';
     loadSaved();
+    // Keys zaten kayıtlıysa setup card'ı gizle
+    const savedOai2 = localStorage.getItem('askviet_key');
+    const savedGem2 = localStorage.getItem('askviet_gemini_key');
+    if(savedOai2 && savedGem2) {
+      const card2 = document.querySelector('.setup-card');
+      if(card2) card2.style.display = 'none';
+    }
   } else {
     const err = document.getElementById('pwErr');
     err.style.display = 'block';
@@ -251,19 +259,24 @@ function checkPw() {
 // Daha önce giriş yapıldıysa şifreyi atla
 if (localStorage.getItem('askviet_auth') === '1') {
   document.getElementById('pwscreen').style.display = 'none';
-  document.getElementById('setup').style.display = 'flex';
-  loadSaved();
+  // Keys kayıtlıysa setup'u da atla — direkt rol seçimine geç
+  const savedOai = localStorage.getItem('askviet_key');
+  const savedGem = localStorage.getItem('askviet_gemini_key');
+  if (savedOai && savedGem) {
+    document.getElementById('setup').style.display = 'flex';
+    // Key alanlarını gizle, sadece rol kartları göster
+    const card = document.querySelector('.setup-card');
+    if(card) card.style.display = 'none';
+    loadSaved();
+  } else {
+    document.getElementById('setup').style.display = 'flex';
+    loadSaved();
+  }
 }
 document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
 
 // ── Model değişince label güncelle ────────────────────────────────────────
-document.getElementById('modelSelect').addEventListener('change', e => {
-  const isGemini = e.target.value.startsWith('gemini');
-  document.getElementById('apiLabel').textContent = isGemini ? 'Gemini API Key' : 'OpenAI API Key';
-  document.getElementById('apiKeyInput').placeholder = isGemini ? 'AIza...' : 'sk-...';
-  const ttsArea = document.getElementById('ttsKeyArea');
-  if(ttsArea) ttsArea.style.display = isGemini ? 'flex' : 'none';
-});
+// model change - artık ayrı alanlar var, listener gerekmez
 
 // ── Paste ─────────────────────────────────────────────────────────────────
 async function pasteTtsKey() {
@@ -273,6 +286,10 @@ async function pasteTtsKey() {
   } catch {
     alert('Yapıştırma izni gerekli. Manuel yapıştır.');
   }
+}
+async function pasteGeminiKey() {
+  try { const t=await navigator.clipboard.readText(); document.getElementById('geminiKeyInput').value=t.trim(); }
+  catch { alert('Yapıştırma izni gerekli.'); }
 }
 async function pasteKey() {
   try {
@@ -287,14 +304,14 @@ function loadSaved() {
   const savedKey = localStorage.getItem('askviet_key');
   const savedModel = localStorage.getItem('askviet_model');
   const savedTtsKey = localStorage.getItem('askviet_tts_key');
+  const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-  if (savedTtsKey) document.getElementById('ttsKeyInput').value = savedTtsKey;
+  if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=savedGeminiKey; }
   if (savedModel) {
     document.getElementById('modelSelect').value = savedModel;
     const isGemini = savedModel.startsWith('gemini');
-    document.getElementById('apiLabel').textContent = isGemini ? 'Gemini API Key' : 'OpenAI API Key';
-    const ttsArea = document.getElementById('ttsKeyArea');
-    if(ttsArea) ttsArea.style.display = isGemini ? 'flex' : 'none';
+    // apiLabel kaldırıldı — artık ayrı alanlar var
+
   }
 }
 
@@ -321,14 +338,15 @@ function fbListen(path, cb) {
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 function start(role) {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { alert('API key gir!'); return; }
-  apiKey = key;
-  selectedModel = document.getElementById('modelSelect').value;
-  localStorage.setItem('askviet_key', key);
+  const openaiKey = document.getElementById('apiKeyInput')?.value.trim()||localStorage.getItem('askviet_key')||'';
+  const geminiKey = document.getElementById('geminiKeyInput')?.value.trim()||localStorage.getItem('askviet_gemini_key')||'';
+  if(!openaiKey){alert('OpenAI API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
+  if(!geminiKey){alert('Gemini API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
+  apiKey=openaiKey; // translateText içinde model'e göre seçilecek
+  localStorage.setItem('askviet_key', openaiKey);
+  localStorage.setItem('askviet_gemini_key', geminiKey);
+  selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-4o';
   localStorage.setItem('askviet_model', selectedModel);
-  const ttsKeyVal = document.getElementById('ttsKeyInput')?.value.trim();
-  if(ttsKeyVal) localStorage.setItem('askviet_tts_key', ttsKeyVal);
   myRole = role;
   theirRole = role === 'tr' ? 'vi' : 'tr';
 
@@ -351,6 +369,7 @@ function start(role) {
       if(cs) cs.textContent='Tin nhắn được dịch sang tiếng Thổ';
       if(mi) mi.placeholder='Viết tiếng Việt...';
       try{const sa=document.getElementById('settingsBtnArea');if(sa)sa.style.display='none';}catch(e){}
+  // VI: model alanı setup'ta gizli kalsın
     }
   }catch(e){console.error('start UI error:',e)}
   // boş mesaj metni dile göre
@@ -548,9 +567,10 @@ async function translateText(text, from) {
   const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Türkçe yazan taraf erkektir (Vietnamcada "anh" kullan), Vietnamca yazan taraf kadındır ("em" kullan). Metnin tonunu, üslubunu ve duygusunu birebir yansıt — samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
 
   const [provider, model] = selectedModel.split(':');
+  const useKey = provider==='gemini' ? (localStorage.getItem('askviet_gemini_key')||'') : (localStorage.getItem('askviet_key')||'');
 
   if (provider === 'gemini') {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${useKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -630,7 +650,7 @@ function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶ Ses';i
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
-async function speak(text,target,btn,silent=false){try{await unlockAudio()}catch{}if(!text||!target)return false;if(isSpeaking){stopAudio();return false}const [provider2]=selectedModel.split(':');const key=provider2==='gemini'?(localStorage.getItem('askviet_tts_key')||document.getElementById('ttsKeyInput')?.value.trim()||''):(document.getElementById('apiKeyInput').value.trim());if(!key){console.warn('TTS key yok');return false}const [provider]=selectedModel.split(':');const voice=target==='vi'?'cedar':'nova',speed=target==='vi'?0.93:1,instructions=target==='vi'?'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.':'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';const token=++ttsToken,ck=cacheKey(text,target,'gpt-4o-mini-tts',voice,speed);setSpeakBtn(btn,true);try{let blob=ttsCache.get(ck);if(!blob){if(provider==='gemini'){const base64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(new Blob([text]))});const r=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:{text},voice:{languageCode:target==='vi'?'vi-VN':'tr-TR'},audioConfig:{audioEncoding:'MP3'}})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||r.statusText);blob=await fetch('data:audio/mp3;base64,'+d.audioContent).then(r=>r.blob())}else{ttsAbort=new AbortController();const r=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',signal:ttsAbort.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||r.statusText)}blob=await r.blob()}if(token!==ttsToken)return false;ttsCache.set(ck,blob);if(ttsCache.size>30)ttsCache.delete(ttsCache.keys().next().value)}await playBlob(blob,token,btn,text);return true}catch(e){const em=String(e);if(/abort|iptal/i.test(em))return false;if(silent&&/NotAllowedError|not allowed|autoplay/i.test(em))return false;console.error('TTS hatası:',e);return false}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
+async function speak(text,target,btn,silent=false){try{await unlockAudio()}catch{}if(!text||!target)return false;if(isSpeaking){stopAudio();return false}const key=localStorage.getItem('askviet_key')||'';if(!key){console.warn('TTS key yok');return false}const [provider]=selectedModel.split(':');const voice=target==='vi'?'cedar':'nova',speed=target==='vi'?0.93:1,instructions=target==='vi'?'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.':'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';const token=++ttsToken,ck=cacheKey(text,target,'gpt-4o-mini-tts',voice,speed);setSpeakBtn(btn,true);try{let blob=ttsCache.get(ck);if(!blob){if(provider==='gemini'){const base64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(new Blob([text]))});const r=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:{text},voice:{languageCode:target==='vi'?'vi-VN':'tr-TR'},audioConfig:{audioEncoding:'MP3'}})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||r.statusText);blob=await fetch('data:audio/mp3;base64,'+d.audioContent).then(r=>r.blob())}else{ttsAbort=new AbortController();const r=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',signal:ttsAbort.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||r.statusText)}blob=await r.blob()}if(token!==ttsToken)return false;ttsCache.set(ck,blob);if(ttsCache.size>30)ttsCache.delete(ttsCache.keys().next().value)}await playBlob(blob,token,btn,text);return true}catch(e){const em=String(e);if(/abort|iptal/i.test(em))return false;if(silent&&/NotAllowedError|not allowed|autoplay/i.test(em))return false;console.error('TTS hatası:',e);return false}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
 
 // ── Model Sync ────────────────────────────────────────────────────────────
 const MODEL_PATH = '/rooms/' + ROOM + '/config/models';
@@ -646,6 +666,12 @@ function syncMyModel(model) {
 }
 
 function listenTheirModel() {
+  // VI tarafı: TR'nin seçtiği modeli kullan
+  if(myRole === 'vi') {
+    fbGet(MODEL_PATH + '/tr').then(m => {
+      if(m) { selectedModel=m; localStorage.setItem('askviet_model',m); }
+    });
+  }
   fbListen(MODEL_PATH, event => {
     if (!event || !event.data) return;
     const path = event.path || '/';
