@@ -313,10 +313,12 @@ function start(role) {
   document.getElementById('chat').style.display = 'flex';
 
   // Bayrakları güncelle
-  const myFlag = document.getElementById('myFlagEmoji');
-  const theirFlag = document.getElementById('theirFlagEmoji');
-  if(myFlag) myFlag.textContent = role === 'tr' ? '🇹🇷' : '🇻🇳';
-  if(theirFlag) theirFlag.textContent = role === 'tr' ? '🇻🇳' : '🇹🇷';
+  try{
+    const myFlag = document.getElementById('myFlagEmoji');
+    const theirFlag = document.getElementById('theirFlagEmoji');
+    if(myFlag) myFlag.textContent = role === 'tr' ? '🇹🇷' : '🇻🇳';
+    if(theirFlag) theirFlag.textContent = role === 'tr' ? '🇻🇳' : '🇹🇷';
+  }catch(e){}
 
   if (role === 'tr') {
     document.getElementById('chatTitle').textContent = '🇹🇷 → 🇻🇳';
@@ -330,8 +332,10 @@ function start(role) {
   // boş mesaj metni dile göre
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henüz mesaj yok.<br>İlk mesajı gönder!' : 'Chưa có tin nhắn.<br>Gửi tin nhắn đầu tiên!';},100);
   // model badge
-  const myBadge = document.getElementById('myModelBadge');
-  if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
+  try{
+    const myBadge = document.getElementById('myModelBadge');
+    if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
+  }catch(e){}
   syncMyModel(selectedModel);
   listenTheirModel();
   initChat();
