@@ -198,8 +198,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 <script>
 const DB_URL = 'https://askviet-9c4ea-default-rtdb.asia-southeast1.firebasedatabase.app';
-const MSGS_PATH = '/messages';
-const TYPING_PATH = '/typing';
+const ROOM = 'xK9mP2vL4q';
+const MSGS_PATH = '/rooms/' + ROOM + '/messages';
+const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -533,7 +534,7 @@ function initPWA() {
 initPWA();
 
 // ── Model Sync ────────────────────────────────────────────────────────────
-const MODEL_PATH = '/config/models';
+const MODEL_PATH = '/rooms/' + ROOM + '/config/models';
 const MODEL_NAMES = {
   'openai:gpt-4o': 'GPT-4o',
   'openai:gpt-4o-mini': '4o-mini',
