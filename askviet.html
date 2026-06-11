@@ -177,6 +177,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <span style="color:var(--muted);font-size:14px">→</span>
         <span id="theirFlagEmoji" style="font-size:22px">🇻🇳</span>
       </div>
+      <div class="chat-title" id="chatTitle" style="display:none"></div>
       <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
       <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
         <span class="model-badge active" id="myModelBadge">-</span>
@@ -320,15 +321,20 @@ function start(role) {
     if(theirFlag) theirFlag.textContent = role === 'tr' ? '🇻🇳' : '🇹🇷';
   }catch(e){}
 
-  if (role === 'tr') {
-    document.getElementById('chatTitle').textContent = '🇹🇷 → 🇻🇳';
-    document.getElementById('chatSubtitle').textContent = 'Mesajların Vietnamca çevriliyor';
-    document.getElementById('msgInput').placeholder = 'Türkçe yaz...';
-  } else {
-    document.getElementById('chatTitle').textContent = '🇻🇳 → 🇹🇷';
-    document.getElementById('chatSubtitle').textContent = 'Tin nhắn được dịch sang tiếng Thổ';
-    document.getElementById('msgInput').placeholder = 'Viết tiếng Việt...';
-  }
+  try{
+    const ct=document.getElementById('chatTitle');
+    const cs=document.getElementById('chatSubtitle');
+    const mi=document.getElementById('msgInput');
+    if(role === 'tr'){
+      if(ct) ct.textContent='🇹🇷 → 🇻🇳';
+      if(cs) cs.textContent='Mesajların Vietnamca çevriliyor';
+      if(mi) mi.placeholder='Türkçe yaz...';
+    }else{
+      if(ct) ct.textContent='🇻🇳 → 🇹🇷';
+      if(cs) cs.textContent='Tin nhắn được dịch sang tiếng Thổ';
+      if(mi) mi.placeholder='Viết tiếng Việt...';
+    }
+  }catch(e){console.error('start UI error:',e)}
   // boş mesaj metni dile göre
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henüz mesaj yok.<br>İlk mesajı gönder!' : 'Chưa có tin nhắn.<br>Gửi tin nhắn đầu tiên!';},100);
   // model badge
@@ -534,17 +540,19 @@ function setMyTyping(val) {
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────
-document.getElementById('msgInput').addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-  setMyTyping(true);
-  clearTimeout(typingTimer);
-  typingTimer = setTimeout(() => setMyTyping(false), 2000);
-});
-
-document.getElementById('msgInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
+const msgInputEl = document.getElementById('msgInput');
+if(msgInputEl){
+  msgInputEl.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    setMyTyping(true);
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => setMyTyping(false), 2000);
+  });
+  msgInputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+}
 
 // ── PWA Manifest ─────────────────────────────────────────────────────────
 function initPWA() {
