@@ -226,6 +226,7 @@ let renderedKeys = new Set();
 function checkPw() {
   const val = document.getElementById('pwInput').value;
   if (val === PW) {
+    localStorage.setItem('askviet_auth', '1');
     document.getElementById('pwscreen').style.display = 'none';
     document.getElementById('setup').style.display = 'flex';
     loadSaved();
@@ -234,6 +235,12 @@ function checkPw() {
     err.style.display = 'block';
     setTimeout(() => err.style.display = 'none', 2000);
   }
+}
+// Daha önce giriş yapıldıysa şifreyi atla
+if (localStorage.getItem('askviet_auth') === '1') {
+  document.getElementById('pwscreen').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+  loadSaved();
 }
 document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
 
