@@ -288,6 +288,8 @@ let unsubAutoRead = null;
 let unsubAudio = null;
 let unsubPresence = null;
 let presenceTimer = null;
+let presencePollTimer = null;
+let autoReadPollTimer = null;
 let presenceId = localStorage.getItem('askviet_presence_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2,8));
 let renderedKeys = new Set();
 let autoReadDone = new Set();
@@ -1296,6 +1298,7 @@ function updateAutoReadUI() {
 
 function listenAutoReadConfig() {
   if (unsubAutoRead) unsubAutoRead();
+  if (autoReadPollTimer) clearInterval(autoReadPollTimer);
   fbGet(VN_AUTO_READ_PATH).then(v => {
     const enabled = v !== false;
     vnAutoRead = enabled;
@@ -1306,15 +1309,18 @@ function listenAutoReadConfig() {
     updateVnAutoReadUI();
     if (myRole === 'tr' && v === null) fbSet(VN_AUTO_READ_PATH, true);
   });
-  unsubAutoRead = fbListen(VN_AUTO_READ_PATH, event => {
-    const enabled = event && event.data !== false;
+  autoReadPollTimer = setInterval(async () => {
+    if (!myRole) return;
+    const v = await fbGet(VN_AUTO_READ_PATH);
+    const enabled = v !== false;
+    if (enabled === vnAutoRead && (myRole !== 'vi' || autoRead === enabled)) return;
     vnAutoRead = enabled;
     if (myRole === 'vi') {
       autoRead = enabled;
       updateAutoReadUI();
     }
     updateVnAutoReadUI();
-  });
+  }, 2500);
 }
 
 function updateAutoReadUI() {
@@ -1380,19 +1386,25 @@ function initPresence() {
   stopPresence();
   heartbeatPresence();
   presenceTimer = setInterval(heartbeatPresence, 20000);
-  if (unsubPresence) unsubPresence();
-  unsubPresence = fbListen(PRESENCE_PATH, event => {
-    const data = event && event.data;
+  const poll = async () => {
+    if (myRole !== 'tr') return;
+    const data = await fbGet(PRESENCE_PATH);
     if (!data || typeof data !== 'object') return;
     const now = Date.now();
     const count = Object.values(data).filter(v => v && Number(v.ts || 0) > now - 45000).length;
-    if (myRole === 'tr') updateOnlineCount(count);
-  });
+    updateOnlineCount(count);
+  };
+  poll();
+  presencePollTimer = setInterval(poll, 5000);
 }
 
 function stopPresence() {
   if (presenceTimer) clearInterval(presenceTimer);
+  if (presencePollTimer) clearInterval(presencePollTimer);
+  if (autoReadPollTimer) clearInterval(autoReadPollTimer);
   presenceTimer = null;
+  presencePollTimer = null;
+  autoReadPollTimer = null;
   if (myRole) fbRemove(PRESENCE_PATH + '/' + presenceId);
 }
 
