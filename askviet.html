@@ -120,10 +120,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
-.tr-guard{display:none;align-items:center;gap:6px;margin-right:2px}
-.vn-voice-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
-.vn-voice-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
-.online-count{min-width:24px;height:24px;padding:0 7px;border-radius:999px;border:2px solid #22c55e;background:#07120b;color:#22c55e;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;box-shadow:0 0 8px rgba(34,197,94,.25)}
 .btn-row button{touch-action:manipulation}
 .input-bar{position:relative;z-index:5}
 @media (max-width: 520px){
@@ -220,10 +216,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
       </div>
     </div>
     <div class="header-right">
-      <div id="trGuard" class="tr-guard">
-        <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
-        <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
-      </div>
       <div id="settingsBtnArea" class="settings-controls">
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
         <div class="settings-actions">
@@ -268,9 +260,7 @@ const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
-const VN_AUTO_READ_PATH = AUTO_READ_PATH + '/vi';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
-const PRESENCE_PATH = '/rooms/' + ROOM + '/presence';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -286,11 +276,6 @@ let unsubTyping = null;
 let unsubModel = null;
 let unsubAutoRead = null;
 let unsubAudio = null;
-let unsubPresence = null;
-let presenceTimer = null;
-let presencePollTimer = null;
-let autoReadPollTimer = null;
-let presenceId = localStorage.getItem('askviet_presence_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2,8));
 let renderedKeys = new Set();
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
@@ -298,8 +283,6 @@ let audioListenStartedAt = 0;
 let chatListenStartedAt = 0;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
-let vnAutoRead = true;
-localStorage.setItem('askviet_presence_id', presenceId);
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -448,7 +431,6 @@ function start(role) {
     }
   }catch(e){console.error('start UI error:',e)}
   setupChatControls();
-  setupTrGuard();
   // boş mesaj metni dile göre
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henüz mesaj yok.<br>İlk mesajı gönder!' : 'Chưa có tin nhắn.<br>Gửi tin nhắn đầu tiên!';},100);
   // model badge
@@ -459,8 +441,6 @@ function start(role) {
   if (myRole === 'tr') syncMyModel(selectedModel);
   updateAutoReadUI();
   listenModelConfig();
-  listenAutoReadConfig();
-  initPresence();
   initChat();
 }
 
@@ -470,8 +450,6 @@ function goBack() {
   if (unsubModel) unsubModel();
   if (unsubAutoRead) unsubAutoRead();
   if (unsubAudio) unsubAudio();
-  if (unsubPresence) unsubPresence();
-  stopPresence();
   renderedKeys.clear();
   autoReadDone.clear();
   handledAudioRequests.clear();
@@ -632,13 +610,7 @@ function renderMessage(key, msg) {
   delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
   delBtn.onclick = () => deleteMessage(key);
 
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = '⧉';
-  copyBtn.title = myRole === 'vi' ? 'Sao chép tin nhắn gốc' : 'Orijinal mesajı kopyala';
-  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1;cursor:pointer';
-  copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
-
-  btnRow.append(spBtn, misBtn, copyBtn, delBtn);
+  btnRow.append(spBtn, misBtn, delBtn);
   div.appendChild(btnRow);
 
   const time = document.createElement('div');
@@ -706,20 +678,11 @@ function refreshMessageText(key) {
   const trans = document.getElementById('trans-' + key);
   if (orig) orig.textContent = getMainText(msg);
   if (trans) {
-    trans.textContent = localizeStatusForViewer(getSubText(msg));
+    trans.textContent = getSubText(msg);
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
   }
-}
-
-function localizeStatusForViewer(text) {
-  if (!text) return text;
-  if (myRole === 'vi') {
-    if (text.startsWith('⚠️ Çeviri hatası:')) return '⚠️ Lỗi dịch:' + text.slice('⚠️ Çeviri hatası:'.length);
-    if (text.startsWith('⏳ Gemini yoğun, tekrar deneniyor...')) return text.replace('Gemini yoğun, tekrar deneniyor...', 'Gemini đang bận, đang thử lại...');
-  }
-  return text;
 }
 
 function markMessageRead(key, msg) {
@@ -811,30 +774,6 @@ async function deleteMessage(key) {
   stopAudio();
   removeMessageElement(key);
   await fbRemove(MSGS_PATH + '/' + key);
-}
-
-async function copyOriginalMessage(key, btn) {
-  const box = document.getElementById('msg-' + key);
-  const text = box?.dataset?.text || '';
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    if (btn) {
-      const old = btn.textContent;
-      btn.textContent = '✓';
-      setTimeout(() => { btn.textContent = old; }, 900);
-    }
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try { document.execCommand('copy'); } catch {}
-    ta.remove();
-  }
 }
 
 function getReadableLang(senderRole) {
@@ -1006,7 +945,7 @@ function errorText(role, msg) {
 
 function isRetryableGeminiError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
-  return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503') || s.includes('high demand') || s.includes('spikes in demand') || s.includes('try again later') || s.includes('temporar');
+  return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503');
 }
 
 async function translateText(text, from) {
@@ -1276,7 +1215,6 @@ function listenModelConfig() {
 
 function toggleAutoRead() {
   unlockAudio();
-  if (myRole === 'vi') return;
   autoRead = !autoRead;
   localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
   updateAutoReadUI();
@@ -1297,30 +1235,7 @@ function updateAutoReadUI() {
 }
 
 function listenAutoReadConfig() {
-  if (unsubAutoRead) unsubAutoRead();
-  if (autoReadPollTimer) clearInterval(autoReadPollTimer);
-  fbGet(VN_AUTO_READ_PATH).then(v => {
-    const enabled = v !== false;
-    vnAutoRead = enabled;
-    if (myRole === 'vi') {
-      autoRead = enabled;
-      updateAutoReadUI();
-    }
-    updateVnAutoReadUI();
-    if (myRole === 'tr' && v === null) fbSet(VN_AUTO_READ_PATH, true);
-  });
-  autoReadPollTimer = setInterval(async () => {
-    if (!myRole) return;
-    const v = await fbGet(VN_AUTO_READ_PATH);
-    const enabled = v !== false;
-    if (enabled === vnAutoRead && (myRole !== 'vi' || autoRead === enabled)) return;
-    vnAutoRead = enabled;
-    if (myRole === 'vi') {
-      autoRead = enabled;
-      updateAutoReadUI();
-    }
-    updateVnAutoReadUI();
-  }, 2500);
+  updateAutoReadUI();
 }
 
 function updateAutoReadUI() {
@@ -1346,66 +1261,6 @@ function updateNotifySoundUI() {
   btn.title = myRole === 'vi'
     ? ('Âm báo: ' + (notifySoundOn ? 'bật' : 'tắt'))
     : ('Bildirim sesi ' + (notifySoundOn ? 'açık' : 'kapalı'));
-}
-
-function setupTrGuard() {
-  const guard = document.getElementById('trGuard');
-  if (guard) guard.style.display = myRole === 'tr' ? 'flex' : 'none';
-  updateVnAutoReadUI();
-  updateOnlineCount(1);
-}
-
-function updateVnAutoReadUI() {
-  const btn = document.getElementById('vnAutoReadBtn');
-  if (!btn) return;
-  btn.textContent = (vnAutoRead ? '🔊 ' : '🔇 ') + 'VN';
-  btn.classList.toggle('off', !vnAutoRead);
-  btn.title = 'Vietnam tarafı otomatik ses ' + (vnAutoRead ? 'açık' : 'kapalı');
-}
-
-function toggleVnAutoRead() {
-  if (myRole !== 'tr') return;
-  unlockAudio();
-  vnAutoRead = !vnAutoRead;
-  updateVnAutoReadUI();
-  fbSet(VN_AUTO_READ_PATH, vnAutoRead);
-}
-
-function updateOnlineCount(count) {
-  const el = document.getElementById('onlineCount');
-  if (!el) return;
-  el.textContent = String(Math.max(1, count || 1));
-}
-
-function heartbeatPresence() {
-  if (!myRole) return;
-  fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() });
-}
-
-function initPresence() {
-  stopPresence();
-  heartbeatPresence();
-  presenceTimer = setInterval(heartbeatPresence, 20000);
-  const poll = async () => {
-    if (myRole !== 'tr') return;
-    const data = await fbGet(PRESENCE_PATH);
-    if (!data || typeof data !== 'object') return;
-    const now = Date.now();
-    const count = Object.values(data).filter(v => v && Number(v.ts || 0) > now - 45000).length;
-    updateOnlineCount(count);
-  };
-  poll();
-  presencePollTimer = setInterval(poll, 5000);
-}
-
-function stopPresence() {
-  if (presenceTimer) clearInterval(presenceTimer);
-  if (presencePollTimer) clearInterval(presencePollTimer);
-  if (autoReadPollTimer) clearInterval(autoReadPollTimer);
-  presenceTimer = null;
-  presencePollTimer = null;
-  autoReadPollTimer = null;
-  if (myRole) fbRemove(PRESENCE_PATH + '/' + presenceId);
 }
 
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
@@ -1446,7 +1301,7 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(chunks.length===0){btn.textContent='🎙';return;}
+      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
         const blob=new Blob(chunks,{type:mt});
@@ -1461,11 +1316,11 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.006){recHadSpeech=true;recSilentSince=0;return;}
+      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
         if(now-recSilentSince>1500)stopRec();
-      }else if(now-recStarted>4500)stopRec();
+      }else if(now-recStarted>2000)stopRec();
       if(now-recStarted>12000)stopRec();
     },120);
   }catch(e){
@@ -1533,11 +1388,9 @@ transcribeVoice = transcribeVoiceOpenAI;
 
 window.addEventListener('beforeunload', () => {
   if (myRole) fbSet(TYPING_PATH + '/' + myRole, false);
-  stopPresence();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') clearUnreadCount();
-  if (document.visibilityState === 'visible') heartbeatPresence();
 });
 </script>
 </body>
