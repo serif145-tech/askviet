@@ -116,7 +116,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .model-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .model-badge.active{border-color:var(--tr);color:var(--tr2)}
 .chat-model-select{max-width:92px;padding:5px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;outline:none}
-.status-pill{font-size:11px;padding:4px 7px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.status-pill{font-size:11px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap;cursor:pointer;font-weight:800}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
@@ -225,8 +225,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="openai:gpt-4o-mini">4o-mini</option>
             <option value="gemini:gemini-2.5-flash">Gemini</option>
           </select>
-          <span class="status-pill" id="autoReadStatus">🔇 Kapalı</span>
-          <button class="back-btn" id="autoReadBtn" onclick="toggleAutoRead()" title="Otomatik ses">🔇</button>
+          <button class="status-pill" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 Kapalı</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
           <button class="back-btn" onclick="goBack()">⚙</button>
         </div>
@@ -439,13 +438,9 @@ function start(role) {
     const myBadge = document.getElementById('myModelBadge');
     if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
   }catch(e){}
-  if (myRole === 'tr') {
-    syncMyModel(selectedModel);
-    syncAutoRead(autoRead);
-  }
+  if (myRole === 'tr') syncMyModel(selectedModel);
   updateAutoReadUI();
   listenModelConfig();
-  listenAutoReadConfig();
   initChat();
 }
 
@@ -1149,14 +1144,12 @@ function setSelectedModel(model, fromRemote=false) {
 
 function setupChatControls() {
   const chatSelect = document.getElementById('chatModelSelect');
-  const autoBtn = document.getElementById('autoReadBtn');
   if (chatSelect) {
     chatSelect.value = selectedModel;
     chatSelect.style.display = myRole === 'tr' ? '' : 'none';
     chatSelect.disabled = myRole !== 'tr';
     chatSelect.onchange = () => setSelectedModel(chatSelect.value);
   }
-  if (autoBtn) autoBtn.style.display = myRole === 'tr' ? '' : 'none';
   setSelectedModel(selectedModel, true);
   updateAutoReadUI();
   updateNotifySoundUI();
@@ -1220,48 +1213,54 @@ function listenModelConfig() {
   });
 }
 
-function syncAutoRead(value) {
-  if (myRole !== 'tr') return;
-  fbSet(AUTO_READ_PATH, !!value);
-}
-
 function toggleAutoRead() {
-  if (myRole !== 'tr') return;
   unlockAudio();
   autoRead = !autoRead;
   localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
   updateAutoReadUI();
-  syncAutoRead(autoRead);
 }
 
 function updateAutoReadUI() {
-  const arBtn = document.getElementById('autoReadBtn');
   const status = document.getElementById('autoReadStatus');
-  const text = autoRead ? '🔊 Açık' : '🔇 Kapalı';
-  if (arBtn) {
-    arBtn.textContent = autoRead ? '🔊' : '🔇';
-    arBtn.title = autoRead ? 'Otomatik ses açık' : 'Otomatik ses kapalı';
-  }
+  const text = myRole === 'vi'
+    ? (autoRead ? '🔊 Tự đọc' : '🔇 Tắt đọc')
+    : (autoRead ? '🔊 Açık' : '🔇 Kapalı');
   if (status) {
     status.textContent = text;
     status.classList.toggle('on', autoRead);
-    status.title = myRole === 'tr' ? 'Otomatik ses kontrolü sende' : 'Otomatik ses TR tarafından kontrol edilir';
+    status.title = myRole === 'vi'
+      ? 'Tự động đọc tin nhắn mới'
+      : 'Yeni mesajları otomatik seslendir';
   }
 }
 
 function listenAutoReadConfig() {
-  if (unsubAutoRead) unsubAutoRead();
-  fbGet(AUTO_READ_PATH).then(v => {
-    if (typeof v === 'boolean') autoRead = v;
-    else if (myRole === 'tr') syncAutoRead(autoRead);
-    updateAutoReadUI();
-  });
-  unsubAutoRead = fbListen(AUTO_READ_PATH, event => {
-    if (!event) return;
-    autoRead = !!event.data;
-    localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
-    updateAutoReadUI();
-  });
+  updateAutoReadUI();
+}
+
+function updateAutoReadUI() {
+  const status = document.getElementById('autoReadStatus');
+  const text = myRole === 'vi'
+    ? (autoRead ? '🔊 Tự đọc' : '🔇 Tắt đọc')
+    : (autoRead ? '🔊 Açık' : '🔇 Kapalı');
+  if (status) {
+    status.textContent = text;
+    status.classList.toggle('on', autoRead);
+    status.title = myRole === 'vi'
+      ? (autoRead ? 'Tự động đọc: bật' : 'Tự động đọc: tắt')
+      : 'Yeni mesajları otomatik seslendir';
+  }
+}
+
+function updateNotifySoundUI() {
+  const btn = document.getElementById('notifySoundBtn');
+  if (!btn) return;
+  const label = myRole === 'vi' ? 'Âm' : 'Bild.';
+  btn.textContent = (notifySoundOn ? '✓ ' : '✕ ') + label;
+  btn.classList.toggle('off', !notifySoundOn);
+  btn.title = myRole === 'vi'
+    ? ('Âm báo: ' + (notifySoundOn ? 'bật' : 'tắt'))
+    : ('Bildirim sesi ' + (notifySoundOn ? 'açık' : 'kapalı'));
 }
 
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
