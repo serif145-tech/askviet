@@ -751,11 +751,11 @@ function maybeNotifyIncoming(key, msg) {
   if (!msg || msg.role === myRole) return;
   const ts = Number(msg.ts || 0);
   if (!ts || ts < chatListenStartedAt - 1500) return;
+  playNotifySound();
   if (document.visibilityState === 'visible') return;
   unreadCount += 1;
   setBadgeCount(unreadCount);
   document.title = `(${unreadCount}) AskViet`;
-  playNotifySound();
   showIncomingNotification(msg);
 }
 
@@ -1355,7 +1355,7 @@ function updateNotifySoundUI() {
 
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
-let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null;
+let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0;
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
@@ -1455,7 +1455,7 @@ async function startVoice() {
   const btn = document.getElementById('micBtn');
   // Zaten kayıt varsa durdur
   if(rec){stopRec();return;}
-  recChunks=[];recHadSpeech=false;recSilentSince=0;
+  recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;
   btn.classList.add('mic-recording');
   try{
     await resetRecAudioCtx();
@@ -1489,7 +1489,13 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
+      if(v>0.03){
+        recLoudFrames++;
+        if(recLoudFrames>=3) recHadSpeech=true;
+        recSilentSince=0;
+        return;
+      }
+      recLoudFrames=0;
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
         if(now-recSilentSince>1500)stopRec();
@@ -1568,6 +1574,11 @@ document.addEventListener('visibilitychange', () => {
     clearUnreadCount();
     if (myRole) fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
   }
+});
+['pointerdown','touchstart','click'].forEach(type => {
+  document.addEventListener(type, () => {
+    if (notifySoundOn) unlockNotifySound(false);
+  }, { passive: true });
 });
 </script>
 </body>
