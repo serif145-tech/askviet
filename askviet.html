@@ -832,7 +832,10 @@ async function translateText(text, from) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: sysPrompt }] },
         contents: [{ parts: [{ text }] }],
-        generationConfig: { temperature: 0.2 }
+        generationConfig: {
+          temperature: 0.2,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
       })
     });
     const data = await r.json();
