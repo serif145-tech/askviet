@@ -1537,6 +1537,9 @@ async function transcribeVoice(blob) {
     fd.append('file', blob, 'audio.webm');
     fd.append('model', 'whisper-1');
     fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
+    fd.append('prompt', myRole === 'tr'
+      ? 'Türkçe günlük sohbet. Bu bir YouTube videosu, kanal kapanışı veya altyazı değil. Sadece gerçek konuşmayı yaz.'
+      : 'Tiếng Việt hội thoại hằng ngày. Đây không phải video YouTube, không phải lời chào/kết thúc video. Chỉ chép lại lời nói thật.');
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {'Authorization': 'Bearer ' + apiKey},
@@ -1554,6 +1557,9 @@ async function transcribeVoiceOpenAI(blob) {
   fd.append('file', blob, 'audio.webm');
   fd.append('model', 'whisper-1');
   fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
+  fd.append('prompt', myRole === 'tr'
+    ? 'Türkçe günlük sohbet. Bu bir YouTube videosu, kanal kapanışı veya altyazı değil. Sadece gerçek konuşmayı yaz.'
+    : 'Tiếng Việt hội thoại hằng ngày. Đây không phải video YouTube, không phải lời chào/kết thúc video. Chỉ chép lại lời nói thật.');
   const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: {'Authorization': 'Bearer ' + key},
