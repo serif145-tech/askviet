@@ -678,11 +678,20 @@ function refreshMessageText(key) {
   const trans = document.getElementById('trans-' + key);
   if (orig) orig.textContent = getMainText(msg);
   if (trans) {
-    trans.textContent = getSubText(msg);
+    trans.textContent = localizeStatusForViewer(getSubText(msg));
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
   }
+}
+
+function localizeStatusForViewer(text) {
+  if (!text) return text;
+  if (myRole === 'vi') {
+    if (text.startsWith('⚠️ Çeviri hatası:')) return '⚠️ Lỗi dịch:' + text.slice('⚠️ Çeviri hatası:'.length);
+    if (text.startsWith('⏳ Gemini yoğun, tekrar deneniyor...')) return text.replace('Gemini yoğun, tekrar deneniyor...', 'Gemini đang bận, đang thử lại...');
+  }
+  return text;
 }
 
 function markMessageRead(key, msg) {
@@ -945,13 +954,13 @@ function errorText(role, msg) {
 
 function isRetryableGeminiError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
-  return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503');
+  return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503') || s.includes('high demand') || s.includes('spikes in demand') || s.includes('try again later') || s.includes('temporar');
 }
 
 async function translateText(text, from) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Türkçe yazan taraf erkektir (Vietnamcada "anh" kullan), Vietnamca yazan taraf kadındır ("em" kullan). Metnin tonunu, üslubunu ve duygusunu birebir yansıt — samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
+  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt — samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
 
   let [provider, model] = selectedModel.split(':');
   if (provider === 'gemini' && model === 'gemini-2.5-flash-preview-05-20') {
