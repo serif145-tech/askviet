@@ -65,6 +65,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .chat-title{font-weight:900;font-size:16px}
 .chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
 .header-right{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto}
+.tr-guard{display:none;align-items:center;gap:6px;flex:0 0 auto}
+.vn-voice-toggle{font-size:12px;font-weight:800;border:1px solid #374151;background:#171722;color:#e5e7eb;border-radius:999px;padding:6px 9px;cursor:pointer;white-space:nowrap}
+.vn-voice-toggle.on{border-color:#22c55e;background:#14532d;color:#dcfce7}
+.vn-voice-toggle.off{border-color:#ef4444;background:#3b1118;color:#fecdd3}
+.online-count{width:28px;height:28px;border-radius:50%;border:2px solid #22c55e;background:#06130b;color:#4ade80;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;box-shadow:0 0 8px rgba(34,197,94,.25)}
 .settings-controls{display:none;align-items:center;gap:5px;min-width:0}
 .settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;flex-wrap:wrap}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
@@ -216,6 +221,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
       </div>
     </div>
     <div class="header-right">
+      <div id="trGuard" class="tr-guard">
+        <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
+        <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
+      </div>
       <div id="settingsBtnArea" class="settings-controls">
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
         <div class="settings-actions">
@@ -260,7 +269,9 @@ const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
+const VN_AUTO_READ_PATH = AUTO_READ_PATH + '/vi';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
+const PRESENCE_PATH = '/rooms/' + ROOM + '/presence';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -283,6 +294,13 @@ let audioListenStartedAt = 0;
 let chatListenStartedAt = 0;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
+let notifyAudioCtx = null;
+let vnAutoRead = true;
+let autoReadPollTimer = null;
+let presenceHeartbeatTimer = null;
+let presencePollTimer = null;
+let presenceId = localStorage.getItem('askviet_presence_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+localStorage.setItem('askviet_presence_id', presenceId);
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -396,6 +414,7 @@ function fbListen(path, cb) {
 function start(role) {
   try { unlockAudio(); } catch(e) {}
   requestNotifyPermission();
+  if (notifySoundOn) unlockNotifySound(false);
   const openaiKey = document.getElementById('apiKeyInput')?.value.trim()||localStorage.getItem('askviet_key')||'';
   const geminiKey = document.getElementById('geminiKeyInput')?.value.trim()||localStorage.getItem('askviet_gemini_key')||'';
   if(!openaiKey){alert('OpenAI API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
@@ -439,7 +458,10 @@ function start(role) {
     if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
   }catch(e){}
   if (myRole === 'tr') syncMyModel(selectedModel);
+  setupTrGuard();
   updateAutoReadUI();
+  listenAutoReadConfig();
+  initPresence();
   listenModelConfig();
   initChat();
 }
@@ -450,6 +472,8 @@ function goBack() {
   if (unsubModel) unsubModel();
   if (unsubAutoRead) unsubAutoRead();
   if (unsubAudio) unsubAudio();
+  stopPresence();
+  stopAutoReadPolling();
   renderedKeys.clear();
   autoReadDone.clear();
   handledAudioRequests.clear();
@@ -610,7 +634,13 @@ function renderMessage(key, msg) {
   delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
   delBtn.onclick = () => deleteMessage(key);
 
-  btnRow.append(spBtn, misBtn, delBtn);
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '⧉';
+  copyBtn.title = 'Orijinal mesajı kopyala';
+  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0e7490;cursor:pointer';
+  copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
+
+  btnRow.append(spBtn, misBtn, copyBtn, delBtn);
   div.appendChild(btnRow);
 
   const time = document.createElement('div');
@@ -734,16 +764,30 @@ function playNotifySound() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
-    const ctx = new Ctx();
+    const ctx = notifyAudioCtx || (notifyAudioCtx = new Ctx());
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 880;
-    gain.gain.value = 0.045;
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    setTimeout(() => { try { osc.stop(); ctx.close(); } catch {} }, 160);
+    setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {} }, 220);
+  } catch {}
+}
+
+async function unlockNotifySound(test = false) {
+  if (!notifySoundOn) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = notifyAudioCtx || (notifyAudioCtx = new Ctx());
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (test) playNotifySound();
   } catch {}
 }
 
@@ -768,6 +812,33 @@ function removeMessageElement(key) {
   renderedKeys.delete(key);
   autoReadDone.delete(key);
   stopAudio();
+}
+
+async function copyOriginalMessage(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  const text = box?.dataset?.text || '';
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    if (btn) {
+      const old = btn.textContent;
+      btn.textContent = '✓';
+      setTimeout(() => { btn.textContent = old; }, 900);
+    }
+  } catch (e) {
+    console.warn('copy failed', e);
+  }
 }
 
 async function deleteMessage(key) {
@@ -1159,6 +1230,7 @@ function toggleNotifySound() {
   notifySoundOn = !notifySoundOn;
   localStorage.setItem('askviet_notify_sound', notifySoundOn ? '1' : '0');
   updateNotifySoundUI();
+  if (notifySoundOn) unlockNotifySound(true);
 }
 
 function updateNotifySoundUI() {
@@ -1218,6 +1290,7 @@ function toggleAutoRead() {
   autoRead = !autoRead;
   localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
   updateAutoReadUI();
+  if (myRole === 'vi') fbSet(VN_AUTO_READ_PATH, autoRead);
 }
 
 function updateAutoReadUI() {
@@ -1235,7 +1308,24 @@ function updateAutoReadUI() {
 }
 
 function listenAutoReadConfig() {
-  updateAutoReadUI();
+  stopAutoReadPolling();
+  const poll = async () => {
+    try {
+      const value = await fbGet(VN_AUTO_READ_PATH);
+      const enabled = value !== false;
+      vnAutoRead = enabled;
+      if (myRole === 'vi') {
+        autoRead = enabled;
+        localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
+        updateAutoReadUI();
+      }
+      updateVnAutoReadUI();
+    } catch (e) {
+      console.warn('auto read status error', e);
+    }
+  };
+  poll();
+  autoReadPollTimer = setInterval(poll, 2500);
 }
 
 function updateAutoReadUI() {
@@ -1279,6 +1369,81 @@ async function ensureAudioCtx(){
   return recAudioCtx;
 }
 
+function stopAutoReadPolling() {
+  if (autoReadPollTimer) {
+    clearInterval(autoReadPollTimer);
+    autoReadPollTimer = null;
+  }
+}
+
+function setupTrGuard() {
+  const guard = document.getElementById('trGuard');
+  if (guard) guard.style.display = myRole === 'tr' ? 'flex' : 'none';
+  updateVnAutoReadUI();
+  updateOnlineCount(1);
+}
+
+function updateVnAutoReadUI() {
+  const btn = document.getElementById('vnAutoReadBtn');
+  if (!btn) return;
+  btn.textContent = (vnAutoRead ? '🔊 VN' : '🔇 VN');
+  btn.classList.toggle('on', vnAutoRead);
+  btn.classList.toggle('off', !vnAutoRead);
+  btn.title = vnAutoRead ? 'Vietnam tarafı otomatik ses açık' : 'Vietnam tarafı otomatik ses kapalı';
+}
+
+async function toggleVnAutoRead() {
+  if (myRole !== 'tr') return;
+  try { unlockAudio(); } catch(e) {}
+  vnAutoRead = !vnAutoRead;
+  updateVnAutoReadUI();
+  await fbSet(VN_AUTO_READ_PATH, vnAutoRead);
+}
+
+function updateOnlineCount(count) {
+  const el = document.getElementById('onlineCount');
+  if (!el) return;
+  el.textContent = String(Math.max(1, count || 1));
+}
+
+function initPresence() {
+  stopPresence(false);
+  const heartbeat = () => {
+    if (!myRole) return;
+    fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
+  };
+  heartbeat();
+  presenceHeartbeatTimer = setInterval(heartbeat, 20000);
+  if (myRole === 'tr') {
+    const poll = async () => {
+      try {
+        const data = await fbGet(PRESENCE_PATH);
+        const now = Date.now();
+        const count = data && typeof data === 'object'
+          ? Object.values(data).filter(v => v && Number(v.ts) > now - 45000).length
+          : 1;
+        updateOnlineCount(count || 1);
+      } catch (e) {
+        updateOnlineCount(1);
+      }
+    };
+    poll();
+    presencePollTimer = setInterval(poll, 5000);
+  }
+}
+
+function stopPresence(removeOwn = true) {
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = null;
+  }
+  if (presencePollTimer) {
+    clearInterval(presencePollTimer);
+    presencePollTimer = null;
+  }
+  if (removeOwn && myRole) fbRemove(PRESENCE_PATH + '/' + presenceId).catch(() => {});
+}
+
 async function startVoice() {
   const btn = document.getElementById('micBtn');
   // Zaten kayıt varsa durdur
@@ -1301,7 +1466,7 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
+      if(chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
         const blob=new Blob(chunks,{type:mt});
@@ -1316,11 +1481,11 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
+      if(v>0.006){recHadSpeech=true;recSilentSince=0;return;}
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
         if(now-recSilentSince>1500)stopRec();
-      }else if(now-recStarted>2000)stopRec();
+      }else if(now-recStarted>4500)stopRec();
       if(now-recStarted>12000)stopRec();
     },120);
   }catch(e){
@@ -1388,9 +1553,13 @@ transcribeVoice = transcribeVoiceOpenAI;
 
 window.addEventListener('beforeunload', () => {
   if (myRole) fbSet(TYPING_PATH + '/' + myRole, false);
+  stopPresence(true);
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') clearUnreadCount();
+  if (document.visibilityState === 'visible') {
+    clearUnreadCount();
+    if (myRole) fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
+  }
 });
 </script>
 </body>
