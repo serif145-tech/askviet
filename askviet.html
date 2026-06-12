@@ -76,6 +76,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg{display:flex;flex-direction:column;max-width:min(82%,680px);min-width:0;overflow-wrap:anywhere}
 .msg.mine{align-self:flex-end;align-items:flex-end}
 .msg.theirs{align-self:flex-start;align-items:flex-start}
+.msg-head{display:flex;align-items:flex-end;gap:6px;max-width:100%}
+.msg.mine .msg-head{flex-direction:row}
+.msg.theirs .msg-head{flex-direction:row-reverse}
+.msg-flag{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #ddd;box-shadow:0 1px 4px rgba(0,0,0,.12);font-size:14px;line-height:1;flex:0 0 22px}
 
 /* Okunacak dil — büyük ve belirgin */
 .msg-original{max-width:100%;padding:10px 14px;border-radius:var(--radius);font-size:16px;font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere}
@@ -157,7 +161,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="openai:gpt-4o-mini">GPT-4o-mini</option>
         </optgroup>
         <optgroup label="Google">
-          <option value="gemini:gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+          <option value="gemini:gemini-2.5-flash">Gemini 2.5 Flash</option>
         </optgroup>
       </select>
     </div>
@@ -209,7 +213,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
             <option value="openai:gpt-4o">GPT-4o</option>
             <option value="openai:gpt-4o-mini">4o-mini</option>
-            <option value="gemini:gemini-2.5-flash-preview-05-20">Gemini</option>
+            <option value="gemini:gemini-2.5-flash">Gemini</option>
           </select>
           <span class="status-pill" id="autoReadStatus">🔇 Kapalı</span>
           <button class="back-btn" id="autoReadBtn" onclick="toggleAutoRead()" title="Otomatik ses">🔇</button>
@@ -265,6 +269,7 @@ let unsubAudio = null;
 let renderedKeys = new Set();
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
+let audioListenStartedAt = 0;
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -333,7 +338,11 @@ async function pasteKey() {
 
 function loadSaved() {
   const savedKey = localStorage.getItem('askviet_key');
-  const savedModel = localStorage.getItem('askviet_model');
+  let savedModel = localStorage.getItem('askviet_model');
+  if (savedModel === 'gemini:gemini-2.5-flash-preview-05-20') {
+    savedModel = 'gemini:gemini-2.5-flash';
+    localStorage.setItem('askviet_model', savedModel);
+  }
   const savedTtsKey = localStorage.getItem('askviet_tts_key');
   const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
@@ -525,11 +534,19 @@ function renderMessage(key, msg) {
   div.dataset.text = msg.text || '';
   div.dataset.translation = msg.translation || '';
 
+  const head = document.createElement('div');
+  head.className = 'msg-head';
+
+  const flag = document.createElement('span');
+  flag.className = 'msg-flag';
+  flag.textContent = msg.role === 'tr' ? '🇹🇷' : '🇻🇳';
+
   const orig = document.createElement('div');
   orig.className = 'msg-original';
   orig.id = 'orig-' + key;
   orig.textContent = getMainText(msg);
-  div.appendChild(orig);
+  head.append(orig, flag);
+  div.appendChild(head);
 
   const trans = document.createElement('div');
   trans.className = 'msg-translation';
@@ -692,6 +709,7 @@ async function requestSpeakForMessage(key, btn) {
 
 function listenAudioRequests() {
   if (unsubAudio) unsubAudio();
+  audioListenStartedAt = Date.now();
   unsubAudio = fbListen(AUDIO_PATH, event => {
     if (!event || !event.data) return;
     const path = event.path || '/';
@@ -706,9 +724,12 @@ function listenAudioRequests() {
 
 function handleAudioRequest(id, req) {
   if (!req || handledAudioRequests.has(id)) return;
+  if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
+  if (Date.now() - req.ts > 15000) return;
   if (req.target !== myRole) return;
   handledAudioRequests.add(id);
   speak(req.text, req.lang || myRole, null, true);
+  fbRemove(AUDIO_PATH + '/' + id);
 }
 
 function getMisunderstoodText() {
@@ -775,7 +796,8 @@ async function translateAndUpdate(key, text, fromRole) {
     const translation = await translateText(text, fromRole);
     await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
   } catch (e) {
-    await fbSet(MSGS_PATH + '/' + key + '/translation', '⚠️ Çeviri hatası');
+    const msg = (e && e.message ? e.message : String(e)).slice(0, 120);
+    await fbSet(MSGS_PATH + '/' + key + '/translation', '⚠️ Çeviri hatası: ' + msg);
     console.error(e);
   }
 }
@@ -785,7 +807,13 @@ async function translateText(text, from) {
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
   const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Türkçe yazan taraf erkektir (Vietnamcada "anh" kullan), Vietnamca yazan taraf kadındır ("em" kullan). Metnin tonunu, üslubunu ve duygusunu birebir yansıt — samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
 
-  const [provider, model] = selectedModel.split(':');
+  let [provider, model] = selectedModel.split(':');
+  if (provider === 'gemini' && model === 'gemini-2.5-flash-preview-05-20') {
+    model = 'gemini-2.5-flash';
+    selectedModel = 'gemini:' + model;
+    localStorage.setItem('askviet_model', selectedModel);
+    if (myRole === 'tr') syncMyModel(selectedModel);
+  }
   const useKey = provider==='gemini' ? (localStorage.getItem('askviet_gemini_key')||'') : (localStorage.getItem('askviet_key')||'');
 
   if (provider === 'gemini') {
@@ -795,7 +823,7 @@ async function translateText(text, from) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: sysPrompt }] },
         contents: [{ parts: [{ text }] }],
-        generationConfig: { temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } }
+        generationConfig: { temperature: 0.2 }
       })
     });
     const data = await r.json();
@@ -938,6 +966,7 @@ speak = speakOpenAI;
 const MODEL_NAMES = {
   'openai:gpt-4o': 'GPT-4o',
   'openai:gpt-4o-mini': '4o-mini',
+  'gemini:gemini-2.5-flash': 'Gemini Flash',
   'gemini:gemini-2.5-flash-preview-05-20': 'Gemini Flash'
 };
 
@@ -947,6 +976,7 @@ function modelName(model) {
 
 function setSelectedModel(model, fromRemote=false) {
   if (!model) return;
+  if (model === 'gemini:gemini-2.5-flash-preview-05-20') model = 'gemini:gemini-2.5-flash';
   selectedModel = model;
   localStorage.setItem('askviet_model', model);
   const setupSelect = document.getElementById('modelSelect');
