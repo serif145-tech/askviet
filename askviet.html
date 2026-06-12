@@ -801,14 +801,31 @@ async function sendMessage() {
 }
 
 async function translateAndUpdate(key, text, fromRole) {
-  try {
-    const translation = await translateText(text, fromRole);
-    await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
-  } catch (e) {
-    const msg = (e && e.message ? e.message : String(e)).slice(0, 120);
-    await fbSet(MSGS_PATH + '/' + key + '/translation', '⚠️ Çeviri hatası: ' + msg);
-    console.error(e);
+  const maxAttempts = selectedModel.startsWith('gemini:') ? 4 : 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const translation = await translateText(text, fromRole);
+      await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
+      return;
+    } catch (e) {
+      const msg = (e && e.message ? e.message : String(e)).slice(0, 120);
+      const retry = selectedModel.startsWith('gemini:') && isRetryableGeminiError(e) && attempt < maxAttempts;
+      if (retry) {
+        const waitMs = attempt * 2500;
+        await fbSet(MSGS_PATH + '/' + key + '/translation', `⏳ Gemini yoğun, tekrar deneniyor... (${attempt}/${maxAttempts - 1})`);
+        await sleep(waitMs);
+        continue;
+      }
+      await fbSet(MSGS_PATH + '/' + key + '/translation', '⚠️ Çeviri hatası: ' + msg);
+      console.error(e);
+      return;
+    }
   }
+}
+
+function isRetryableGeminiError(e) {
+  const s = String((e && e.message) || e || '').toLowerCase();
+  return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503');
 }
 
 async function translateText(text, from) {
