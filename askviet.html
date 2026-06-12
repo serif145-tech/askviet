@@ -108,6 +108,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 .model-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .model-badge.active{border-color:var(--tr);color:var(--tr2)}
+.chat-model-select{max-width:138px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;outline:none}
+.status-pill{font-size:11px;padding:4px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.status-pill.on{border-color:var(--tr);color:var(--tr2)}
+.btn-row button{touch-action:manipulation}
+.input-bar{position:relative;z-index:5}
+@media (min-width: 900px){
+  #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
+}
 </style>
 <link rel="manifest" id="pwaManifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -198,7 +206,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
         <div class="settings-actions">
           <div class="conn-dot off" id="connDot"></div>
-          <button class="back-btn" id="autoReadBtn" onclick="autoRead=!autoRead;localStorage.setItem('askviet_autoread',autoRead?'1':'0');this.textContent=autoRead?'🔊':'🔇';this.title=autoRead?'Otomatik ses açık':'Otomatik ses kapalı'" title="Otomatik ses">🔇</button>
+          <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
+            <option value="openai:gpt-4o">GPT-4o</option>
+            <option value="openai:gpt-4o-mini">4o-mini</option>
+            <option value="gemini:gemini-2.5-flash-preview-05-20">Gemini</option>
+          </select>
+          <span class="status-pill" id="autoReadStatus">🔇 Kapalı</span>
+          <button class="back-btn" id="autoReadBtn" onclick="toggleAutoRead()" title="Otomatik ses">🔇</button>
           <button class="back-btn" onclick="goBack()">⚙</button>
         </div>
       </div>
@@ -229,6 +243,9 @@ const DB_URL = 'https://askviet-9c4ea-default-rtdb.asia-southeast1.firebasedatab
 const ROOM = 'xK9mP2vL4q';
 const MSGS_PATH = '/rooms/' + ROOM + '/messages';
 const TYPING_PATH = '/rooms/' + ROOM + '/typing';
+const CONFIG_PATH = '/rooms/' + ROOM + '/config';
+const MODEL_PATH = CONFIG_PATH + '/models/tr';
+const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -241,7 +258,10 @@ let typingTimer = null;
 let isTyping = false;
 let unsubMessages = null;
 let unsubTyping = null;
+let unsubModel = null;
+let unsubAutoRead = null;
 let renderedKeys = new Set();
+let autoReadDone = new Set();
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -335,6 +355,9 @@ async function fbPush(path, data) {
 async function fbSet(path, data) {
   await fetch(DB_URL + path + '.json', { method: 'PUT', body: JSON.stringify(data) });
 }
+async function fbRemove(path) {
+  await fetch(DB_URL + path + '.json', { method: 'DELETE' });
+}
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
   es.addEventListener('put', e => { try { cb(JSON.parse(e.data)); } catch {} });
@@ -376,10 +399,11 @@ function start(role) {
       if(ct) ct.textContent='🇻🇳 → 🇹🇷';
       if(cs) cs.textContent='Tin nhắn được dịch sang tiếng Thổ';
       if(mi) mi.placeholder='Viết tiếng Việt...';
-      try{const sa=document.getElementById('settingsBtnArea');if(sa)sa.style.display='none';}catch(e){}
+      try{const sa=document.getElementById('settingsBtnArea');if(sa)sa.style.display='flex';}catch(e){}
   // VI: model alanı setup'ta gizli kalsın
     }
   }catch(e){console.error('start UI error:',e)}
+  setupChatControls();
   // boş mesaj metni dile göre
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henüz mesaj yok.<br>İlk mesajı gönder!' : 'Chưa có tin nhắn.<br>Gửi tin nhắn đầu tiên!';},100);
   // model badge
@@ -387,17 +411,24 @@ function start(role) {
     const myBadge = document.getElementById('myModelBadge');
     if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
   }catch(e){}
-  syncMyModel(selectedModel);
-  // autoRead butonu güncelle
-  try{const arBtn=document.getElementById('autoReadBtn');if(arBtn)arBtn.textContent=autoRead?'🔊':'🔇';}catch(e){}
-  listenTheirModel();
+  if (myRole === 'tr') {
+    syncMyModel(selectedModel);
+    syncAutoRead(autoRead);
+  }
+  updateAutoReadUI();
+  listenModelConfig();
+  listenAutoReadConfig();
   initChat();
 }
 
 function goBack() {
   if (unsubMessages) unsubMessages();
   if (unsubTyping) unsubTyping();
+  if (unsubModel) unsubModel();
+  if (unsubAutoRead) unsubAutoRead();
   renderedKeys.clear();
+  autoReadDone.clear();
+  stopAudio();
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('chat').style.display = 'none';
   document.getElementById('messages').innerHTML = '<div class="empty-state" id="emptyState"><div class="empty-emoji">💬</div><div class="empty-text" id="emptyText">Henüz mesaj yok.<br>İlk mesajı gönder!</div></div><div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
@@ -413,8 +444,21 @@ function initChat() {
   });
 
   unsubMessages = fbListen(MSGS_PATH, event => {
-    if (!event || !event.data) return;
+    if (!event) return;
     const path = event.path || '/';
+    if (event.data === null) {
+      if (path === '/') {
+        document.querySelectorAll('.msg').forEach(el => el.remove());
+        renderedKeys.clear();
+        autoReadDone.clear();
+        stopAudio();
+      } else {
+        const key = path.replace(/^\//, '').split('/')[0];
+        removeMessageElement(key);
+      }
+      return;
+    }
+    if (!event.data) return;
     if (path === '/') {
       if (typeof event.data === 'object') {
         Object.entries(event.data).forEach(([k, v]) => { if (v) updateOrRender(k, v); });
@@ -429,6 +473,7 @@ function initChat() {
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
         const el = document.getElementById('trans-' + key);
         if (el) { el.textContent = event.data; el.style.color = ''; el.style.fontStyle = 'italic'; }
+        maybeAutoReadMessage(key);
         scrollToBottom();
       }
     }
@@ -464,6 +509,10 @@ function renderMessage(key, msg) {
   const div = document.createElement('div');
   div.className = 'msg ' + (isMine ? 'mine' : 'theirs');
   div.id = 'msg-' + key;
+  div.dataset.key = key;
+  div.dataset.role = msg.role || '';
+  div.dataset.text = msg.text || '';
+  div.dataset.translation = msg.translation || '';
 
   const orig = document.createElement('div');
   orig.className = 'msg-original';
@@ -485,13 +534,14 @@ function renderMessage(key, msg) {
 
   // Butonlar — ▶ Ses, ⚠↻ Anlamadım, ✕ Sil
   const btnRow = document.createElement('div');
+  btnRow.className = 'btn-row';
   btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
   const spBtn = document.createElement('button');
   spBtn.className = 'speakBtn';
   spBtn.textContent = '▶';
   spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  spBtn.onclick = () => speak(msg.translation || msg.text, isMine ? (myRole==='tr'?'vi':'tr') : myRole, spBtn);
+  spBtn.onclick = () => speak(getReadableText(key), getReadableLang(msg.role), spBtn);
 
   const misBtn = document.createElement('button');
   misBtn.textContent = '⚠';
@@ -506,7 +556,7 @@ function renderMessage(key, msg) {
   const delBtn = document.createElement('button');
   delBtn.textContent = '✕';
   delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
-  delBtn.onclick = () => { stopAudio(); div.remove(); };
+  delBtn.onclick = () => deleteMessage(key);
 
   btnRow.append(spBtn, misBtn, delBtn);
   div.appendChild(btnRow);
@@ -522,12 +572,54 @@ function renderMessage(key, msg) {
 
 function updateOrRender(key, msg) {
   if (!renderedKeys.has(key)) { renderMessage(key, msg); return; }
+  const box = document.getElementById('msg-' + key);
+  if (box) {
+    box.dataset.role = msg.role || box.dataset.role || '';
+    box.dataset.text = msg.text || box.dataset.text || '';
+    if (msg.translation) box.dataset.translation = msg.translation;
+  }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
     el.textContent = msg.translation;
     el.style.color = '';
     el.style.fontStyle = 'italic';
   }
+  maybeAutoReadMessage(key);
+}
+
+function removeMessageElement(key) {
+  const el = document.getElementById('msg-' + key);
+  if (el) el.remove();
+  renderedKeys.delete(key);
+  autoReadDone.delete(key);
+  stopAudio();
+}
+
+async function deleteMessage(key) {
+  stopAudio();
+  removeMessageElement(key);
+  await fbRemove(MSGS_PATH + '/' + key);
+}
+
+function getReadableLang(senderRole) {
+  return senderRole === myRole ? theirRole : myRole;
+}
+
+function getReadableText(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return '';
+  return box.dataset.translation || box.dataset.text || '';
+}
+
+function maybeAutoReadMessage(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box || !autoRead || autoReadDone.has(key)) return;
+  const senderRole = box.dataset.role;
+  if (!senderRole || senderRole === myRole) return;
+  const text = box.dataset.translation || '';
+  if (!text || text.includes('⏳') || text.includes('⚠')) return;
+  autoReadDone.add(key);
+  speak(text, myRole, null, true);
 }
 
 function formatTime(ts) {
@@ -543,26 +635,32 @@ function scrollToBottom() {
 
 async function sendMessage() {
   const input = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
   input.style.height = '';
-  document.getElementById('sendBtn').disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
   setMyTyping(false);
 
-  const msg = { role: myRole, text, ts: Date.now(), translation: null };
-  const result = await fbPush(MSGS_PATH, msg);
-  const key = result?.name;
-  document.getElementById('sendBtn').disabled = false;
-  if (!key) return;
-  translateAndUpdate(key, text, myRole);
+  try {
+    const msg = { role: myRole, text, ts: Date.now(), translation: null };
+    const result = await fbPush(MSGS_PATH, msg);
+    const key = result?.name;
+    if (!key) return;
+    translateAndUpdate(key, text, myRole);
+  } catch (e) {
+    console.error('Mesaj gönderilemedi:', e);
+    input.value = text;
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
 }
 
 async function translateAndUpdate(key, text, fromRole) {
   try {
     const translation = await translateText(text, fromRole);
     await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
-    if(autoRead && translation) await speak(translation, fromRole==='tr'?'vi':'tr', null, true);
   } catch (e) {
     await fbSet(MSGS_PATH + '/' + key + '/translation', '⚠️ Çeviri hatası');
     console.error(e);
@@ -661,16 +759,101 @@ async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audi
 async function speak(text,target,btn,silent=false){try{await unlockAudio()}catch{}if(!text||!target)return false;if(isSpeaking){stopAudio();return false}const key=localStorage.getItem('askviet_key')||'';if(!key){console.warn('TTS key yok');return false}const [provider]=selectedModel.split(':');const voice=target==='vi'?'cedar':'nova',speed=target==='vi'?0.93:1,instructions=target==='vi'?'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.':'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';const token=++ttsToken,ck=cacheKey(text,target,'gpt-4o-mini-tts',voice,speed);setSpeakBtn(btn,true);try{let blob=ttsCache.get(ck);if(!blob){if(provider==='gemini'){const base64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(new Blob([text]))});const r=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:{text},voice:{languageCode:target==='vi'?'vi-VN':'tr-TR'},audioConfig:{audioEncoding:'MP3'}})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||r.statusText);blob=await fetch('data:audio/mp3;base64,'+d.audioContent).then(r=>r.blob())}else{ttsAbort=new AbortController();const r=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',signal:ttsAbort.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||r.statusText)}blob=await r.blob()}if(token!==ttsToken)return false;ttsCache.set(ck,blob);if(ttsCache.size>30)ttsCache.delete(ttsCache.keys().next().value)}await playBlob(blob,token,btn,text);return true}catch(e){const em=String(e);if(/abort|iptal/i.test(em))return false;if(silent&&/NotAllowedError|not allowed|autoplay/i.test(em))return false;console.error('TTS hatası:',e);return false}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
 
 // ── Model Sync ────────────────────────────────────────────────────────────
-const MODEL_PATH = '/rooms/' + ROOM + '/config/models';
+async function speakOpenAI(text, target, btn, silent=false) {
+  try { await unlockAudio(); } catch {}
+  if (!text || !target) return false;
+  if (isSpeaking) { stopAudio(); return false; }
+  const key = localStorage.getItem('askviet_key') || '';
+  if (!key) { console.warn('TTS key yok'); return false; }
+  const voice = target === 'vi' ? 'cedar' : 'nova';
+  const speed = target === 'vi' ? 0.93 : 1;
+  const instructions = target === 'vi'
+    ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
+    : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
+  const token = ++ttsToken;
+  const ck = cacheKey(text, target, 'gpt-4o-mini-tts', voice, speed);
+  setSpeakBtn(btn, true);
+  try {
+    let blob = ttsCache.get(ck);
+    if (!blob) {
+      ttsAbort = new AbortController();
+      const r = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        signal: ttsAbort.signal,
+        headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body: JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(()=>({}));
+        throw new Error(d.error?.message || r.statusText);
+      }
+      blob = await r.blob();
+      if (token !== ttsToken) return false;
+      ttsCache.set(ck, blob);
+      if (ttsCache.size > 30) ttsCache.delete(ttsCache.keys().next().value);
+    }
+    await playBlob(blob, token, btn, text);
+    return true;
+  } catch(e) {
+    const em = String(e);
+    if (/abort|iptal/i.test(em)) return false;
+    if (silent && /NotAllowedError|not allowed|autoplay/i.test(em)) return false;
+    console.error('TTS hatası:', e);
+    return false;
+  } finally {
+    if (token === ttsToken) {
+      isSpeaking = false;
+      setSpeakBtn(btn, false);
+    }
+  }
+}
+speak = speakOpenAI;
+
 const MODEL_NAMES = {
   'openai:gpt-4o': 'GPT-4o',
   'openai:gpt-4o-mini': '4o-mini',
   'gemini:gemini-2.5-flash-preview-05-20': 'Gemini Flash'
 };
 
+function modelName(model) {
+  return MODEL_NAMES[model] || (model || '').split(':')[1] || '-';
+}
+
+function setSelectedModel(model, fromRemote=false) {
+  if (!model) return;
+  selectedModel = model;
+  localStorage.setItem('askviet_model', model);
+  const setupSelect = document.getElementById('modelSelect');
+  const chatSelect = document.getElementById('chatModelSelect');
+  if (setupSelect && setupSelect.value !== model) setupSelect.value = model;
+  if (chatSelect && chatSelect.value !== model) chatSelect.value = model;
+  const myBadge = document.getElementById('myModelBadge');
+  const theirBadge = document.getElementById('theirModelBadge');
+  if (myBadge) myBadge.textContent = modelName(model);
+  if (theirBadge) {
+    theirBadge.textContent = myRole === 'tr' ? 'TR kontrol' : 'TR seçimi';
+    theirBadge.classList.add('active');
+  }
+  if (myRole === 'tr' && !fromRemote) syncMyModel(model);
+}
+
+function setupChatControls() {
+  const chatSelect = document.getElementById('chatModelSelect');
+  const autoBtn = document.getElementById('autoReadBtn');
+  if (chatSelect) {
+    chatSelect.value = selectedModel;
+    chatSelect.style.display = myRole === 'tr' ? '' : 'none';
+    chatSelect.disabled = myRole !== 'tr';
+    chatSelect.onchange = () => setSelectedModel(chatSelect.value);
+  }
+  if (autoBtn) autoBtn.style.display = myRole === 'tr' ? '' : 'none';
+  setSelectedModel(selectedModel, true);
+  updateAutoReadUI();
+}
+
 function syncMyModel(model) {
-  if (!myRole) return;
-  fbSet(MODEL_PATH + '/' + myRole, model);
+  if (myRole !== 'tr') return;
+  fbSet(MODEL_PATH, model);
 }
 
 function listenTheirModel() {
@@ -696,6 +879,61 @@ function listenTheirModel() {
         badge.classList.add('active');
       }
     }
+  });
+}
+
+function listenModelConfig() {
+  if (unsubModel) unsubModel();
+  fbGet(MODEL_PATH).then(m => {
+    if (m) setSelectedModel(m, true);
+    else if (myRole === 'tr') syncMyModel(selectedModel);
+  });
+  unsubModel = fbListen(MODEL_PATH, event => {
+    if (!event || !event.data) return;
+    setSelectedModel(event.data, true);
+  });
+}
+
+function syncAutoRead(value) {
+  if (myRole !== 'tr') return;
+  fbSet(AUTO_READ_PATH, !!value);
+}
+
+function toggleAutoRead() {
+  if (myRole !== 'tr') return;
+  autoRead = !autoRead;
+  localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
+  updateAutoReadUI();
+  syncAutoRead(autoRead);
+}
+
+function updateAutoReadUI() {
+  const arBtn = document.getElementById('autoReadBtn');
+  const status = document.getElementById('autoReadStatus');
+  const text = autoRead ? '🔊 Açık' : '🔇 Kapalı';
+  if (arBtn) {
+    arBtn.textContent = autoRead ? '🔊' : '🔇';
+    arBtn.title = autoRead ? 'Otomatik ses açık' : 'Otomatik ses kapalı';
+  }
+  if (status) {
+    status.textContent = text;
+    status.classList.toggle('on', autoRead);
+    status.title = myRole === 'tr' ? 'Otomatik ses kontrolü sende' : 'Otomatik ses TR tarafından kontrol edilir';
+  }
+}
+
+function listenAutoReadConfig() {
+  if (unsubAutoRead) unsubAutoRead();
+  fbGet(AUTO_READ_PATH).then(v => {
+    if (typeof v === 'boolean') autoRead = v;
+    else if (myRole === 'tr') syncAutoRead(autoRead);
+    updateAutoReadUI();
+  });
+  unsubAutoRead = fbListen(AUTO_READ_PATH, event => {
+    if (!event) return;
+    autoRead = !!event.data;
+    localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
+    updateAutoReadUI();
   });
 }
 
@@ -803,6 +1041,24 @@ async function transcribeVoice(blob) {
     return (data.text || '').trim();
   }
 }
+
+async function transcribeVoiceOpenAI(blob) {
+  const key = localStorage.getItem('askviet_key') || '';
+  if (!key) throw new Error('OpenAI API key gerekli');
+  const fd = new FormData();
+  fd.append('file', blob, 'audio.webm');
+  fd.append('model', 'whisper-1');
+  fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
+  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + key},
+    body: fd
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error?.message || resp.statusText);
+  return (data.text || '').trim();
+}
+transcribeVoice = transcribeVoiceOpenAI;
 
 window.addEventListener('beforeunload', () => {
   if (myRole) fbSet(TYPING_PATH + '/' + myRole, false);
