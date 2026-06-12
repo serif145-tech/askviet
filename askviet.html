@@ -796,7 +796,7 @@ function showIncomingNotification(msg) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const title = msg.role === 'tr' ? '🇹🇷 AskViet' : '🇻🇳 AskViet';
     const body = msg.translation || msg.text || 'Yeni mesaj';
-    new Notification(title, { body, tag: 'askviet-new-message', silent: true });
+    new Notification(title, { body, tag: 'askviet-new-message', silent: false });
   } catch {}
 }
 
@@ -1361,6 +1361,13 @@ function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(l
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
+async function resetRecAudioCtx(){
+  if(recAudioCtx){
+    try{await recAudioCtx.close()}catch{}
+    recAudioCtx=null;
+  }
+}
+
 async function ensureAudioCtx(){
   try{
     if(!recAudioCtx||recAudioCtx.state==='closed') recAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -1451,6 +1458,7 @@ async function startVoice() {
   recChunks=[];recHadSpeech=false;recSilentSince=0;
   btn.classList.add('mic-recording');
   try{
+    await resetRecAudioCtx();
     const ctx=await ensureAudioCtx();
     recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
     recNode=ctx.createMediaStreamSource(recStream);
@@ -1466,7 +1474,7 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(chunks.length===0){btn.textContent='🎙';return;}
+      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
         const blob=new Blob(chunks,{type:mt});
@@ -1481,11 +1489,11 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.006){recHadSpeech=true;recSilentSince=0;return;}
+      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
         if(now-recSilentSince>1500)stopRec();
-      }else if(now-recStarted>4500)stopRec();
+      }else if(now-recStarted>2000)stopRec();
       if(now-recStarted>12000)stopRec();
     },120);
   }catch(e){
