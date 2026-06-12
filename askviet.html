@@ -270,6 +270,7 @@ let renderedKeys = new Set();
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
 let audioListenStartedAt = 0;
+let chatListenStartedAt = 0;
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -451,6 +452,7 @@ function goBack() {
 
 // ── Chat ──────────────────────────────────────────────────────────────────
 function initChat() {
+  chatListenStartedAt = Date.now();
   fbGet(MSGS_PATH).then(data => {
     if (data && typeof data === 'object') {
       Object.entries(data).forEach(([k, v]) => { if (v) renderMessage(k, v); });
@@ -533,6 +535,7 @@ function renderMessage(key, msg) {
   div.dataset.role = msg.role || '';
   div.dataset.text = msg.text || '';
   div.dataset.translation = msg.translation || '';
+  div.dataset.ts = msg.ts || '';
 
   const head = document.createElement('div');
   head.className = 'msg-head';
@@ -609,6 +612,7 @@ function updateOrRender(key, msg) {
     box.dataset.role = msg.role || box.dataset.role || '';
     box.dataset.text = msg.text || box.dataset.text || '';
     if (msg.translation) box.dataset.translation = msg.translation;
+    if (msg.ts) box.dataset.ts = msg.ts;
   }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
@@ -750,6 +754,11 @@ function maybeAutoReadMessage(key) {
   if (!box || !autoRead || autoReadDone.has(key)) return;
   const senderRole = box.dataset.role;
   if (!senderRole || senderRole === myRole) return;
+  const ts = Number(box.dataset.ts || 0);
+  if (!ts || ts < chatListenStartedAt - 1500) {
+    autoReadDone.add(key);
+    return;
+  }
   const text = box.dataset.translation || '';
   if (!text || text.includes('⏳') || text.includes('⚠')) return;
   autoReadDone.add(key);
