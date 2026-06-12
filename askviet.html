@@ -246,6 +246,7 @@ const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
+const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -260,8 +261,10 @@ let unsubMessages = null;
 let unsubTyping = null;
 let unsubModel = null;
 let unsubAutoRead = null;
+let unsubAudio = null;
 let renderedKeys = new Set();
 let autoReadDone = new Set();
+let handledAudioRequests = new Set();
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -369,6 +372,7 @@ function fbListen(path, cb) {
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 function start(role) {
+  try { unlockAudio(); } catch(e) {}
   const openaiKey = document.getElementById('apiKeyInput')?.value.trim()||localStorage.getItem('askviet_key')||'';
   const geminiKey = document.getElementById('geminiKeyInput')?.value.trim()||localStorage.getItem('askviet_gemini_key')||'';
   if(!openaiKey){alert('OpenAI API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
@@ -426,8 +430,10 @@ function goBack() {
   if (unsubTyping) unsubTyping();
   if (unsubModel) unsubModel();
   if (unsubAutoRead) unsubAutoRead();
+  if (unsubAudio) unsubAudio();
   renderedKeys.clear();
   autoReadDone.clear();
+  handledAudioRequests.clear();
   stopAudio();
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('chat').style.display = 'none';
@@ -471,8 +477,11 @@ function initChat() {
         updateOrRender(key, event.data);
         scrollToBottom();
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
+        const box = document.getElementById('msg-' + key);
+        if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
         if (el) { el.textContent = event.data; el.style.color = ''; el.style.fontStyle = 'italic'; }
+        refreshMessageText(key);
         maybeAutoReadMessage(key);
         scrollToBottom();
       }
@@ -493,6 +502,8 @@ function initChat() {
     ind.classList.toggle('show', val);
     if (val) scrollToBottom();
   });
+
+  listenAudioRequests();
 }
 
 function setConnected(v) {
@@ -516,7 +527,8 @@ function renderMessage(key, msg) {
 
   const orig = document.createElement('div');
   orig.className = 'msg-original';
-  orig.textContent = msg.text;
+  orig.id = 'orig-' + key;
+  orig.textContent = getMainText(msg);
   div.appendChild(orig);
 
   const trans = document.createElement('div');
@@ -541,7 +553,7 @@ function renderMessage(key, msg) {
   spBtn.className = 'speakBtn';
   spBtn.textContent = '▶';
   spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  spBtn.onclick = () => speak(getReadableText(key), getReadableLang(msg.role), spBtn);
+  spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
 
   const misBtn = document.createElement('button');
   misBtn.textContent = '⚠';
@@ -552,6 +564,8 @@ function renderMessage(key, msg) {
     const misText = lang === 'vi' ? 'Em không hiểu, anh nói lại được không? 🥺' : 'Anlamadım aşkım, tekrar söyler misin? 🥺';
     document.getElementById('msgInput').value = misText;
   };
+
+  misBtn.onclick = () => sendQuickMisunderstood();
 
   const delBtn = document.createElement('button');
   delBtn.textContent = '✕';
@@ -568,6 +582,7 @@ function renderMessage(key, msg) {
 
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
+  refreshMessageText(key);
 }
 
 function updateOrRender(key, msg) {
@@ -584,7 +599,39 @@ function updateOrRender(key, msg) {
     el.style.color = '';
     el.style.fontStyle = 'italic';
   }
+  refreshMessageText(key);
   maybeAutoReadMessage(key);
+}
+
+function getMainText(msg) {
+  const isMine = msg.role === myRole;
+  if (isMine) return msg.text || '';
+  return msg.translation || '⏳ çevriliyor...';
+}
+
+function getSubText(msg) {
+  const isMine = msg.role === myRole;
+  if (isMine) return msg.translation || '⏳ çevriliyor...';
+  return msg.text || '';
+}
+
+function refreshMessageText(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const msg = {
+    role: box.dataset.role || '',
+    text: box.dataset.text || '',
+    translation: box.dataset.translation || ''
+  };
+  const orig = document.getElementById('orig-' + key);
+  const trans = document.getElementById('trans-' + key);
+  if (orig) orig.textContent = getMainText(msg);
+  if (trans) {
+    trans.textContent = getSubText(msg);
+    const waiting = !msg.translation;
+    trans.style.color = waiting ? 'var(--tr2)' : '';
+    trans.style.fontStyle = waiting ? 'normal' : 'italic';
+  }
 }
 
 function removeMessageElement(key) {
@@ -609,6 +656,72 @@ function getReadableText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
   return box.dataset.translation || box.dataset.text || '';
+}
+
+function getRecipientRole(senderRole) {
+  return senderRole === 'tr' ? 'vi' : 'tr';
+}
+
+function getRecipientText(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return '';
+  return box.dataset.translation || '';
+}
+
+async function requestSpeakForMessage(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const targetRole = getRecipientRole(box.dataset.role);
+  const text = getRecipientText(key);
+  if (!text || text.includes('⏳') || text.includes('⚠')) return;
+  if (targetRole === myRole) {
+    speak(text, myRole, btn);
+    return;
+  }
+  setSpeakBtn(btn, true);
+  await fbPush(AUDIO_PATH, {
+    key,
+    from: myRole,
+    target: targetRole,
+    text,
+    lang: targetRole,
+    ts: Date.now()
+  });
+  setTimeout(() => setSpeakBtn(btn, false), 700);
+}
+
+function listenAudioRequests() {
+  if (unsubAudio) unsubAudio();
+  unsubAudio = fbListen(AUDIO_PATH, event => {
+    if (!event || !event.data) return;
+    const path = event.path || '/';
+    if (path === '/' && typeof event.data === 'object') {
+      Object.entries(event.data).forEach(([id, req]) => handleAudioRequest(id, req));
+      return;
+    }
+    const id = path.replace(/^\//, '').split('/')[0];
+    if (id && typeof event.data === 'object') handleAudioRequest(id, event.data);
+  });
+}
+
+function handleAudioRequest(id, req) {
+  if (!req || handledAudioRequests.has(id)) return;
+  if (req.target !== myRole) return;
+  handledAudioRequests.add(id);
+  speak(req.text, req.lang || myRole, null, true);
+}
+
+function getMisunderstoodText() {
+  return myRole === 'vi'
+    ? 'Em không hiểu, anh nói lại được không? 🥺'
+    : 'Anlamadım aşkım, tekrar söyler misin? 🥺';
+}
+
+async function sendQuickMisunderstood() {
+  const input = document.getElementById('msgInput');
+  if (!input) return;
+  input.value = getMisunderstoodText();
+  await sendMessage();
 }
 
 function maybeAutoReadMessage(key) {
@@ -752,6 +865,19 @@ initPWA();
 
 // ── Ses Fonksiyonları ────────────────────────────────────────────────────
 function getAudioPlayer(){if(!audioPlayer){audioPlayer=new Audio();audioPlayer.preload='none'}return audioPlayer}
+async function unlockAudio(){
+  const a=getAudioPlayer();
+  try{
+    if(!a.src){
+      a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+      a.volume=0;
+      await a.play();
+      a.pause();
+      a.currentTime=0;
+      a.volume=1;
+    }
+  }catch{}
+}
 function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶ Ses';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
@@ -831,7 +957,7 @@ function setSelectedModel(model, fromRemote=false) {
   const theirBadge = document.getElementById('theirModelBadge');
   if (myBadge) myBadge.textContent = modelName(model);
   if (theirBadge) {
-    theirBadge.textContent = myRole === 'tr' ? 'TR kontrol' : 'TR seçimi';
+    theirBadge.textContent = modelName(model);
     theirBadge.classList.add('active');
   }
   if (myRole === 'tr' && !fromRemote) syncMyModel(model);
@@ -901,6 +1027,7 @@ function syncAutoRead(value) {
 
 function toggleAutoRead() {
   if (myRole !== 'tr') return;
+  unlockAudio();
   autoRead = !autoRead;
   localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
   updateAutoReadUI();
