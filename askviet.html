@@ -60,21 +60,26 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
-.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 10px 10px;padding-top:max(env(safe-area-inset-top),10px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap}
-.header-main{min-width:150px;flex:1 1 150px;display:flex;flex-direction:column;gap:2px}
-.chat-title{font-weight:900;font-size:16px}
-.chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
-.header-models{display:flex;gap:6px;margin-top:5px;align-items:center;flex-wrap:wrap}
-.last-seen{font-size:10px;color:#9ca3af;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-weight:700}
+.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 12px 12px;padding-top:max(env(safe-area-inset-top),12px);background:linear-gradient(180deg,#111118 0%,#0d0d13 100%);border-bottom:1px solid #24242c;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main right" "meta meta";gap:10px 12px;flex-shrink:0}
+.header-main{grid-area:main;min-width:0;display:flex;flex-direction:column;gap:4px}
+.chat-title{font-weight:900;font-size:19px;line-height:1.15}
+.chat-subtitle{font-size:13px;color:#8f8f9b;margin-top:0;line-height:1.25}
+.header-models{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.last-seen{font-size:13px;color:#9ca3af;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;font-weight:800;display:flex;align-items:center;gap:7px}
+.last-seen::before{content:"◷";font-size:15px;color:#9ca3af}
+.last-seen .presence-sep{color:#3f3f46;margin:0 8px}
+.last-seen .presence-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;box-shadow:0 0 8px rgba(239,68,68,.35)}
 .last-seen.online{color:#22c55e;font-weight:900;text-shadow:0 0 8px rgba(34,197,94,.25)}
-.header-right{display:flex;align-items:flex-start;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto;padding-top:24px}
+.last-seen.online::before{color:#9ca3af}
+.last-seen.online .presence-dot{background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.45)}
+.header-right{grid-area:right;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;padding-top:2px}
 .tr-guard{display:none;align-items:center;gap:6px;flex:0 0 auto}
 .vn-voice-toggle{font-size:12px;font-weight:800;border:1px solid #374151;background:#171722;color:#e5e7eb;border-radius:999px;padding:6px 9px;cursor:pointer;white-space:nowrap}
 .vn-voice-toggle.on{border-color:#22c55e;background:#14532d;color:#dcfce7}
 .vn-voice-toggle.off{border-color:#ef4444;background:#3b1118;color:#fecdd3}
 .online-count{width:28px;height:28px;border-radius:50%;border:2px solid #22c55e;background:#06130b;color:#4ade80;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;box-shadow:0 0 8px rgba(34,197,94,.25)}
-.settings-controls{display:none;align-items:center;gap:5px;min-width:0}
-.settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;flex-wrap:wrap}
+.settings-controls{display:none;align-items:center;gap:8px;min-width:0}
+.settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
@@ -101,15 +106,20 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 0 0 2px;box-shadow:0 1px 5px rgba(22,163,74,.35);align-self:center;white-space:nowrap}
 .msg.mine .msg-read{background:#2563eb;border-color:#60a5fa;box-shadow:0 1px 5px rgba(37,99,235,.35)}
 .msg-read.show{display:inline-block}
-.msg-media-img{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:14px;object-fit:cover;background:#111}
+.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:14px;object-fit:cover;background:#111;cursor:pointer}
+.msg-media-video{min-width:min(240px,68vw)}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-9px;bottom:-9px;width:24px;height:24px;border-radius:50%;border:1px solid #d1d5db;background:#fff;color:#6b7280;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.18);cursor:pointer}
-.msg.mine .msg-react-btn{right:auto;left:-9px}
+.msg-react-btn{position:absolute;right:-17px;bottom:-15px;width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#6b7280;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4}
+.msg.mine .msg-react-btn{right:-17px;left:auto}
 .msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .msg-reactions.show{display:flex}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22)}
 .reaction-picker.show{display:flex}
 .reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
+.media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
+.media-lightbox.show{display:flex}
+.media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
+.media-lightbox-close{position:fixed;top:max(env(safe-area-inset-top),14px);right:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,20,.75);color:#fff;font-size:24px;font-weight:900;z-index:100001}
 
 .typing-indicator{display:none;align-self:flex-start;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px}
 .typing-indicator.show{display:flex;gap:4px;align-items:center}
@@ -144,8 +154,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
   .back-btn{font-size:18px;padding:3px}
   .model-badge{font-size:10px;padding:2px 6px}
   .chat-header{gap:6px}
-  .header-main{flex:1 1 130px;min-width:130px}
-  .header-right{flex:1 1 190px;padding-top:4px}
+  .header-main{min-width:0}
+  .header-right{padding-top:2px;gap:5px}
   .last-seen{max-width:210px}
   .vn-voice-toggle{font-size:11px;padding:5px 7px}
   .online-count{width:25px;height:25px;font-size:12px}
@@ -274,14 +284,19 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="input-bar">
-    <input type="file" id="galleryInput" accept="image/*" style="display:none" onchange="handleImageInput(event)">
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleImageInput(event)">
+    <input type="file" id="galleryInput" accept="image/*,video/*" style="display:none" onchange="handleImageInput(event)">
+    <input type="file" id="cameraInput" accept="image/*,video/*" capture="environment" style="display:none" onchange="handleImageInput(event)">
     <button class="send-btn" id="galleryBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openGallery()" title="Fotoğraf / sticker">🖼</button>
     <button class="send-btn" id="cameraBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openCamera()" title="Kamera">📷</button>
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
     <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">🎙</button>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
   </div>
+</div>
+
+<div class="media-lightbox" id="mediaLightbox" onclick="closeMediaPreview()">
+  <button class="media-lightbox-close" onclick="event.stopPropagation();closeMediaPreview()">×</button>
+  <div id="mediaLightboxBody" onclick="event.stopPropagation()"></div>
 </div>
 
 <script>
@@ -653,7 +668,7 @@ function renderMessage(key, msg) {
   trans.className = 'msg-translation';
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
-  if (msg.type === 'image') {
+  if (msg.type === 'image' || msg.type === 'video') {
     trans.style.display = 'none';
   } else if (msg.translation) {
     trans.textContent = msg.translation;
@@ -747,14 +762,14 @@ function updateOrRender(key, msg) {
 }
 
 function getMainText(msg) {
-  if (msg.type === 'image') return '';
+  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
   return msg.translation || '⏳ çevriliyor...';
 }
 
 function getSubText(msg) {
-  if (msg.type === 'image') return '';
+  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.translation || '⏳ çevriliyor...';
   return msg.text || '';
@@ -768,8 +783,19 @@ function setMessageContent(el, msg) {
     img.className = 'msg-media-img';
     img.src = msg.mediaUrl;
     img.alt = msg.text || 'Fotoğraf';
-    img.onclick = () => openImagePreview(msg.mediaUrl);
+    img.onclick = () => openMediaPreview(msg.mediaUrl, 'image');
     el.appendChild(img);
+    return;
+  }
+  if (msg.type === 'video' && msg.mediaUrl) {
+    const video = document.createElement('video');
+    video.className = 'msg-media-video';
+    video.src = msg.mediaUrl;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.onclick = () => openMediaPreview(msg.mediaUrl, 'video');
+    el.appendChild(video);
     return;
   }
   el.textContent = getMainText(msg);
@@ -780,7 +806,7 @@ function reactionEmojis(){return ['👍','❤️','😂','😳','😭','😡']}
 function addReactionButton(parent, key) {
   const btn = document.createElement('button');
   btn.className = 'msg-react-btn';
-  btn.textContent = '♡';
+  btn.textContent = '👍';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
   let longPress = false, timer = null;
   btn.addEventListener('pointerdown', e => {
@@ -841,9 +867,31 @@ function updateReactions(key, reactions = {}) {
   el.classList.add('show');
 }
 
-function openImagePreview(src) {
-  const w = window.open('', '_blank');
-  if (w) w.document.write('<img src="'+src+'" style="max-width:100%;height:auto;display:block;margin:auto;background:#111">');
+function openMediaPreview(src, type='image') {
+  const box = document.getElementById('mediaLightbox');
+  const body = document.getElementById('mediaLightboxBody');
+  if (!box || !body || !src) return;
+  body.innerHTML = '';
+  if (type === 'video') {
+    const video = document.createElement('video');
+    video.src = src;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    body.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    body.appendChild(img);
+  }
+  box.classList.add('show');
+}
+
+function closeMediaPreview() {
+  const box = document.getElementById('mediaLightbox');
+  const body = document.getElementById('mediaLightboxBody');
+  if (body) body.innerHTML = '';
+  if (box) box.classList.remove('show');
 }
 
 function refreshMessageText(key) {
@@ -860,7 +908,7 @@ function refreshMessageText(key) {
   const trans = document.getElementById('trans-' + key);
   if (orig) setMessageContent(orig, msg);
   if (trans) {
-    if (msg.type === 'image') { trans.style.display = 'none'; return; }
+    if (msg.type === 'image' || msg.type === 'video') { trans.style.display = 'none'; return; }
     trans.style.display = '';
     trans.textContent = getSubText(msg);
     const waiting = !msg.translation;
@@ -970,7 +1018,7 @@ function removeMessageElement(key) {
 
 async function copyOriginalMessage(key, btn) {
   const box = document.getElementById('msg-' + key);
-  const text = box?.dataset?.type === 'image' ? (box?.dataset?.mediaUrl || '') : (box?.dataset?.text || '');
+  const text = (box?.dataset?.type === 'image' || box?.dataset?.type === 'video') ? (box?.dataset?.mediaUrl || '') : (box?.dataset?.text || '');
   if (!text) return;
   try {
     if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
@@ -1008,7 +1056,7 @@ function getReadableLang(senderRole) {
 function getReadableText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  if (box.dataset.type === 'image') return '';
+  if (box.dataset.type === 'image' || box.dataset.type === 'video') return '';
   return box.dataset.translation || box.dataset.text || '';
 }
 
@@ -1085,7 +1133,7 @@ async function sendQuickMisunderstood() {
 function maybeAutoReadMessage(key) {
   const box = document.getElementById('msg-' + key);
   if (!box || !autoRead || autoReadDone.has(key)) return;
-  if (box.dataset.type === 'image') { autoReadDone.add(key); return; }
+  if (box.dataset.type === 'image' || box.dataset.type === 'video') { autoReadDone.add(key); return; }
   const senderRole = box.dataset.role;
   if (!senderRole || senderRole === myRole) return;
   const ts = Number(box.dataset.ts || 0);
@@ -1136,18 +1184,20 @@ async function handleImageInput(event) {
   input.value = '';
   if (!file) return;
   try {
-    showMediaStatus(myRole === 'vi' ? 'Đang gửi ảnh...' : 'Fotoğraf gönderiliyor...');
+    const isVideo = /^video\//i.test(file.type);
+    showMediaStatus(myRole === 'vi' ? (isVideo ? 'Đang gửi video...' : 'Đang gửi ảnh...') : (isVideo ? 'Video gönderiliyor...' : 'Fotoğraf gönderiliyor...'));
     const media = await prepareImageForUpload(file);
     const uploaded = await uploadMediaFile(media.blob, media.name);
-    await sendImageMessage(uploaded.url || uploaded.mediaUrl, file.name);
+    await sendMediaMessage(uploaded.url || uploaded.mediaUrl, file.name, uploaded.mime || file.type);
   } catch (e) {
-    alert((myRole === 'vi' ? 'Không gửi được ảnh: ' : 'Fotoğraf gönderilemedi: ') + (e.message || e));
+    alert((myRole === 'vi' ? 'Không gửi được media: ' : 'Medya gönderilemedi: ') + (e.message || e));
   } finally {
     hideMediaStatus();
   }
 }
 
 async function prepareImageForUpload(file) {
+  if (/^video\//i.test(file.type)) return { blob: file, name: safeMediaName(file.name || 'video') };
   const keepOriginal = /image\/(gif|webp|png)/i.test(file.type) && file.size <= 1800000;
   if (keepOriginal) return { blob: file, name: safeMediaName(file.name || 'image') };
   const bmp = await createImageBitmap(file);
@@ -1176,9 +1226,11 @@ async function uploadMediaFile(blob, fileName) {
   return data;
 }
 
-async function sendImageMessage(url, name='') {
+async function sendMediaMessage(url, name='', mime='') {
   if (!url) throw new Error('Upload URL yok');
-  const msg = { role: myRole, type:'image', text:name || 'Fotoğraf', mediaUrl:url, ts:Date.now(), translation:null };
+  const type = /^video\//i.test(mime) || /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'video' : 'image';
+  const label = name || (type === 'video' ? 'Video' : 'Fotoğraf');
+  const msg = { role: myRole, type, text:label, mediaUrl:url, mime:mime || null, ts:Date.now(), translation:null };
   await fbPush(MSGS_PATH, msg);
   setMyTyping(false);
 }
@@ -1757,7 +1809,7 @@ function updateOnlineCount(count) {
 }
 
 function lastSeenOnlineText() {
-  return myRole === 'vi' ? 'Đang online' : 'Çevrimiçi';
+  return myRole === 'vi' ? 'Đang hoạt động' : 'Şu anda aktif';
 }
 
 function formatLastSeen(ts) {
@@ -1765,28 +1817,19 @@ function formatLastSeen(ts) {
   if (!el) return;
   el.classList.remove('online');
   if (!ts) {
-    el.textContent = myRole === 'vi' ? 'Chưa thấy hoạt động' : 'Son görülme yok';
+    el.innerHTML = '<span class="presence-dot"></span>' + (myRole === 'vi' ? 'Chưa thấy hoạt động' : 'Son görülme yok');
     return;
   }
-  const diff = Math.max(0, Date.now() - Number(ts));
-  const min = Math.floor(diff / 60000);
-  const hour = Math.floor(min / 60);
-  if (min < 1) el.textContent = myRole === 'vi' ? 'Vừa hoạt động' : 'Az önce görüldü';
-  else if (min < 60) el.textContent = myRole === 'vi' ? `Hoạt động ${min} phút trước` : `Son görülme ${min} dk önce`;
-  else if (hour < 24) el.textContent = myRole === 'vi' ? `Hoạt động ${hour} giờ trước` : `Son görülme ${hour} saat önce`;
-  else {
-    const d = new Date(Number(ts));
-    el.textContent = myRole === 'vi'
-      ? 'Hoạt động ' + d.toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
-      : 'Son görülme ' + d.toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-  }
+  const d = new Date(Number(ts));
+  const time = d.toLocaleTimeString(myRole === 'vi' ? 'vi-VN' : 'tr-TR', { hour:'2-digit', minute:'2-digit' });
+  el.innerHTML = '<span class="presence-dot"></span>' + (myRole === 'vi' ? 'Hoạt động lúc ' : 'Son görülme ') + time;
 }
 
 function updateLastSeenStatus(isOnline, lastTs) {
   const el = document.getElementById('lastSeenStatus');
   if (!el) return;
   el.classList.toggle('online', !!isOnline);
-  if (isOnline) el.textContent = lastSeenOnlineText();
+  if (isOnline) el.innerHTML = '<span class="presence-dot"></span>' + lastSeenOnlineText();
   else formatLastSeen(lastTs);
 }
 
