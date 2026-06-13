@@ -222,8 +222,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
     <div class="header-right">
       <div id="trGuard" class="tr-guard">
-        <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
         <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
+        <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
       </div>
       <div id="settingsBtnArea" class="settings-controls">
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
@@ -1361,14 +1361,6 @@ function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(l
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
-async function resetRecPipeline(){
-  clearInterval(recTimer);recTimer=null;
-  if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-  if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-  recAnalyser=null;recData=null;
-  await resetRecAudioCtx();
-}
-
 async function resetRecAudioCtx(){
   if(recAudioCtx){
     try{await recAudioCtx.close()}catch{}
@@ -1466,8 +1458,6 @@ async function startVoice() {
   recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;
   btn.classList.add('mic-recording');
   try{
-    await unlockAudio();
-    stopAudio();
     if(recNode){try{recNode.disconnect()}catch{}recNode=null}
     if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
     recAnalyser=null;recData=null;
@@ -1491,8 +1481,6 @@ async function startVoice() {
       if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
-        await sleep(260);
-        setStatus('Çeviriyor');
         const blob=new Blob(chunks,{type:mt});
         const text=await transcribeVoice(blob);
         if(text){document.getElementById('msgInput').value=text;sendMessage();}
@@ -1517,6 +1505,8 @@ async function startVoice() {
       if(now-recStarted>12000)stopRec();
     },120);
   }catch(e){
+    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
     btn.classList.remove('mic-recording');
     alert('Mikrofon izni gerekli: '+e.message);
   }
@@ -1592,15 +1582,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     clearUnreadCount();
     if (myRole) fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
-    if (recAudioCtx && recAudioCtx.state === 'suspended') {
-      try { recAudioCtx.resume(); } catch {}
-    }
-    setStatus('HazÄ±r');
-  } else {
-    if (rec) cancelRecorderSilent();
-    if (liveOn) stopLive();
-    stopAudio();
-    _audioUnlocked = false;
   }
 });
 ['pointerdown','touchstart','click'].forEach(type => {
