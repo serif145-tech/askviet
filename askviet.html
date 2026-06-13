@@ -1355,7 +1355,7 @@ function updateNotifySoundUI() {
 
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
-let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0,recFlatFrames=0,recMicFault=false;
+let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0;
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
@@ -1463,10 +1463,13 @@ async function startVoice() {
   const btn = document.getElementById('micBtn');
   // Zaten kayıt varsa durdur
   if(rec){stopRec();return;}
-  recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;recFlatFrames=0;recMicFault=false;
+  recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;
   btn.classList.add('mic-recording');
   try{
-    await resetRecPipeline();
+    await resetRecAudioCtx();
+    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
+    recAnalyser=null;recData=null;
     const ctx=await ensureAudioCtx();
     recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
     if(ctx.state==='suspended') await ctx.resume();
@@ -1478,10 +1481,13 @@ async function startVoice() {
     rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
     rec.onstop=async()=>{
       const chunks=recChunks.slice(),mt=rec?.mimeType||'audio/webm';
-      await resetRecPipeline();
+      clearInterval(recTimer);recTimer=null;
+      if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+      if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
+      recAnalyser=null;recData=null;
+      await resetRecAudioCtx();
       btn.classList.remove('mic-recording');
       rec=null;
-      if(recMicFault){btn.textContent='🎙';return;}
       if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
@@ -1496,18 +1502,7 @@ async function startVoice() {
     recButton=btn;
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
-      recAnalyser.getByteTimeDomainData(recData);
-      let sum=0,min=255,max=0;
-      for(let i=0;i<recData.length;i++){const x=recData[i];if(x<min)min=x;if(x>max)max=x;const v=(x-128)/128;sum+=v*v}
-      const v=Math.sqrt(sum/recData.length),now=Date.now();
-      const track=recStream&&recStream.getAudioTracks&&recStream.getAudioTracks()[0];
-      const flat=(max-min)<=1;
-      recFlatFrames=flat?recFlatFrames+1:0;
-      if((track&&(track.readyState!=='live'||track.muted))||(recFlatFrames>=12&&now-recStarted>1400)){
-        recMicFault=true;
-        stopRec();
-        return;
-      }
+      const v=rms(recAnalyser,recData),now=Date.now();
       if(v>0.03){
         recLoudFrames++;
         if(recLoudFrames>=3) recHadSpeech=true;
@@ -1523,7 +1518,7 @@ async function startVoice() {
     },120);
   }catch(e){
     btn.classList.remove('mic-recording');
-    await resetRecPipeline();
+    await resetRecAudioCtx();
     alert('Mikrofon izni gerekli: '+e.message);
   }
 }
