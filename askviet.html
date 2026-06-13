@@ -1466,7 +1466,8 @@ async function startVoice() {
   recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;
   btn.classList.add('mic-recording');
   try{
-    await resetRecAudioCtx();
+    await unlockAudio();
+    stopAudio();
     if(recNode){try{recNode.disconnect()}catch{}recNode=null}
     if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
     recAnalyser=null;recData=null;
@@ -1485,12 +1486,13 @@ async function startVoice() {
       if(recNode){try{recNode.disconnect()}catch{}recNode=null}
       if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
       recAnalyser=null;recData=null;
-      await resetRecAudioCtx();
       btn.classList.remove('mic-recording');
       rec=null;
       if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
       btn.textContent='⏳';
       try{
+        await sleep(260);
+        setStatus('Çeviriyor');
         const blob=new Blob(chunks,{type:mt});
         const text=await transcribeVoice(blob);
         if(text){document.getElementById('msgInput').value=text;sendMessage();}
@@ -1503,13 +1505,11 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.03){
-        recLoudFrames++;
-        if(recLoudFrames>=3) recHadSpeech=true;
+      if(v>0.012){
+        recHadSpeech=true;
         recSilentSince=0;
         return;
       }
-      recLoudFrames=0;
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
         if(now-recSilentSince>1500)stopRec();
@@ -1518,7 +1518,6 @@ async function startVoice() {
     },120);
   }catch(e){
     btn.classList.remove('mic-recording');
-    await resetRecAudioCtx();
     alert('Mikrofon izni gerekli: '+e.message);
   }
 }
@@ -1593,6 +1592,15 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     clearUnreadCount();
     if (myRole) fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
+    if (recAudioCtx && recAudioCtx.state === 'suspended') {
+      try { recAudioCtx.resume(); } catch {}
+    }
+    setStatus('HazÄ±r');
+  } else {
+    if (rec) cancelRecorderSilent();
+    if (liveOn) stopLive();
+    stopAudio();
+    _audioUnlocked = false;
   }
 });
 ['pointerdown','touchstart','click'].forEach(type => {
