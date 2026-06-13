@@ -60,12 +60,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
-.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 10px 10px;padding-top:max(env(safe-area-inset-top),10px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap}
-.header-main{min-width:150px;flex:1 1 150px}
+.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 10px 10px;padding-top:max(env(safe-area-inset-top),10px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.header-main{min-width:150px;flex:1 1 150px;display:flex;flex-direction:column;gap:2px}
 .chat-title{font-weight:900;font-size:16px}
 .chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
-.last-seen{font-size:10px;color:#9ca3af;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
-.header-right{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto}
+.header-models{display:flex;gap:6px;margin-top:5px;align-items:center;flex-wrap:wrap}
+.last-seen{font-size:10px;color:#9ca3af;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-weight:700}
+.last-seen.online{color:#22c55e;font-weight:900;text-shadow:0 0 8px rgba(34,197,94,.25)}
+.header-right{display:flex;align-items:flex-start;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto;padding-top:24px}
 .tr-guard{display:none;align-items:center;gap:6px;flex:0 0 auto}
 .vn-voice-toggle{font-size:12px;font-weight:800;border:1px solid #374151;background:#171722;color:#e5e7eb;border-radius:999px;padding:6px 9px;cursor:pointer;white-space:nowrap}
 .vn-voice-toggle.on{border-color:#22c55e;background:#14532d;color:#dcfce7}
@@ -141,6 +143,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
   .settings-controls>img{width:38px!important;height:38px!important}
   .back-btn{font-size:18px;padding:3px}
   .model-badge{font-size:10px;padding:2px 6px}
+  .chat-header{gap:6px}
+  .header-main{flex:1 1 130px;min-width:130px}
+  .header-right{flex:1 1 190px;padding-top:4px}
+  .last-seen{max-width:210px}
+  .vn-voice-toggle{font-size:11px;padding:5px 7px}
+  .online-count{width:25px;height:25px;font-size:12px}
 }
 @media (min-width: 900px){
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
@@ -224,7 +232,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="header-main">
       <div class="chat-title" id="chatTitle">🇹🇷 → 🇻🇳</div>
       <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
-      <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+      <div class="header-models">
         <span class="model-badge active" id="myModelBadge">-</span>
         <span style="color:var(--muted);font-size:10px">vs</span>
         <span class="model-badge" id="theirModelBadge">?</span>
@@ -233,8 +241,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
     <div class="header-right">
       <div id="trGuard" class="tr-guard">
-        <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
         <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
+        <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
       </div>
       <div id="settingsBtnArea" class="settings-controls">
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
@@ -360,6 +368,18 @@ if (localStorage.getItem('askviet_auth') === '1') {
 }
 document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
 
+function tryAutoResumeReloadRole() {
+  const role = localStorage.getItem('askviet_reload_role');
+  if (role !== 'tr' && role !== 'vi') return;
+  const hasAuth = localStorage.getItem('askviet_auth') === '1';
+  const hasOpenai = !!localStorage.getItem('askviet_key');
+  const hasGemini = !!localStorage.getItem('askviet_gemini_key');
+  if (!hasAuth || !hasOpenai || !hasGemini) return;
+  localStorage.removeItem('askviet_reload_role');
+  setTimeout(() => start(role), 180);
+}
+tryAutoResumeReloadRole();
+
 // ── Model değişince label güncelle ────────────────────────────────────────
 // model change - artık ayrı alanlar var, listener gerekmez
 
@@ -422,7 +442,7 @@ async function fbRemove(path) {
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
   es.addEventListener('put', e => { try { cb(JSON.parse(e.data)); } catch {} });
-  es.addEventListener('patch', e => { try { cb({ path: '/', data: JSON.parse(e.data) }); } catch {} });
+  es.addEventListener('patch', e => { try { cb(JSON.parse(e.data)); } catch {} });
   es.onerror = () => setConnected(false);
   es.onopen = () => setConnected(true);
   return () => es.close();
@@ -443,6 +463,7 @@ function start(role) {
   selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-4o';
   localStorage.setItem('askviet_model', selectedModel);
   myRole = role;
+  localStorage.setItem('askviet_last_role', role);
   theirRole = role === 'tr' ? 'vi' : 'tr';
 
   document.getElementById('setup').style.display = 'none';
@@ -552,6 +573,14 @@ function initChat() {
           if (parts[2] === 'tr') box.dataset.readTr = event.data || '';
           if (parts[2] === 'vi') box.dataset.readVi = event.data || '';
           updateReadStatus(key);
+        }
+      } else if (parts.length === 3 && parts[1] === 'reactions') {
+        const el = document.getElementById('react-' + key);
+        if (el) {
+          const current = el.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
+          if (event.data) current[parts[2]] = event.data;
+          else delete current[parts[2]];
+          updateReactions(key, current);
         }
       }
     }
@@ -803,6 +832,7 @@ async function setMessageReaction(key, emoji) {
 function updateReactions(key, reactions = {}) {
   const el = document.getElementById('react-' + key);
   if (!el) return;
+  el.dataset.reactions = JSON.stringify(reactions || {});
   const values = Object.values(reactions || {}).filter(Boolean);
   if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
   const counts = {};
@@ -1600,6 +1630,7 @@ function handleNoSpeechStop(btn){
   micNoSpeechTimes.push(now);
   if(micNoSpeechTimes.length>=2){
     showMicReloadNotice();
+    if(myRole) localStorage.setItem('askviet_reload_role', myRole);
     if(btn)btn.textContent='⏳';
     setTimeout(()=>location.reload(),800);
     return true;
@@ -1732,6 +1763,7 @@ function lastSeenOnlineText() {
 function formatLastSeen(ts) {
   const el = document.getElementById('lastSeenStatus');
   if (!el) return;
+  el.classList.remove('online');
   if (!ts) {
     el.textContent = myRole === 'vi' ? 'Chưa thấy hoạt động' : 'Son görülme yok';
     return;
@@ -1753,6 +1785,7 @@ function formatLastSeen(ts) {
 function updateLastSeenStatus(isOnline, lastTs) {
   const el = document.getElementById('lastSeenStatus');
   if (!el) return;
+  el.classList.toggle('online', !!isOnline);
   if (isOnline) el.textContent = lastSeenOnlineText();
   else formatLastSeen(lastTs);
 }
