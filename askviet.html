@@ -560,8 +560,23 @@ function initChat() {
         autoReadDone.clear();
         stopAudio();
       } else {
-        const key = path.replace(/^\//, '').split('/')[0];
-        removeMessageElement(key);
+        const parts = path.replace(/^\//, '').split('/');
+        const key = parts[0];
+        if (parts.length === 3 && parts[1] === 'reactions') {
+          const el = document.getElementById('react-' + key);
+          const current = el?.dataset?.reactions ? JSON.parse(el.dataset.reactions) : {};
+          delete current[parts[2]];
+          updateReactions(key, current);
+        } else if (parts.length === 3 && parts[1] === 'read') {
+          const box = document.getElementById('msg-' + key);
+          if (box) {
+            if (parts[2] === 'tr') box.dataset.readTr = '';
+            if (parts[2] === 'vi') box.dataset.readVi = '';
+            updateReadStatus(key);
+          }
+        } else if (parts.length === 1) {
+          removeMessageElement(key);
+        }
       }
       return;
     }
