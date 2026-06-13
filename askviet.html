@@ -806,6 +806,7 @@ function setMessageContent(el, msg) {
 function reactionEmojis(){return ['👍','❤️','😂','😳','😭','😡']}
 
 function addReactionButton(parent, key) {
+  if (parent.querySelector('.msg-react-btn')) return;
   const btn = document.createElement('button');
   btn.className = 'msg-react-btn';
   btn.textContent = '👍';
@@ -908,7 +909,10 @@ function refreshMessageText(key) {
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
-  if (orig) setMessageContent(orig, msg);
+  if (orig) {
+    setMessageContent(orig, msg);
+    addReactionButton(orig, key);
+  }
   if (trans) {
     if (msg.type === 'image' || msg.type === 'video') { trans.style.display = 'none'; return; }
     trans.style.display = '';
