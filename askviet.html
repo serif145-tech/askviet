@@ -1356,9 +1356,11 @@ function updateNotifySoundUI() {
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0;
+let micNoSpeechTimes=[];
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
+function stopRecorder(){stopRec()}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 function cancelRecorderSilent(){
@@ -1381,6 +1383,31 @@ function cancelRecorderSilent(){
   recLoudFrames=0;
 }
 
+function showMicReloadNotice(){
+  const text=myRole==='vi'?'Đang làm mới micro...':'Mikrofon yenileniyor...';
+  let box=document.getElementById('micReloadNotice');
+  if(!box){
+    box=document.createElement('div');
+    box.id='micReloadNotice';
+    box.style.cssText='position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #22c55e;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap';
+    document.body.appendChild(box);
+  }
+  box.textContent=text;
+}
+
+function handleNoSpeechStop(btn){
+  const now=Date.now();
+  micNoSpeechTimes=micNoSpeechTimes.filter(t=>now-t<30000);
+  micNoSpeechTimes.push(now);
+  if(micNoSpeechTimes.length>=2){
+    showMicReloadNotice();
+    if(btn)btn.textContent='⏳';
+    setTimeout(()=>location.reload(),800);
+    return true;
+  }
+  return false;
+}
+
 async function resetRecAudioCtx(){
   if(recAudioCtx){
     try{await recAudioCtx.close()}catch{}
@@ -1394,6 +1421,72 @@ async function ensureAudioCtx(){
     if(recAudioCtx.state==='suspended') await recAudioCtx.resume();
   }catch{}
   return recAudioCtx;
+}
+
+async function startRecorder(source,button,onDone,autoSilence=false){
+  try{await unlockAudio()}catch{}
+  if(rec){
+    if(recButton===button){stopRecorder();return}
+    stopRecorder();
+    await sleep(180);
+  }
+  stopAudio();
+  recButton=button;
+  recChunks=[];
+  recHadSpeech=false;
+  recSilentSince=0;
+  recLoudFrames=0;
+  button.classList.add('mic-recording');
+  try{
+    const ctx=await ensureAudioCtx();
+    recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
+    if(ctx&&ctx.state==='suspended') await ctx.resume();
+    recNode=ctx.createMediaStreamSource(recStream);
+    recAnalyser=ctx.createAnalyser();
+    recAnalyser.fftSize=1024;
+    recData=new Uint8Array(recAnalyser.fftSize);
+    recNode.connect(recAnalyser);
+    rec=new MediaRecorder(recStream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
+    rec.onstop=async()=>{
+      const chunks=recChunks.slice(),had=recHadSpeech,mt=rec?.mimeType||'audio/webm';
+      clearInterval(recTimer);recTimer=null;
+      if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+      recAnalyser=null;recData=null;
+      if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
+      button.classList.remove('mic-recording');
+      rec=null;
+      recButton=null;
+      await sleep(260);
+      await onDone(new Blob(chunks,{type:mt}),had);
+    };
+    rec.start(120);
+    recStarted=Date.now();
+    recTimer=setInterval(()=>{
+      if(!recAnalyser||!recData)return;
+      const v=rms(recAnalyser,recData),now=Date.now();
+      const speech=v>0.012;
+      if(speech){
+        recHadSpeech=true;
+        recSilentSince=0;
+        return;
+      }
+      if(!autoSilence)return;
+      if(recHadSpeech){
+        if(!recSilentSince)recSilentSince=now;
+        if(now-recSilentSince>1500)stopRecorder();
+      }else if(now-recStarted>2000)stopRecorder();
+      if(now-recStarted>12000)stopRecorder();
+    },120);
+  }catch(e){
+    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+    recAnalyser=null;recData=null;
+    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
+    button.classList.remove('mic-recording');
+    rec=null;
+    recButton=null;
+    alert('Mikrofon izni gerekli: '+e.message);
+  }
 }
 
 function stopAutoReadPolling() {
@@ -1473,65 +1566,19 @@ function stopPresence(removeOwn = true) {
 
 async function startVoice() {
   const btn = document.getElementById('micBtn');
-  // Zaten kayıt varsa durdur
-  if(rec){stopRec();return;}
-  recChunks=[];recHadSpeech=false;recSilentSince=0;recLoudFrames=0;
-  btn.classList.add('mic-recording');
-  try{
-    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-    recAnalyser=null;recData=null;
-    const ctx=await ensureAudioCtx();
-    recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
-    if(ctx.state==='suspended') await ctx.resume();
-    recNode=ctx.createMediaStreamSource(recStream);
-    recAnalyser=ctx.createAnalyser();recAnalyser.fftSize=1024;
-    recData=new Uint8Array(recAnalyser.fftSize);
-    recNode.connect(recAnalyser);
-    rec=new MediaRecorder(recStream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
-    rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
-    rec.onstop=async()=>{
-      const chunks=recChunks.slice(),mt=rec?.mimeType||'audio/webm';
-      clearInterval(recTimer);recTimer=null;
-      if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-      if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-      recAnalyser=null;recData=null;
-      btn.classList.remove('mic-recording');
-      rec=null;
-      recButton=null;
-      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
-      btn.textContent='⏳';
-      try{
-        const blob=new Blob(chunks,{type:mt});
-        const text=await transcribeVoice(blob);
-        if(text){document.getElementById('msgInput').value=text;sendMessage();}
-      }catch(e){console.error('Ses hatası:',e);}
-      btn.textContent='🎙';
-    };
-    rec.start(120);
-    recStarted=Date.now();
-    recButton=btn;
-    recTimer=setInterval(()=>{
-      if(!recAnalyser||!recData)return;
-      const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.012){
-        recHadSpeech=true;
-        recSilentSince=0;
-        return;
-      }
-      if(recHadSpeech){
-        if(!recSilentSince)recSilentSince=now;
-        if(now-recSilentSince>1500)stopRec();
-      }else if(now-recStarted>2000)stopRec();
-      if(now-recStarted>12000)stopRec();
-    },120);
-  }catch(e){
-    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-    recAnalyser=null;recData=null;rec=null;recButton=null;
-    btn.classList.remove('mic-recording');
-    alert('Mikrofon izni gerekli: '+e.message);
-  }
+  return startRecorder(myRole,btn,async(blob,had)=>{
+    if(!had||!blob||!blob.size){
+      if(!handleNoSpeechStop(btn))btn.textContent='🎙';
+      return;
+    }
+    micNoSpeechTimes=[];
+    btn.textContent='⏳';
+    try{
+      const text=await transcribeVoice(blob);
+      if(text){document.getElementById('msgInput').value=text;sendMessage();}
+    }catch(e){console.error('Ses hatası:',e);}
+    btn.textContent='🎙';
+  },true);
 }
 
 async function transcribeVoice(blob) {
