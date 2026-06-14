@@ -136,6 +136,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#a78bfa;background:#7c3aed;color:#fff;box-shadow:0 0 0 1px rgba(167,139,250,.25),0 5px 14px rgba(124,58,237,.22)}
 .remote-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
 .remote-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
+.own-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
+.own-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
 .live-panel{display:none;flex-shrink:0;margin:8px 10px 0;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.28);z-index:6}
@@ -181,6 +183,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
 .live-mini{min-height:50px;min-width:52px;padding:0 12px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
+.ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
+.ptt-src{color:#f2f2f2;font-size:15px;font-weight:400;line-height:1.4;white-space:pre-wrap}
+.ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
+.turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.tool-btn{min-height:34px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850;font-size:12px;padding:0 10px}
+.tool-btn.danger{background:#dc2626;border-color:#ef4444}
+.tool-btn.confirm{background:#16a34a!important;border-color:#22c55e!important}
 .status-pill.live-on{border-color:#22c55e;color:#86efac}
 @media (max-width: 520px){
   .flag-actions,.ptt-actions{grid-template-columns:1fr}.roundflag{min-height:76px}
@@ -314,7 +323,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div id="settingsBtnArea" class="settings-controls">
       <div class="control-row">
         <div class="left-controls">
-          <span class="online-counter" id="onlineCounter" title="Online">0</span>
+          <span class="online-counter" id="onlineCounter" title="Online">1</span>
           <button class="status-pill remote-voice" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 VN</button>
         </div>
         <div class="right-controls">
@@ -327,6 +336,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
             <option value="gemini:gemini-3.1-flash-lite">G 3.1 Lite</option>
           </select>
+          <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
         </div>
       </div>
@@ -424,7 +434,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
   <div class="input-bar">
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
-    <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">🎙</button>
+    <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">&#127908;</button>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
   </div>
 </div>
@@ -798,35 +808,33 @@ function renderMessage(key, msg) {
   }
   div.appendChild(trans);
 
-  // Butonlar — ▶ Ses, ⚠↻ Anlamadım, ✕ Sil
   const btnRow = document.createElement('div');
   btnRow.className = 'btn-row';
-  btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+  btnRow.style.cssText = 'display:flex;gap:7px;padding:4px 10px 7px;flex-wrap:wrap';
 
-  const spBtn = document.createElement('button');
-  spBtn.className = 'speakBtn';
-  spBtn.textContent = '▶';
-  spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  const retryBtn = makeMsgButton('&#8635; Tekrar');
+  retryBtn.onclick = () => retryMessageTranslation(key, retryBtn);
+
+  const misBtn = makeMsgButton('&#9888;');
+  misBtn.title = myRole === 'vi' ? 'Khong hieu, noi lai duoc khong?' : 'Anlamadim, tekrar soyler misin?';
+  misBtn.onclick = () => { sendQuickMisunderstood(); misBtn.innerHTML = '&#129402;'; };
+
+  const copyBtn = makeMsgButton('&#128203;');
+  copyBtn.onclick = () => copyMessageText(key, copyBtn);
+
+  const spBtn = makeMsgButton('&#9654; Ses');
+  spBtn.className += ' speakBtn';
   spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
 
-  const misBtn = document.createElement('button');
-  misBtn.textContent = '⚠';
-  misBtn.title = 'Anlamadım, tekrar söyler misin?';
-  misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  misBtn.onclick = () => {
-    const lang = isMine ? myRole : theirRole;
-    const misText = lang === 'vi' ? 'Em không hiểu, anh nói lại được không? 🥺' : 'Anlamadım aşkım, tekrar söyler misin? 🥺';
-    document.getElementById('msgInput').value = misText;
-  };
+  const blockBtn = makeMsgButton('Engelle');
+  blockBtn.classList.add('danger');
+  blockBtn.onclick = () => blockMessageText(key, blockBtn);
 
-  misBtn.onclick = () => sendQuickMisunderstood();
-
-  const delBtn = document.createElement('button');
-  delBtn.textContent = '✕';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+  const delBtn = makeMsgButton('&times;');
+  delBtn.classList.add('danger');
   delBtn.onclick = () => deleteMessage(key);
 
-  btnRow.append(spBtn, misBtn, delBtn);
+  btnRow.append(retryBtn, misBtn, copyBtn, spBtn, blockBtn, delBtn);
   div.appendChild(btnRow);
 
   const time = document.createElement('div');
@@ -845,6 +853,7 @@ function renderMessage(key, msg) {
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
+  maybeRetryMissingTranslation(key, msg);
 }
 
 function updateOrRender(key, msg) {
@@ -1015,13 +1024,16 @@ function getRecipientText(key) {
 async function requestSpeakForMessage(key, btn) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
+  if (btn && btn.dataset.busy === '1') { stopAudio(); btn.dataset.busy = '0'; setSpeakBtn(btn, false); return; }
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
   if (!text || text.includes('Ceviriliyor') || text.includes('Dang dich') || text.includes('Ceviri hatasi') || text.includes('Loi dich')) return;
   if (targetRole === myRole) {
-    speak(text, myRole, btn);
+    btn.dataset.busy = '1';
+    speak(text, myRole, btn).finally(() => { btn.dataset.busy = '0'; });
     return;
   }
+  btn.dataset.busy = '1';
   setSpeakBtn(btn, true);
   await fbPush(AUDIO_PATH, {
     key,
@@ -1031,7 +1043,46 @@ async function requestSpeakForMessage(key, btn) {
     lang: targetRole,
     ts: Date.now()
   });
-  setTimeout(() => setSpeakBtn(btn, false), 700);
+  setTimeout(() => { btn.dataset.busy = '0'; setSpeakBtn(btn, false); }, 700);
+}
+
+function makeMsgButton(text) {
+  const btn = document.createElement('button');
+  btn.className = 'tool-btn';
+  btn.innerHTML = text;
+  return btn;
+}
+
+function retryMessageTranslation(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  btn.textContent = '...';
+  translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole)
+    .then(() => { btn.textContent = '✓'; btn.classList.add('confirm'); })
+    .catch(() => { btn.textContent = '↻'; });
+}
+
+async function copyMessageText(key, btn) {
+  const text = getReadableText(key);
+  if (!text) return;
+  await navigator.clipboard.writeText(text).catch(()=>{});
+  btn.textContent = '✓';
+  btn.classList.add('confirm');
+}
+
+function blockMessageText(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const text = box.dataset.text || box.dataset.translation || '';
+  if (btn.dataset.confirm === '1') {
+    addBlockedText(text);
+    btn.textContent = '✓';
+    btn.classList.add('confirm');
+    return;
+  }
+  btn.dataset.confirm = '1';
+  btn.textContent = 'Emin?';
+  btn.classList.add('confirm');
 }
 
 function listenAudioRequests() {
@@ -1127,7 +1178,7 @@ async function sendMessage() {
 }
 
 async function translateAndUpdate(key, text, fromRole) {
-  const maxAttempts = selectedModel.startsWith('gemini:') ? 4 : 1;
+  const maxAttempts = 4;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -1136,7 +1187,7 @@ async function translateAndUpdate(key, text, fromRole) {
       return;
     } catch (e) {
       const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
-      const retry = selectedModel.startsWith('gemini:') && isRetryableGeminiError(e) && attempt < maxAttempts;
+      const retry = !isFatalTranslationError(e) && attempt < maxAttempts;
       if (retry) {
         const waitMs = attempt * 2500;
         await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attempt, maxAttempts - 1));
@@ -1148,6 +1199,24 @@ async function translateAndUpdate(key, text, fromRole) {
       return;
     }
   }
+}
+
+function isFatalTranslationError(e) {
+  const s = String((e && e.message) || e || '').toLowerCase();
+  return s.includes('api key') || s.includes('401') || s.includes('403');
+}
+
+function isPendingTranslationText(text) {
+  const s = String(text || '').toLowerCase();
+  return !s || s.includes('ceviriliyor') || s.includes('dang dich') || s.includes('çeviriliyor') || s.includes('gemini yogun') || s.includes('dang thu lai');
+}
+
+function maybeRetryMissingTranslation(key, msg) {
+  if (!msg || !msg.role || !msg.text) return;
+  if (!isPendingTranslationText(msg.translation)) return;
+  const age = Date.now() - Number(msg.ts || 0);
+  if (age < 1200) return;
+  setTimeout(() => translateAndUpdate(key, msg.text, msg.role), 400);
 }
 
 function normalizeApiError(msg, role) {
@@ -1296,13 +1365,80 @@ function appendPttLog(text) {
   }
 }
 async function pttTranslate(text, from) {
-  const sourceLabel = from === 'tr' ? '🇹🇷' : '🇻🇳';
   const target = from === 'tr' ? 'vi' : 'tr';
-  const targetLabel = target === 'tr' ? '🇹🇷' : '🇻🇳';
-  setPttLog(sourceLabel + ': ' + text + '\n' + targetLabel + ': ' + uiText('Cevriliyor...', 'Dang dich...'));
+  setPttLog(uiText('Çeviriliyor...', 'Đang dịch...'));
   const out = await translateText(text, from);
-  setPttLog(sourceLabel + ': ' + text + '\n' + targetLabel + ': ' + out);
+  renderPttTurn(text, out, from, target);
   if (out) speak(out, target, null, true).catch(()=>{});
+}
+
+function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
+  const log = document.getElementById('pttLog');
+  if (!log) return;
+  if (log.querySelector('.empty')) log.textContent = '';
+  const turn = document.createElement('div');
+  turn.className = 'ptt-turn';
+  const src = document.createElement('div');
+  src.className = 'ptt-src';
+  src.textContent = sourceText;
+  const dst = document.createElement('div');
+  dst.className = 'ptt-dst';
+  dst.textContent = translatedText;
+  const tools = document.createElement('div');
+  tools.className = 'turn-tools';
+
+  const retry = makeToolButton('↻ Tekrar', () => pttTranslate(sourceText, sourceRole));
+  const mis = makeToolButton('⚠', () => {
+    const input = document.getElementById('msgInput');
+    if (input) input.value = targetRole === 'tr' ? 'Anlamadım aşkım, tekrar söyler misin? 🥺' : 'Em không hiểu, anh nói lại được không? 🥺';
+    mis.textContent = '🥺';
+  });
+  const copy = makeToolButton('📋', async () => {
+    await navigator.clipboard.writeText(translatedText).catch(()=>{});
+    copy.textContent = '✓';
+    copy.classList.add('confirm');
+  });
+  const speakBtn = makeToolButton('▶ Ses', () => speak(translatedText, targetRole, speakBtn));
+  speakBtn.classList.add('speakBtn');
+  const block = makeToolButton('Engelle', () => {
+    if (block.dataset.confirm === '1') {
+      addBlockedText(sourceText || translatedText);
+      block.textContent = '✓';
+      block.classList.add('confirm');
+      return;
+    }
+    block.dataset.confirm = '1';
+    block.textContent = 'Emin?';
+    block.classList.add('confirm');
+  });
+  block.classList.add('danger');
+  const del = makeToolButton('×', () => { stopAudio(); turn.remove(); if (!log.children.length) clearPttLog(); });
+  del.classList.add('danger');
+  tools.append(retry, mis, copy, speakBtn, block, del);
+  turn.append(src, dst, tools);
+  log.appendChild(turn);
+  log.scrollTop = log.scrollHeight;
+}
+
+function makeToolButton(text, fn) {
+  const btn = document.createElement('button');
+  btn.className = 'tool-btn';
+  btn.textContent = text;
+  btn.onclick = fn;
+  return btn;
+}
+
+function addBlockedText(text) {
+  const key = 'askviet_blocked_texts';
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+  if (text && !list.includes(text)) list.push(text);
+  localStorage.setItem(key, JSON.stringify(list.slice(-200)));
+}
+
+function clearPttLog() {
+  const log = document.getElementById('pttLog');
+  if (log) log.innerHTML = '<div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div>';
 }
 function pttManual(from) {
   const text = (document.getElementById('pttInput')?.value || '').trim();
@@ -1552,7 +1688,7 @@ async function unlockAudio(){
     }
   }catch{}
 }
-function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?uiText('Durdur','Dung'):uiText('Ses','Doc');if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':uiText('▶ Ses','▶ Đọc');if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
@@ -1646,12 +1782,22 @@ function setSelectedModel(model, fromRemote=false) {
 
 function setupChatControls() {
   const chatSelect = document.getElementById('chatModelSelect');
+  const autoBtn = document.getElementById('autoReadStatus');
+  const ownBtn = document.getElementById('ownAutoReadStatus');
+  const leftControls = document.querySelector('.left-controls');
+  const rightControls = document.querySelector('.right-controls');
+  const notifyBtn = document.getElementById('notifySoundBtn');
   if (chatSelect) {
     chatSelect.value = selectedModel;
-    chatSelect.style.display = '';
+    chatSelect.style.display = myRole === 'tr' ? '' : 'none';
     chatSelect.disabled = myRole !== 'tr';
     chatSelect.onchange = () => setSelectedModel(chatSelect.value);
   }
+  if (autoBtn && leftControls && rightControls) {
+    if (myRole === 'vi') rightControls.insertBefore(autoBtn, notifyBtn || null);
+    else leftControls.appendChild(autoBtn);
+  }
+  if (ownBtn) ownBtn.style.display = myRole === 'tr' ? '' : 'none';
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
   const modeRow = document.getElementById('modeRow');
@@ -1762,14 +1908,33 @@ function toggleAutoRead() {
   updateAutoReadUI();
   fbSet(AUTO_READ_PATH + '/' + role, next);
 }
+function toggleOwnAutoRead() {
+  unlockAudio();
+  if (!myRole) return;
+  const next = !getAutoReadState(myRole);
+  autoReadStates[myRole] = next;
+  autoRead = next;
+  localStorage.setItem('askviet_autoread', next ? '1' : '0');
+  updateAutoReadUI();
+  fbSet(AUTO_READ_PATH + '/' + myRole, next);
+}
 function updateAutoReadUI() {
   const status = document.getElementById('autoReadStatus');
-  if (!status || !myRole) return;
+  const own = document.getElementById('ownAutoReadStatus');
+  if ((!status && !own) || !myRole) return;
   const role = autoReadControlRole();
   const on = getAutoReadState(role);
-  if (myRole === 'vi') { status.textContent = on ? '✓ Tu doc' : '🔇 Tu doc'; status.title = on ? 'Tu dong doc dang bat' : 'Tu dong doc dang tat'; }
-  else { status.textContent = on ? '✓ VN' : '🔇 VN'; status.title = on ? 'Vietnam tarafi otomatik ses acik' : 'Vietnam tarafi otomatik ses kapali'; }
-  status.classList.toggle('on', on);
+  if (status) {
+    if (myRole === 'vi') { status.textContent = on ? '✓ Tự đọc' : '🔇 Tự đọc'; status.title = on ? 'Tự động đọc đang bật' : 'Tự động đọc đang tắt'; }
+    else { status.textContent = on ? '✓ VN' : '🔇 VN'; status.title = on ? 'Vietnam tarafı otomatik ses açık' : 'Vietnam tarafı otomatik ses kapalı'; }
+    status.classList.toggle('on', on);
+  }
+  if (own) {
+    const ownOn = getAutoReadState(myRole);
+    own.textContent = myRole === 'vi' ? (ownOn ? '✓ Tự đọc' : '🔇 Tự đọc') : (ownOn ? '✓ TR' : '🔇 TR');
+    own.title = myRole === 'vi' ? (ownOn ? 'Tự động đọc đang bật' : 'Tự động đọc đang tắt') : (ownOn ? 'Türk tarafı otomatik ses açık' : 'Türk tarafı otomatik ses kapalı');
+    own.classList.toggle('on', ownOn);
+  }
 }
 function listenAutoReadConfig() {
   if (unsubAutoRead) unsubAutoRead();
@@ -1790,8 +1955,8 @@ function updatePresenceStatus(data) {
   if (!el) return;
   const online = !!(data && data.online);
   if (counter) {
-    counter.textContent = online ? '1' : '0';
-    counter.title = online ? 'Online' : 'Offline';
+    counter.textContent = String((myRole ? 1 : 0) + (online ? 1 : 0));
+    counter.title = online ? '2 kişi çevrim içi' : '1 kişi çevrim içi';
   }
   el.classList.toggle('online', online);
   el.classList.toggle('seen', !online);
@@ -1806,6 +1971,8 @@ function updateMyPresence(online=true) {
 }
 function startPresence() {
   updateMyPresence(true);
+  const counter = document.getElementById('onlineCounter');
+  if (counter) counter.textContent = '1';
   if (presenceTimer) clearInterval(presenceTimer);
   presenceTimer = setInterval(() => updateMyPresence(true), 30000);
 }
@@ -1818,10 +1985,13 @@ function listenPresence() {
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null;
 let lastLiveText='', lastLiveTarget='vi';
+const MIC_ICON = '&#127908;';
 const REC_SILENCE_MS = 2000;
 function silenceCountdownText(start, now) {
   if (!start) return '';
-  const left = Math.max(0, Math.ceil((REC_SILENCE_MS - (now - start)) / 1000));
+  const remaining = REC_SILENCE_MS - (now - start);
+  if (remaining <= 0) return '';
+  const left = Math.max(1, Math.ceil(remaining / 1000));
   return String(left);
 }
 function showRecCountdown(btn, start, now, kind) {
@@ -1837,7 +2007,7 @@ function clearRecCountdown(btn, kind, listenText) {
   if (kind === 'ptt') {
     if (listenText) setPttLog(listenText);
   } else if (btn) {
-    btn.textContent = '🎙';
+    btn.innerHTML = MIC_ICON;
   }
 }
 
@@ -1871,7 +2041,7 @@ async function startVoice() {
   if(rec){stopRec();return;}
   recChunks=[];recHadSpeech=false;recSilentSince=0;
   btn.classList.add('mic-recording');
-  btn.textContent='??';
+  btn.innerHTML=MIC_ICON;
   try{
     const ctx=await ensureAudioCtx();
     recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
@@ -1888,14 +2058,14 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(!recHadSpeech||chunks.length===0){btn.textContent='??';return;}
-      btn.textContent='Bekle';
+      if(!recHadSpeech||chunks.length===0){btn.innerHTML=MIC_ICON;return;}
+      btn.textContent=uiText('Bekle', 'Doi');
       try{
         const blob=new Blob(chunks,{type:mt});
         const text=await transcribeVoice(blob);
         if(text){document.getElementById('msgInput').value=text;sendMessage();}
       }catch(e){console.error(uiText('Ses hatasi:', 'Loi am thanh:'),e);}
-      btn.textContent='??';
+      btn.innerHTML=MIC_ICON;
     };
     rec.start(120);
     recStarted=Date.now();
@@ -1913,7 +2083,7 @@ async function startVoice() {
     },120);
   }catch(e){
     btn.classList.remove('mic-recording');
-    btn.textContent='??';
+    btn.innerHTML=MIC_ICON;
     if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
     alert(uiText('Mikrofon izni gerekli: ', 'Can quyen micro: ')+e.message);
   }
@@ -1986,7 +2156,12 @@ window.addEventListener('beforeunload', () => {
   if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); updateMyPresence(false); }
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') clearUnreadCount();
+  if (document.visibilityState === 'visible') {
+    clearUnreadCount();
+    if (myRole) updateMyPresence(true);
+  } else if (myRole) {
+    updateMyPresence(false);
+  }
 });
 </script>
 </body>
