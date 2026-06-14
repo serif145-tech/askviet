@@ -64,6 +64,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
+#chat.mode-panel-open .messages,#chat.mode-panel-open .input-bar{display:none}
 .chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 8px 8px;padding-top:max(env(safe-area-inset-top),8px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .header-topline{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%;min-width:0}
 .header-main{min-width:0;flex:1 1 auto}
@@ -157,8 +158,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-result{white-space:pre-wrap;word-break:break-word;min-height:42px;padding:10px;border-radius:12px;background:#f0ece8;color:#211f24;font-size:14px;line-height:1.35}
 @media (max-width: 520px){.live-buttons,.live-actions{grid-template-columns:1fr}.live-panel{margin:6px 8px 0}}
 .ptt-panel,.real-live-panel{display:none;flex-shrink:0;margin:0;padding:0;background:#070707;border-bottom:1px solid #171717;z-index:6}
-.ptt-panel.open{display:flex;flex-direction:column;min-height:min(650px,calc(100dvh - 176px))}
-.real-live-panel.open{display:flex;flex-direction:column;min-height:min(650px,calc(100dvh - 176px))}
+.ptt-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
+.real-live-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
 .panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid #171717}
 .panel-title{font-size:14px;font-weight:900;color:#c084fc}
 .panel-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
@@ -188,6 +189,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
 .tool-btn{min-height:34px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850;font-size:12px;padding:0 10px}
+.tool-btn.primary{background:#2563eb;border-color:#60a5fa;color:#fff}
 .tool-btn.danger{background:#dc2626;border-color:#ef4444}
 .tool-btn.confirm{background:#16a34a!important;border-color:#22c55e!important}
 .status-pill.live-on{border-color:#22c55e;color:#86efac}
@@ -594,21 +596,11 @@ async function fbGet(path) {
   return r.ok ? r.json() : null;
 }
 async function fbPush(path, data) {
-  const r = await fetch(DB_URL + path + '.json', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  if (!r.ok) throw new Error('Firebase yazma hatasi: ' + (await r.text().catch(() => r.statusText)));
-  return r.json();
+  const r = await fetch(DB_URL + path + '.json', { method: 'POST', body: JSON.stringify(data) });
+  return r.ok ? r.json() : null;
 }
 async function fbSet(path, data) {
-  const r = await fetch(DB_URL + path + '.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  if (!r.ok) throw new Error('Firebase guncelleme hatasi: ' + (await r.text().catch(() => r.statusText)));
+  await fetch(DB_URL + path + '.json', { method: 'PUT', body: JSON.stringify(data) });
 }
 async function fbRemove(path) {
   await fetch(DB_URL + path + '.json', { method: 'DELETE' });
@@ -810,31 +802,26 @@ function renderMessage(key, msg) {
 
   const btnRow = document.createElement('div');
   btnRow.className = 'btn-row';
-  btnRow.style.cssText = 'display:flex;gap:7px;padding:4px 10px 7px;flex-wrap:wrap';
+  btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
-  const retryBtn = makeMsgButton('&#8635; Tekrar');
-  retryBtn.onclick = () => retryMessageTranslation(key, retryBtn);
-
-  const misBtn = makeMsgButton('&#9888;');
-  misBtn.title = myRole === 'vi' ? 'Khong hieu, noi lai duoc khong?' : 'Anlamadim, tekrar soyler misin?';
-  misBtn.onclick = () => { sendQuickMisunderstood(); misBtn.innerHTML = '&#129402;'; };
-
-  const copyBtn = makeMsgButton('&#128203;');
-  copyBtn.onclick = () => copyMessageText(key, copyBtn);
-
-  const spBtn = makeMsgButton('&#9654; Ses');
-  spBtn.className += ' speakBtn';
+  const spBtn = document.createElement('button');
+  spBtn.className = 'speakBtn';
+  spBtn.innerHTML = '&#9654;';
+  spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
   spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
 
-  const blockBtn = makeMsgButton('Engelle');
-  blockBtn.classList.add('danger');
-  blockBtn.onclick = () => blockMessageText(key, blockBtn);
+  const misBtn = document.createElement('button');
+  misBtn.innerHTML = '&#9888;';
+  misBtn.title = myRole === 'vi' ? 'Khong hieu, noi lai duoc khong?' : 'Anlamadim, tekrar soyler misin?';
+  misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  misBtn.onclick = () => sendQuickMisunderstood();
 
-  const delBtn = makeMsgButton('&times;');
-  delBtn.classList.add('danger');
+  const delBtn = document.createElement('button');
+  delBtn.innerHTML = '&times;';
+  delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
   delBtn.onclick = () => deleteMessage(key);
 
-  btnRow.append(retryBtn, misBtn, copyBtn, spBtn, blockBtn, delBtn);
+  btnRow.append(spBtn, misBtn, delBtn);
   div.appendChild(btnRow);
 
   const time = document.createElement('div');
@@ -1046,45 +1033,6 @@ async function requestSpeakForMessage(key, btn) {
   setTimeout(() => { btn.dataset.busy = '0'; setSpeakBtn(btn, false); }, 700);
 }
 
-function makeMsgButton(text) {
-  const btn = document.createElement('button');
-  btn.className = 'tool-btn';
-  btn.innerHTML = text;
-  return btn;
-}
-
-function retryMessageTranslation(key, btn) {
-  const box = document.getElementById('msg-' + key);
-  if (!box) return;
-  btn.textContent = '...';
-  translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole)
-    .then(() => { btn.textContent = '✓'; btn.classList.add('confirm'); })
-    .catch(() => { btn.textContent = '↻'; });
-}
-
-async function copyMessageText(key, btn) {
-  const text = getReadableText(key);
-  if (!text) return;
-  await navigator.clipboard.writeText(text).catch(()=>{});
-  btn.textContent = '✓';
-  btn.classList.add('confirm');
-}
-
-function blockMessageText(key, btn) {
-  const box = document.getElementById('msg-' + key);
-  if (!box) return;
-  const text = box.dataset.text || box.dataset.translation || '';
-  if (btn.dataset.confirm === '1') {
-    addBlockedText(text);
-    btn.textContent = '✓';
-    btn.classList.add('confirm');
-    return;
-  }
-  btn.dataset.confirm = '1';
-  btn.textContent = 'Emin?';
-  btn.classList.add('confirm');
-}
-
 function listenAudioRequests() {
   if (unsubAudio) unsubAudio();
   audioListenStartedAt = Date.now();
@@ -1164,14 +1112,13 @@ async function sendMessage() {
     const msg = { role: myRole, text, ts: Date.now(), translation: null };
     const result = await fbPush(MSGS_PATH, msg);
     const key = result?.name;
-    if (!key) throw new Error('Firebase mesaj anahtari donmedi');
+    if (!key) { input.value = text; return; }
     renderMessage(key, msg);
     scrollToBottom();
     translateAndUpdate(key, text, myRole);
   } catch (e) {
     console.error('Mesaj gönderilemedi:', e);
     input.value = text;
-    alert(uiText('Mesaj gonderilemedi. Internet/Firebase baglantisini kontrol et.', 'Khong gui duoc tin nhan. Kiem tra ket noi Internet/Firebase.'));
   } finally {
     if (sendBtn) sendBtn.disabled = false;
   }
@@ -1227,7 +1174,7 @@ function normalizeApiError(msg, role) {
   if (/bos cevap|empty response|no response/i.test(raw)) return isVi ? 'Dich vu tra loi trong. Thu lai.' : raw;
   if (/Ses metne cevrilemedi|transcri/i.test(raw)) return isVi ? 'Khong chuyen duoc giong noi thanh chu.' : raw;
   if (/adresine ulasilamadi|network|failed to fetch|abort/i.test(raw)) return isVi ? 'Khong ket noi duoc dich vu. Kiem tra mang va thu lai.' : raw;
-  if (/[?-??-???]/.test(raw)) return isVi ? 'Dich vu tam thoi khong kha dung. Thu lai sau.' : 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
+  if (/[\u{1F300}-\u{1FAFF}]/u.test(raw)) return isVi ? 'Dich vu tam thoi khong kha dung. Thu lai sau.' : 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
   if (/temporar|unavailable|busy|overload|503/i.test(raw)) return isVi ? 'Dich vu tam thoi khong kha dung. Thu lai sau.' : 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
   return raw;
 }
@@ -1347,11 +1294,19 @@ function setPanelOpen(panelId, btnId, force) {
   const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
   panel.classList.toggle('open', open);
   if (btn) btn.classList.toggle('on', open);
+  updateModePanelState();
   return open;
 }
 
 function togglePttMode(force) {
   if (setPanelOpen('pttPanel', 'pttModeBtn', force)) toggleRealLive(false);
+}
+
+function updateModePanelState() {
+  const chat = document.getElementById('chat');
+  const pttOpen = document.getElementById('pttPanel')?.classList.contains('open');
+  const liveOpen = document.getElementById('realLivePanel')?.classList.contains('open');
+  if (chat) chat.classList.toggle('mode-panel-open', !!(pttOpen || liveOpen));
 }
 
 function setPttLog(text) { const el = document.getElementById('pttLog'); if (el) el.textContent = text || ''; }
@@ -1388,18 +1343,22 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   tools.className = 'turn-tools';
 
   const retry = makeToolButton('↻ Tekrar', () => pttTranslate(sourceText, sourceRole));
+  retry.classList.add('primary');
+
   const mis = makeToolButton('⚠', () => {
-    const input = document.getElementById('msgInput');
-    if (input) input.value = targetRole === 'tr' ? 'Anlamadım aşkım, tekrar söyler misin? 🥺' : 'Em không hiểu, anh nói lại được không? 🥺';
+    sendPttMisunderstood(sourceRole, mis);
     mis.textContent = '🥺';
   });
+
   const copy = makeToolButton('📋', async () => {
     await navigator.clipboard.writeText(translatedText).catch(()=>{});
     copy.textContent = '✓';
     copy.classList.add('confirm');
   });
+
   const speakBtn = makeToolButton('▶ Ses', () => speak(translatedText, targetRole, speakBtn));
   speakBtn.classList.add('speakBtn');
+
   const block = makeToolButton('Engelle', () => {
     if (block.dataset.confirm === '1') {
       addBlockedText(sourceText || translatedText);
@@ -1412,14 +1371,37 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
     block.classList.add('confirm');
   });
   block.classList.add('danger');
+
   const del = makeToolButton('×', () => { stopAudio(); turn.remove(); if (!log.children.length) clearPttLog(); });
   del.classList.add('danger');
+
   tools.append(retry, mis, copy, speakBtn, block, del);
   turn.append(src, dst, tools);
   log.appendChild(turn);
   log.scrollTop = log.scrollHeight;
 }
 
+function sendPttMisunderstood(role, btn) {
+  const text = role === 'vi'
+    ? 'Em không hiểu, anh nói lại được không?'
+    : 'Anlamadım aşkım, tekrar söyler misin?';
+  renderPttNotice(text);
+  speak(text, role, btn).catch(()=>{});
+}
+
+function renderPttNotice(text) {
+  const log = document.getElementById('pttLog');
+  if (!log) return;
+  if (log.querySelector('.empty')) log.textContent = '';
+  const turn = document.createElement('div');
+  turn.className = 'ptt-turn';
+  const dst = document.createElement('div');
+  dst.className = 'ptt-dst';
+  dst.textContent = text;
+  turn.appendChild(dst);
+  log.appendChild(turn);
+  log.scrollTop = log.scrollHeight;
+}
 function makeToolButton(text, fn) {
   const btn = document.createElement('button');
   btn.className = 'tool-btn';
@@ -2166,3 +2148,4 @@ document.addEventListener('visibilitychange', () => {
 </script>
 </body>
 </html>
+
