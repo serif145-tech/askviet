@@ -515,6 +515,7 @@ let apiKey = '';
 let geminiApiKey = '';
 let liveRecognizer = null;
 let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveDirection = 'tr';
+let lastLiveReadErrorAt = 0;
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
 let isTyping = false;
@@ -644,6 +645,16 @@ function loadSaved() {
     // apiLabel kaldırıldı — artık ayrı alanlar var
 
   }
+  resumeAfterMicReload();
+}
+
+function resumeAfterMicReload() {
+  const role = localStorage.getItem('askviet_resume_role');
+  if (role !== 'tr' && role !== 'vi') return;
+  localStorage.removeItem('askviet_resume_role');
+  setTimeout(() => {
+    try { start(role); } catch(e) { console.error('Mikrofon yenileme sonrasi role donulemedi:', e); }
+  }, 120);
 }
 
 // ── Firebase REST ──────────────────────────────────────────────────────────
@@ -659,7 +670,8 @@ async function fbSet(path, data) {
   await fetch(DB_URL + path + '.json', { method: 'PUT', body: JSON.stringify(data) });
 }
 async function fbRemove(path) {
-  await fetch(DB_URL + path + '.json', { method: 'DELETE' });
+  const r = await fetch(DB_URL + path + '.json', { method: 'DELETE' });
+  if (!r.ok) throw new Error('Firebase silme hatasi: ' + r.status);
 }
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
@@ -692,6 +704,7 @@ function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
+  localStorage.setItem('askviet_last_role', role);
   theirRole = role === 'tr' ? 'vi' : 'tr';
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
@@ -759,8 +772,23 @@ function initChat() {
         autoReadDone.clear();
         stopAudio();
       } else {
-        const key = path.replace(/^\//, '').split('/')[0];
-        removeMessageElement(key);
+        const parts = path.replace(/^\//, '').split('/');
+        const key = parts[0];
+        if (parts.length === 1) {
+          removeMessageElement(key);
+        } else if (parts.length === 3 && parts[1] === 'reactions') {
+          const el = document.getElementById('react-' + key);
+          const current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
+          delete current[parts[2]];
+          updateReactions(key, current);
+        } else if (parts.length === 3 && parts[1] === 'read') {
+          const box = document.getElementById('msg-' + key);
+          if (box) {
+            if (parts[2] === 'tr') box.dataset.readTr = '';
+            if (parts[2] === 'vi') box.dataset.readVi = '';
+            updateReadStatus(key);
+          }
+        }
       }
       return;
     }
@@ -930,6 +958,17 @@ function renderMessage(key, msg) {
 
   btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
   div.appendChild(btnRow);
+  } else {
+    btnRow = document.createElement('div');
+    btnRow.className = 'btn-row';
+    btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+    const delBtn = document.createElement('button');
+    delBtn.innerHTML = '&times;';
+    delBtn.title = myRole === 'vi' ? 'Xóa' : 'Sil';
+    delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+    delBtn.onclick = e => { e.preventDefault(); e.stopPropagation(); deleteMessage(key); };
+    btnRow.appendChild(delBtn);
+    div.appendChild(btnRow);
   }
 
   const time = document.createElement('div');
@@ -951,7 +990,7 @@ function renderMessage(key, msg) {
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
-  maybeRetryMissingTranslation(key, msg);
+  if (!isMedia) maybeRetryMissingTranslation(key, msg);
 }
 
 function updateOrRender(key, msg) {
@@ -1310,9 +1349,26 @@ function removeMessageElement(key) {
 }
 
 async function deleteMessage(key) {
+  const el = document.getElementById('msg-' + key);
+  const msg = el ? {
+    role: el.dataset.role,
+    text: el.dataset.text,
+    translation: el.dataset.translation,
+    type: el.dataset.type,
+    imageUrl: el.dataset.imageUrl,
+    mediaUrl: el.dataset.mediaUrl,
+    mime: el.dataset.mime,
+    ts: Number(el.dataset.ts || Date.now()),
+    read: { tr: el.dataset.readTr || null, vi: el.dataset.readVi || null }
+  } : null;
   stopAudio();
   removeMessageElement(key);
-  await fbRemove(MSGS_PATH + '/' + key);
+  try {
+    await fbRemove(MSGS_PATH + '/' + key);
+  } catch (e) {
+    console.error('Mesaj silinemedi:', e);
+    if (msg) renderMessage(key, msg);
+  }
 }
 
 function getReadableLang(senderRole) {
@@ -1400,7 +1456,7 @@ async function sendQuickMisunderstood() {
 
 function maybeAutoReadMessage(key) {
   const box = document.getElementById('msg-' + key);
-  if (!box || !autoRead || autoReadDone.has(key)) return;
+  if (!box || !getAutoReadState(myRole) || autoReadDone.has(key)) return;
   const senderRole = box.dataset.role;
   if (!senderRole || senderRole === myRole) return;
   const ts = Number(box.dataset.ts || 0);
@@ -1459,6 +1515,28 @@ async function handleMediaFile(file) {
   } catch (e) {
     alert((myRole === 'vi' ? 'Khong gui duoc media: ' : 'Medya gonderilemedi: ') + (e.message || e));
   } finally { hideMediaStatus(); }
+}
+
+function mediaFileFromTransfer(dt) {
+  if (!dt) return null;
+  const files = Array.from(dt.files || []);
+  const direct = files.find(f => /^image\//i.test(f.type) || /^video\//i.test(f.type));
+  if (direct) return direct;
+  const items = Array.from(dt.items || []);
+  for (const item of items) {
+    if (!/^image\//i.test(item.type) && !/^video\//i.test(item.type)) continue;
+    const file = item.getAsFile && item.getAsFile();
+    if (file) return file;
+  }
+  return null;
+}
+
+function handleMediaTransferEvent(e) {
+  const file = mediaFileFromTransfer(e.clipboardData || e.dataTransfer || e.inputEvent?.dataTransfer);
+  if (!file) return false;
+  e.preventDefault();
+  handleMediaFile(file);
+  return true;
 }
 
 async function prepareMediaForUpload(file) {
@@ -1690,15 +1768,9 @@ if(msgInputEl){
   msgInputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
-  msgInputEl.addEventListener('paste', e => {
-    const items = Array.from(e.clipboardData?.items || []);
-    const mediaItem = items.find(item => /^image\//i.test(item.type) || /^video\//i.test(item.type));
-    if (!mediaItem) return;
-    const file = mediaItem.getAsFile();
-    if (!file) return;
-    e.preventDefault();
-    handleMediaFile(file);
-  });
+  msgInputEl.addEventListener('paste', handleMediaTransferEvent);
+  msgInputEl.addEventListener('beforeinput', handleMediaTransferEvent);
+  msgInputEl.addEventListener('drop', handleMediaTransferEvent);
 }
 
 // ── PWA Manifest ─────────────────────────────────────────────────────────
@@ -1746,7 +1818,7 @@ async function pttTranslate(text, from) {
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   const log = document.getElementById('pttLog');
   if (!log) return;
-  if (log.querySelector('.empty')) log.textContent = '';
+  if (log.querySelector('.empty') || /Çeviriliyor|Đang dịch|Ceviriliyor|Dang dich/i.test(log.textContent || '')) log.textContent = '';
   const turn = document.createElement('div');
   turn.className = 'ptt-turn';
   const src = document.createElement('div');
@@ -1925,7 +1997,8 @@ async function startPttVoice(from) {
       if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
       delete btn.dataset.recRole;
       rec=null;
-      if(!recHadSpeech || recVoiceMs < MIN_VOICE_MS || chunks.length===0){ setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy tiếng. Thử lại.')); return; }
+      if(!recHadSpeech || recVoiceMs < MIN_VOICE_MS || chunks.length===0){ noteNoSpeechStop(); setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy tiếng. Thử lại.')); return; }
+      resetNoSpeechStops();
       try {
         const blob = new Blob(chunks,{type:mt});
         const text = await transcribeVoice(blob, from);
@@ -2103,6 +2176,7 @@ async function startGeminiLive(from) {
   };
   ws.onmessage = e => {
     try {
+      if (!e.data || typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       const raw = JSON.stringify(data);
       if (data.setupComplete) appendRealLiveLog(uiText('Baglanti hazir.', 'Ket noi san sang.'));
@@ -2118,7 +2192,13 @@ async function startGeminiLive(from) {
         if (audio?.data && shouldAutoSpeak) playLiveAudio(audio.data, audio.mimeType || audio.mime_type).catch(()=>appendRealLiveLog(uiText('Live sesi calinamadi.', 'Khong phat duoc am thanh Live.')));
       }
       if (!parts.length && /error/i.test(raw)) appendRealLiveLog(uiText('Live hata: ', 'Loi Live: ') + raw.slice(0,220));
-    } catch(err) { appendRealLiveLog(uiText('Live cevap okunamadi.', 'Khong doc duoc phan hoi Live.')); }
+    } catch(err) {
+      const now = Date.now();
+      if (now - lastLiveReadErrorAt > 6000) {
+        lastLiveReadErrorAt = now;
+        console.warn('Live cevap okunamadi:', err);
+      }
+    }
   };
   ws.onerror = () => { setRealLiveStatus(uiText('Gemini Live baglanti hatasi.', 'Loi ket noi Gemini Live.')); appendRealLiveLog(uiText('WebSocket hatasi. API key/model erisimi veya tarayici destegi gerekebilir.', 'Loi WebSocket. Co the can API key/model hoac trinh duyet ho tro.')); };
   ws.onclose = () => { setRealLiveStatus(uiText('Live kapandi.', 'Live da dong.')); updateLiveMainButton(false); if(topBtn) topBtn.classList.remove('live-on'); geminiLiveWs=null; };
@@ -2161,7 +2241,7 @@ async function unlockAudio(){
 function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
-async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
+async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);try{await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});return true}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
 async function speak(text,target,btn,silent=false){try{await unlockAudio()}catch{}if(!text||!target)return false;if(isSpeaking){stopAudio();return false}const key=localStorage.getItem('askviet_key')||'';if(!key){console.warn('TTS key yok');return false}const [provider]=selectedModel.split(':');const voice=target==='vi'?'cedar':'nova',speed=target==='vi'?0.93:1,instructions=target==='vi'?'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.':'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';const token=++ttsToken,ck=cacheKey(text,target,'gpt-4o-mini-tts',voice,speed);setSpeakBtn(btn,true);try{let blob=ttsCache.get(ck);if(!blob){if(provider==='gemini'){const base64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(new Blob([text]))});const r=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:{text},voice:{languageCode:target==='vi'?'vi-VN':'tr-TR'},audioConfig:{audioEncoding:'MP3'}})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||r.statusText);blob=await fetch('data:audio/mp3;base64,'+d.audioContent).then(r=>r.blob())}else{ttsAbort=new AbortController();const r=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',signal:ttsAbort.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||r.statusText)}blob=await r.blob()}if(token!==ttsToken)return false;ttsCache.set(ck,blob);if(ttsCache.size>30)ttsCache.delete(ttsCache.keys().next().value)}await playBlob(blob,token,btn,text);return true}catch(e){const em=String(e);if(/abort|iptal/i.test(em))return false;if(silent&&/NotAllowedError|not allowed|autoplay/i.test(em))return false;console.error('TTS hatası:',e);return false}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
 
 // ── Model Sync ────────────────────────────────────────────────────────────
@@ -2185,16 +2265,9 @@ async function speakOpenAI(text, target, btn, silent=false) {
     let blob = ttsCache.get(ck);
     if (!blob) {
       ttsAbort = new AbortController();
-      const r = await fetch('https://api.openai.com/v1/audio/speech', {
-        method: 'POST',
-        signal: ttsAbort.signal,
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
-        body: JSON.stringify({model,input:text,voice,instructions,response_format:'mp3',speed})
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(()=>({}));
-        throw new Error(normalizeApiError(d.error?.message || r.statusText));
-      }
+      let r = await openAiSpeechRequest({ model, input:text, voice, instructions, speed, signal:ttsAbort.signal, key });
+      if (!r.ok) r = await openAiSpeechRequest({ model:'gpt-4o-mini-tts', input:text, voice:target === 'vi' ? 'nova' : 'nova', instructions, speed:1, signal:ttsAbort.signal, key });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(normalizeApiError(d.error?.message || r.statusText)); }
       blob = await r.blob();
       if (token !== ttsToken) return false;
       ttsCache.set(ck, blob);
@@ -2216,6 +2289,15 @@ async function speakOpenAI(text, target, btn, silent=false) {
   }
 }
 speak = speakOpenAI;
+
+function openAiSpeechRequest({model,input,voice,instructions,speed,signal,key}) {
+  return fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    signal,
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body: JSON.stringify({model,input,voice,instructions,response_format:'mp3',speed})
+  });
+}
 
 const MODEL_NAMES = {
   'openai:gpt-5.5': 'GPT-5.5',
@@ -2462,10 +2544,23 @@ function listenPresence() {
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recVoiceMs=0;
 let lastLiveText='', lastLiveTarget='vi';
+let noSpeechStops = [];
 const MIC_ICON = '&#127908;';
 const REC_SILENCE_MS = 2000;
 const VOICE_RMS_THRESHOLD = 0.018;
 const MIN_VOICE_MS = 420;
+function noteNoSpeechStop() {
+  const now = Date.now();
+  noSpeechStops = noSpeechStops.filter(t => now - t < 30000);
+  noSpeechStops.push(now);
+  if (noSpeechStops.length < 2) return;
+  noSpeechStops = [];
+  const role = myRole || localStorage.getItem('askviet_last_role') || 'tr';
+  localStorage.setItem('askviet_resume_role', role);
+  localStorage.setItem('askviet_last_role', role);
+  setTimeout(() => location.reload(), 120);
+}
+function resetNoSpeechStops() { noSpeechStops = []; }
 function silenceCountdownText(start, now) {
   if (!start) return '';
   const remaining = REC_SILENCE_MS - (now - start);
@@ -2540,7 +2635,8 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(!recHadSpeech||recVoiceMs<MIN_VOICE_MS||chunks.length===0){btn.innerHTML=MIC_ICON;return;}
+      if(!recHadSpeech||recVoiceMs<MIN_VOICE_MS||chunks.length===0){btn.innerHTML=MIC_ICON;noteNoSpeechStop();return;}
+      resetNoSpeechStops();
       btn.textContent=uiText('Bekle', 'Đợi');
       try{
         const blob=new Blob(chunks,{type:mt});
