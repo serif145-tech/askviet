@@ -6,6 +6,10 @@
 <title>AskViet</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+button{transition:transform .08s ease,filter .12s ease,box-shadow .12s ease}
+button:active,button.pressed{transform:scale(.96);filter:brightness(1.35) saturate(1.25);box-shadow:0 0 0 2px #fff8 inset,0 0 12px #ffffff55}
+button.flash{animation:btnFlash .28s ease}
+@keyframes btnFlash{0%{transform:scale(1);filter:brightness(1)}45%{transform:scale(.94);filter:brightness(1.45) saturate(1.35)}100%{transform:scale(1)}}
 :root{
   --bg:#0a0a0f;
   --surface:#13131a;
@@ -60,15 +64,22 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
-.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 10px 10px;padding-top:max(env(safe-area-inset-top),10px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap}
-.header-main{min-width:150px;flex:1 1 150px}
+.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 8px 8px;padding-top:max(env(safe-area-inset-top),8px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.header-topline{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%;min-width:0}
+.header-main{min-width:0;flex:1 1 auto}
 .chat-title{font-weight:900;font-size:16px}
 .chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
-.presence-status{font-size:11px;color:var(--muted);margin-top:3px;font-weight:800}
-.presence-status.online{color:#22c55e}
-.header-right{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto}
-.settings-controls{display:none;align-items:center;gap:5px;min-width:0;position:relative}
-.settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;flex-wrap:wrap}
+.presence-status{font-size:13px;color:var(--muted);font-weight:900;display:flex;align-items:center;gap:12px}
+.presence-status.online,.presence-status.seen{color:#22c55e}
+.header-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;flex:0 0 auto}
+.witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88}
+.model-row{display:flex;gap:6px;align-items:center;min-width:0}
+.model-vs{color:var(--muted);font-size:10px}
+.mode-row{display:flex;align-items:center;gap:8px;justify-content:flex-end;width:100%;min-width:0}
+.settings-controls{display:none;min-width:0;position:relative;width:100%}
+.control-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;width:100%}
+.left-controls,.right-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.right-controls{justify-content:flex-end;flex:1 1 auto}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .online-counter{min-width:26px;height:26px;border-radius:999px;border:2px solid #22c55e;color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(34,197,94,.18);flex:0 0 auto}
@@ -123,6 +134,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .status-pill.mode-toggle{min-width:78px;border-color:#6d28d9;background:#201331;color:#ddd}
 .status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#a78bfa;background:#7c3aed;color:#fff;box-shadow:0 0 0 1px rgba(167,139,250,.25),0 5px 14px rgba(124,58,237,.22)}
+.remote-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
+.remote-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
 .live-panel{display:none;flex-shrink:0;margin:8px 10px 0;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.28);z-index:6}
@@ -141,39 +154,41 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-action.secondary{border-color:var(--vi);background:var(--vi)}
 .live-result{white-space:pre-wrap;word-break:break-word;min-height:42px;padding:10px;border-radius:12px;background:#f0ece8;color:#211f24;font-size:14px;line-height:1.35}
 @media (max-width: 520px){.live-buttons,.live-actions{grid-template-columns:1fr}.live-panel{margin:6px 8px 0}}
-.ptt-panel,.real-live-panel{display:none;flex-shrink:0;margin:8px 10px 0;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.28);z-index:6}
-.ptt-panel.open{display:flex;flex-direction:column;min-height:min(650px,calc(100dvh - 190px));background:#050507;border-color:#171720;box-shadow:none}
-.real-live-panel.open{display:block}
-.panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
-.panel-title{font-size:14px;font-weight:900;color:var(--tr2)}
+.ptt-panel,.real-live-panel{display:none;flex-shrink:0;margin:0;padding:0;background:#070707;border-bottom:1px solid #171717;z-index:6}
+.ptt-panel.open{display:flex;flex-direction:column;min-height:min(650px,calc(100dvh - 176px))}
+.real-live-panel.open{display:flex;flex-direction:column;min-height:min(650px,calc(100dvh - 176px))}
+.panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid #171717}
+.panel-title{font-size:14px;font-weight:900;color:#c084fc}
 .panel-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
-.ptt-help{color:#707078;text-align:center;font-size:16px;line-height:1.35;margin:42px auto 0;max-width:330px}
+.ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
-.ptt-panel .flag-actions{margin-top:auto;margin-bottom:88px;gap:42px;justify-items:center}
-.roundflag{min-height:92px;border-radius:18px;border:2px solid var(--border);font-size:34px;font-weight:900;color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25)}
-.ptt-panel .roundflag{width:136px;height:136px;min-height:136px;border-radius:50%;background:#19191d;border:10px solid #201336;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 0 0 1px rgba(124,58,237,.32),0 10px 28px rgba(0,0,0,.45);font-size:34px}
-.roundflag small{display:block;font-size:12px;margin-top:5px;color:#fff;opacity:.92}
-.ptt-panel .roundflag small{font-weight:500;color:#c8c8cf;letter-spacing:.2px}
-.roundflag.tr{background:linear-gradient(145deg,var(--tr),#4c1d95);border-color:var(--tr2)}
-.roundflag.vi{background:linear-gradient(145deg,var(--vi),#831843);border-color:var(--vi2)}
-.ptt-panel .roundflag.tr,.ptt-panel .roundflag.vi{background:#19191d;border-color:#201336}
-.roundflag.recording{animation:pulse .8s infinite;outline:2px solid #fff8}
+.ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:20px;padding:18px 24px calc(28px + env(safe-area-inset-bottom));margin:0}
+.roundflag{width:132px;height:132px;min-height:132px;justify-self:center;border-radius:50%;border:2px solid #2d2d2d;background:linear-gradient(145deg,#171717,#0d0d0d);color:#fff;font-size:50px;font-weight:900;cursor:pointer;box-shadow:0 0 0 10px rgba(124,58,237,.1),0 6px 24px rgba(0,0,0,.45)}
+.roundflag small{display:block;font-size:12px;margin-top:7px;color:#ccc;opacity:1;font-weight:700}
+.roundflag.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
 .ptt-input{width:100%;min-height:74px;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;line-height:1.35;resize:vertical;outline:none;font-family:inherit;margin-bottom:8px}
 .ptt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .ptt-action{padding:10px;border-radius:12px;border:1px solid var(--tr);background:var(--tr);color:#fff;font-weight:900;cursor:pointer}
 .ptt-action.vi{border-color:var(--vi);background:var(--vi)}
-.ptt-log,.real-live-log{white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:190px;overflow:auto;padding:10px;border-radius:12px;background:#f0ece8;color:#211f24;font-size:14px;line-height:1.35}
-.live-status{font-size:13px;color:var(--muted);line-height:1.35;margin-bottom:8px}
-.live-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.ptt-log,.real-live-log{flex:1;min-height:0;overflow:auto;padding:12px 14px;background:#070707;color:#c084fc;font-size:19px;font-weight:850;line-height:1.42;white-space:pre-wrap;word-break:break-word}
+.live-status{padding:10px 14px;border-bottom:1px solid #1b1b1b;color:#888;font-weight:850;font-size:13px;line-height:1.35;margin:0}
+.live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
+.live-settings.open{display:grid}
 .live-settings label{font-size:11px;font-weight:900;color:var(--muted)}
 .live-settings select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none}
+.live-bar{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
+.live-listen{min-height:50px;border:none;border-radius:10px;background:#7c3aed;color:#fff;font-weight:900;font-size:16px;padding:0 14px}
+.live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
+.live-mini{min-height:50px;min-width:52px;padding:0 12px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850}
+.empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
 .status-pill.live-on{border-color:#22c55e;color:#86efac}
 @media (max-width: 520px){
   .flag-actions,.ptt-actions{grid-template-columns:1fr}.roundflag{min-height:76px}
-  .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:30px;margin-bottom:78px}
-  .ptt-panel .roundflag{width:132px;height:132px;min-height:132px}
+  .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:12px;padding-left:12px;padding-right:12px}
+  .ptt-panel .roundflag,.roundflag{width:118px;height:118px;min-height:118px}
+  .live-bar{grid-template-columns:1fr 54px 54px 54px}
 }
-.tts-panel{display:none;position:absolute;right:0;top:48px;width:min(310px,calc(100vw - 18px));padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 35px rgba(0,0,0,.45);z-index:20}
+.tts-panel{display:none;position:absolute;right:0;top:34px;width:min(310px,calc(100vw - 18px));padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 35px rgba(0,0,0,.45);z-index:20}
 .tts-panel.open{display:grid;gap:8px}
 .tts-panel label{font-size:11px;font-weight:800;color:var(--muted)}
 .tts-panel select,.tts-panel input{width:100%;padding:8px 9px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none}
@@ -182,15 +197,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .btn-row button{touch-action:manipulation}
 .input-bar{position:relative;z-index:5}
 @media (max-width: 520px){
-  .settings-controls>img{width:38px!important;height:38px!important}
   .back-btn{font-size:18px;padding:3px}
   .model-badge{font-size:10px;padding:2px 6px}
-  .chat-header{align-items:flex-start;gap:6px}
-  .header-main{flex:1 1 170px;min-width:0}
-  .settings-actions{gap:5px}
+  .chat-header{gap:6px}
+  .control-row{gap:6px}
+  .left-controls,.right-controls{gap:5px}
   .chat-model-select{max-width:86px}
-  .status-pill{padding:5px 7px}
+  .status-pill{padding:5px 7px;font-size:11px}
   .notify-toggle{padding:5px 7px}
+  .status-pill.mode-toggle{min-width:76px}
 }
 @media (min-width: 900px){
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
@@ -275,23 +290,36 @@ img,svg,video,canvas{max-width:100%;height:auto}
 <!-- CHAT -->
 <div id="chat">
   <div class="chat-header">
-    <div class="header-main">
-      <div class="chat-title" id="chatTitle">🇹🇷 → 🇻🇳</div>
-      <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
-      <div class="presence-status" id="presenceStatus"></div>
-      <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
-        <span class="model-badge active" id="myModelBadge">-</span>
-        <span style="color:var(--muted);font-size:10px">vs</span>
-        <span class="model-badge" id="theirModelBadge">?</span>
+    <div class="header-topline">
+      <div class="header-main">
+        <div class="chat-title" id="chatTitle">🇹🇷 → 🇻🇳</div>
+        <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
+      </div>
+      <div class="header-tools">
+        <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
+        <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarlari">&#9881;</button>
+        <button class="back-btn" onclick="goBack()" title="API ve taraf secimine don">&#8617;</button>
       </div>
     </div>
-    <div class="header-right">
-      <div id="settingsBtnArea" class="settings-controls">
-        <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
-        <div class="settings-actions">
+    <div class="model-row">
+      <span class="model-badge active" id="myModelBadge">-</span>
+      <span class="model-vs">vs</span>
+      <span class="model-badge" id="theirModelBadge">?</span>
+    </div>
+    <div class="presence-status" id="presenceStatus"></div>
+    <div class="mode-row" id="modeRow">
+      <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konus modu">Bas-Konus</button>
+      <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate">Live</button>
+    </div>
+    <div id="settingsBtnArea" class="settings-controls">
+      <div class="control-row">
+        <div class="left-controls">
           <span class="online-counter" id="onlineCounter" title="Online">0</span>
+          <button class="status-pill remote-voice" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 VN</button>
+        </div>
+        <div class="right-controls">
           <div class="conn-dot off" id="connDot"></div>
-          <select class="chat-model-select" id="chatModelSelect" title="Model se?imi">
+          <select class="chat-model-select" id="chatModelSelect" title="Model secimi">
             <option value="openai:gpt-5.5">GPT-5.5</option>
             <option value="openai:gpt-5.4">5.4</option>
             <option value="openai:gpt-5.4-mini">5.4 mini</option>
@@ -299,13 +327,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
             <option value="gemini:gemini-3.1-flash-lite">G 3.1 Lite</option>
           </select>
-          <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konus modu">Bas-Konus</button>
-          <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate">Live</button>
-          <button class="status-pill" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 Kapalı</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
-          <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarlari">&#9881;</button>
-          <button class="back-btn" onclick="goBack()" title="API ve taraf secimine don">&#8617;</button>
         </div>
+      </div>
         <div class="tts-panel" id="ttsPanel">
           <label>Ses modeli</label>
           <select id="ttsModelSelect" onchange="saveTtsSettings()">
@@ -344,35 +368,25 @@ img,svg,video,canvas{max-width:100%;height:auto}
           </select>
           <button class="tts-save" onclick="saveTtsSettings();toggleTtsSettings(false)">Kaydet</button>
         </div>
-      </div>
     </div>
   </div>
 
   <div class="ptt-panel" id="pttPanel">
-    <div class="panel-top">
-      <div class="panel-title">Bas-Konus</div>
-      <button class="panel-close" onclick="togglePttMode(false)">Kapat</button>
-    </div>
-    <div class="ptt-help" id="pttHelp">Bayraga bas, konus; susunca otomatik cevirip seslendirir.</div>
+    <div class="ptt-log" id="pttLog"><div class="empty">Bayraga bas, konus; susunca otomatik cevirip seslendirir.</div></div>
     <div class="flag-actions">
-      <button class="roundflag tr" id="pttTrBtn" onclick="startPttVoice('tr')">&#127481;&#127479;<small>TR -> VI</small></button>
-      <button class="roundflag vi" id="pttViBtn" onclick="startPttVoice('vi')">&#127483;&#127475;<small>VI -> TR</small></button>
+      <button class="roundflag tr" id="pttTrBtn" onclick="startPttVoice('tr')">&#127481;&#127479;<small>&#127481;&#127479; -> &#127483;&#127475;</small></button>
+      <button class="roundflag vi" id="pttViBtn" onclick="startPttVoice('vi')">&#127483;&#127475;<small>&#127483;&#127475; -> &#127481;&#127479;</small></button>
     </div>
-    <textarea class="ptt-input" id="pttInput" placeholder="Ses calismazsa buraya yaz..."></textarea>
-    <div class="ptt-actions">
-      <button class="ptt-action" onclick="pttManual('tr')">&#127481;&#127479; -> &#127483;&#127475;</button>
-      <button class="ptt-action vi" onclick="pttManual('vi')">&#127483;&#127475; -> &#127481;&#127479;</button>
-    </div>
-    <div class="ptt-log" id="pttLog">Hazir.</div>
   </div>
 
   <div class="real-live-panel" id="realLivePanel">
     <div class="panel-top">
       <div class="panel-title">Gemini Live Translate</div>
+      <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarlari">&#9881;</button>
       <button class="panel-close" onclick="toggleRealLive(false)">Kapat</button>
     </div>
-    <div class="live-status" id="realLiveStatus">Gemini API key ile gercek Live oturumu acilir. Text modunda ceviri ekrana yazar; Ses modunda Gemini ses cevabi dener.</div>
-    <div class="live-settings">
+    <div class="live-status" id="realLiveStatus">Dinleniyor degil</div>
+    <div class="live-settings" id="liveSettingsPanel">
       <label>Live model</label>
       <select id="liveModelSelect" onchange="saveLiveSettings()">
         <option value="gemini-3.5-live-translate-preview">Gemini 3.5 Live Translate</option>
@@ -387,15 +401,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <option value="AUDIO">Gemini Ses</option>
       </select>
     </div>
-    <div class="flag-actions">
-      <button class="roundflag tr" id="liveTrStartBtn" onclick="startGeminiLive('tr')">&#127481;&#127479;<small>Live TR -> VI</small></button>
-      <button class="roundflag vi" id="liveViStartBtn" onclick="startGeminiLive('vi')">&#127483;&#127475;<small>Live VI -> TR</small></button>
+    <div class="real-live-log" id="realLiveLog"><div class="empty">Dinle'ye basinca surekli dinler; sessizlikte cevirip seslendirir.</div></div>
+    <div class="live-bar">
+      <button class="live-listen" id="liveMainBtn" onclick="toggleGeminiLiveMain()">&#9654; Dinle</button>
+      <button class="live-mini" onclick="appendRealLiveLog('Tekrar ozelligi Gemini Live icin hazir degil.')">&#8635;</button>
+      <button class="live-mini speakBtn" onclick="speakLastLive()">&#9654;</button>
+      <button class="live-mini" onclick="clearRealLiveLog()">&#129529;</button>
     </div>
-    <div class="ptt-actions">
-      <button class="ptt-action vi" onclick="stopGeminiLive()">Durdur</button>
-      <button class="ptt-action" onclick="clearRealLiveLog()">Temizle</button>
-    </div>
-    <div class="real-live-log" id="realLiveLog">Hazir.</div>
   </div>
 
   <div class="messages" id="messages">
@@ -568,27 +580,28 @@ function loadSaved() {
 
 // ── Firebase REST ──────────────────────────────────────────────────────────
 async function fbGet(path) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json', {}, 15000);
+  const r = await fetch(DB_URL + path + '.json');
   return r.ok ? r.json() : null;
 }
 async function fbPush(path, data) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json', { method: 'POST', body: JSON.stringify(data) }, 15000);
-  return r.ok ? r.json() : null;
+  const r = await fetch(DB_URL + path + '.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error('Firebase yazma hatasi: ' + (await r.text().catch(() => r.statusText)));
+  return r.json();
 }
 async function fbSet(path, data) {
-  await fetchWithTimeout(DB_URL + path + '.json', { method: 'PUT', body: JSON.stringify(data) }, 15000);
+  const r = await fetch(DB_URL + path + '.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error('Firebase guncelleme hatasi: ' + (await r.text().catch(() => r.statusText)));
 }
 async function fbRemove(path) {
-  await fetchWithTimeout(DB_URL + path + '.json', { method: 'DELETE' }, 15000);
-}
-async function fetchWithTimeout(url, options={}, ms=20000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { ...options, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  await fetch(DB_URL + path + '.json', { method: 'DELETE' });
 }
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
@@ -626,8 +639,8 @@ function start(role) {
   document.getElementById('chat').style.display = 'flex';
   try{
     const ct=document.getElementById('chatTitle'); const cs=document.getElementById('chatSubtitle'); const mi=document.getElementById('msgInput');
-    if(role === 'tr'){ if(ct) ct.textContent='TR -> VI'; if(cs) cs.textContent='Mesajlar Vietnamcaya cevriliyor'; if(mi) mi.placeholder='Turkce yaz...'; }
-    else { if(ct) ct.textContent='VI -> TR'; if(cs) cs.textContent='Tin nhan duoc dich sang tieng Tho'; if(mi) mi.placeholder='Viet tieng Viet...'; }
+    if(role === 'tr'){ if(ct) ct.textContent='🇹🇷 → 🇻🇳'; if(cs) cs.textContent='Mesajlar Vietnamcaya cevriliyor'; if(mi) mi.placeholder='Turkce yaz...'; }
+    else { if(ct) ct.textContent='🇻🇳 → 🇹🇷'; if(cs) cs.textContent='Tin nhan duoc dich sang tieng Tho'; if(mi) mi.placeholder='Viet tieng Viet...'; }
     const sa=document.getElementById('settingsBtnArea'); if(sa) sa.style.display='flex';
   }catch(e){console.error('start UI error:',e)}
   setupChatControls();
@@ -1100,11 +1113,14 @@ async function sendMessage() {
     const msg = { role: myRole, text, ts: Date.now(), translation: null };
     const result = await fbPush(MSGS_PATH, msg);
     const key = result?.name;
-    if (!key) return;
+    if (!key) throw new Error('Firebase mesaj anahtari donmedi');
+    renderMessage(key, msg);
+    scrollToBottom();
     translateAndUpdate(key, text, myRole);
   } catch (e) {
     console.error('Mesaj gönderilemedi:', e);
     input.value = text;
+    alert(uiText('Mesaj gonderilemedi. Internet/Firebase baglantisini kontrol et.', 'Khong gui duoc tin nhan. Kiem tra ket noi Internet/Firebase.'));
   } finally {
     if (sendBtn) sendBtn.disabled = false;
   }
@@ -1273,12 +1289,16 @@ function setPttLog(text) { const el = document.getElementById('pttLog'); if (el)
 function appendPttLog(text) {
   const el = document.getElementById('pttLog');
   const ready = uiText('Hazir.', 'San sang.');
-  if (el) { el.textContent = (el.textContent && el.textContent !== ready ? el.textContent + '\n\n' : '') + text; el.scrollTop = el.scrollHeight; }
+  if (el) {
+    if (el.querySelector('.empty')) el.textContent = '';
+    el.textContent = (el.textContent && el.textContent !== ready ? el.textContent + '\n\n' : '') + text;
+    el.scrollTop = el.scrollHeight;
+  }
 }
 async function pttTranslate(text, from) {
-  const sourceLabel = from === 'tr' ? 'TR' : 'VI';
+  const sourceLabel = from === 'tr' ? '🇹🇷' : '🇻🇳';
   const target = from === 'tr' ? 'vi' : 'tr';
-  const targetLabel = target === 'tr' ? 'TR' : 'VI';
+  const targetLabel = target === 'tr' ? '🇹🇷' : '🇻🇳';
   setPttLog(sourceLabel + ': ' + text + '\n' + targetLabel + ': ' + uiText('Cevriliyor...', 'Dang dich...'));
   const out = await translateText(text, from);
   setPttLog(sourceLabel + ': ' + text + '\n' + targetLabel + ': ' + out);
@@ -1295,7 +1315,8 @@ async function startPttVoice(from) {
   if (rec) { stopRec(); return; }
   recChunks=[]; recHadSpeech=false; recSilentSince=0;
   btn.classList.add('recording');
-  setPttLog((from === 'tr' ? 'TR' : 'VI') + ': ' + uiText('Dinliyorum...', 'Dang nghe...'));
+  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': ' + uiText('Dinliyorum...', 'Dang nghe...');
+  setPttLog(listenText);
   try {
     const ctx = await ensureAudioCtx();
     recStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
@@ -1328,10 +1349,10 @@ async function startPttVoice(from) {
     recTimer = setInterval(() => {
       if(!recAnalyser || !recData) return;
       const v = rms(recAnalyser, recData), now = Date.now();
-      if(v > 0.012){ recHadSpeech=true; recSilentSince=0; return; }
-      if(recHadSpeech){ if(!recSilentSince) recSilentSince=now; if(now-recSilentSince>1500) stopRec(); }
+      if(v > 0.012){ recHadSpeech=true; recSilentSince=0; clearRecCountdown(btn, 'ptt', listenText); return; }
+      if(recHadSpeech){ if(!recSilentSince) recSilentSince=now; showRecCountdown(btn, recSilentSince, now, 'ptt'); if(now-recSilentSince>REC_SILENCE_MS) stopRec(); }
       else if(now-recStarted>2500) stopRec();
-      if(now-recStarted>12000) stopRec();
+      if(now-recStarted>30000) stopRec();
     },120);
   } catch(e) {
     btn.classList.remove('recording');
@@ -1363,13 +1384,36 @@ function toggleRealLive(force) {
   syncLiveSettingsUI();
   if (setPanelOpen('realLivePanel', 'realLiveBtn', force)) togglePttMode(false);
 }
+function toggleLiveSettings(force) {
+  const panel = document.getElementById('liveSettingsPanel');
+  if (!panel) return;
+  const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+}
+function updateLiveMainButton(on=false) {
+  const btn = document.getElementById('liveMainBtn');
+  if (!btn) return;
+  btn.innerHTML = on ? '&#9632; Durdur' : '&#9654; Dinle';
+  btn.classList.toggle('recording', !!on);
+}
+function toggleGeminiLiveMain() {
+  if (geminiLiveWs || geminiLiveStream) stopGeminiLive();
+  else startGeminiLive('tr');
+}
+function speakLastLive() {
+  if (lastLiveText) speak(lastLiveText, lastLiveTarget || 'vi', null, true).catch(()=>{});
+}
 function setRealLiveStatus(text) { const el = document.getElementById('realLiveStatus'); if (el) el.textContent = text || ''; }
 function appendRealLiveLog(text) {
   const el = document.getElementById('realLiveLog');
   const ready = uiText('Hazir.', 'San sang.');
-  if (el) { el.textContent = (el.textContent && el.textContent !== ready ? el.textContent + '\n' : '') + text; el.scrollTop = el.scrollHeight; }
+  if (el) {
+    if (el.querySelector('.empty')) el.textContent = '';
+    el.textContent = (el.textContent && el.textContent !== ready ? el.textContent + '\n' : '') + text;
+    el.scrollTop = el.scrollHeight;
+  }
 }
-function clearRealLiveLog(){ const el = document.getElementById('realLiveLog'); if(el) el.textContent=uiText('Hazir.', 'San sang.'); }
+function clearRealLiveLog(){ const el = document.getElementById('realLiveLog'); if(el) el.innerHTML='<div class="empty">Dinleye basinca surekli dinler; sessizlikte cevirip seslendirir.</div>'; }
 function pcm16Base64(float32) {
   const buf = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buf);
@@ -1414,6 +1458,7 @@ function stopGeminiLive() {
   geminiLiveProcessor=null; geminiLiveSource=null; geminiLiveStream=null; geminiLiveWs=null;
   document.querySelectorAll('#liveTrStartBtn,#liveViStartBtn').forEach(b=>b.classList.remove('recording'));
   const b=document.getElementById('realLiveBtn'); if(b) b.classList.remove('live-on');
+  updateLiveMainButton(false);
   setRealLiveStatus(uiText('Live durdu.', 'Live da dung.'));
 }
 async function startGeminiLive(from) {
@@ -1426,9 +1471,10 @@ async function startGeminiLive(from) {
   const target = from === 'tr' ? 'Vietnamese' : 'Turkish';
   const source = from === 'tr' ? 'Turkish' : 'Vietnamese';
   const modality = settings.response === 'AUDIO' ? 'AUDIO' : 'TEXT';
-  const btn = document.getElementById(from === 'tr' ? 'liveTrStartBtn' : 'liveViStartBtn');
+  const btn = document.getElementById('liveMainBtn');
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
+  updateLiveMainButton(true);
   setRealLiveStatus(uiText('Gemini Live baglaniyor... Model: ', 'Dang ket noi Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
   appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live basladi.', ' Live bat dau.'));
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
@@ -1458,6 +1504,8 @@ async function startGeminiLive(from) {
       for (const part of parts) {
         if (part.text) {
           appendRealLiveLog(part.text);
+          lastLiveText = part.text;
+          lastLiveTarget = from === 'tr' ? 'vi' : 'tr';
           if (settings.response === 'TEXT_TTS') speak(part.text, from === 'tr' ? 'vi' : 'tr', null, true).catch(()=>{});
         }
         const audio = part.inlineData || part.inline_data;
@@ -1467,7 +1515,7 @@ async function startGeminiLive(from) {
     } catch(err) { appendRealLiveLog(uiText('Live cevap okunamadi.', 'Khong doc duoc phan hoi Live.')); }
   };
   ws.onerror = () => { setRealLiveStatus(uiText('Gemini Live baglanti hatasi.', 'Loi ket noi Gemini Live.')); appendRealLiveLog(uiText('WebSocket hatasi. API key/model erisimi veya tarayici destegi gerekebilir.', 'Loi WebSocket. Co the can API key/model hoac trinh duyet ho tro.')); };
-  ws.onclose = () => { setRealLiveStatus(uiText('Live kapandi.', 'Live da dong.')); document.querySelectorAll('#liveTrStartBtn,#liveViStartBtn').forEach(b=>b.classList.remove('recording')); if(topBtn) topBtn.classList.remove('live-on'); };
+  ws.onclose = () => { setRealLiveStatus(uiText('Live kapandi.', 'Live da dong.')); updateLiveMainButton(false); if(topBtn) topBtn.classList.remove('live-on'); geminiLiveWs=null; };
 }
 function initPWA() {
   const manifest = {
@@ -1600,16 +1648,19 @@ function setupChatControls() {
   const chatSelect = document.getElementById('chatModelSelect');
   if (chatSelect) {
     chatSelect.value = selectedModel;
-    chatSelect.style.display = myRole === 'tr' ? '' : 'none';
+    chatSelect.style.display = '';
     chatSelect.disabled = myRole !== 'tr';
     chatSelect.onchange = () => setSelectedModel(chatSelect.value);
   }
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
+  const modeRow = document.getElementById('modeRow');
+  if (modeRow) modeRow.style.display = myRole === 'tr' ? 'flex' : 'none';
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
-  if (pttBtn) pttBtn.style.display = '';
-  if (realLiveBtn) realLiveBtn.style.display = '';
+  if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
+  if (realLiveBtn) realLiveBtn.style.display = myRole === 'tr' ? '' : 'none';
+  if (myRole !== 'tr') { togglePttMode(false); toggleRealLive(false); }
   applyLocaleUI();
   setSelectedModel(selectedModel, true);
   updateAutoReadUI();
@@ -1628,6 +1679,8 @@ function applyLocaleUI() {
   const isVi = viMode();
   const chatSelect = document.getElementById('chatModelSelect');
   if (chatSelect) chatSelect.title = isVi ? 'Chon model' : 'Model secimi';
+  const ct = document.getElementById('chatTitle');
+  if (ct) ct.textContent = isVi ? '🇻🇳 → 🇹🇷' : '🇹🇷 → 🇻🇳';
   const pttBtn = document.getElementById('pttModeBtn');
   if (pttBtn) { pttBtn.textContent = isVi ? 'Bam noi' : 'Bas-Konus'; pttBtn.title = isVi ? 'Che do bam noi' : 'Bas-konus modu'; }
   const liveBtn = document.getElementById('realLiveBtn');
@@ -1645,9 +1698,6 @@ function applyLocaleUI() {
   const liveLabels = document.querySelectorAll('#realLivePanel .live-settings label');
   if (liveLabels[0]) liveLabels[0].textContent = isVi ? 'Model Live' : 'Live model';
   if (liveLabels[1]) liveLabels[1].textContent = isVi ? 'Kieu tra loi' : 'Cevap tipi';
-  const liveButtons = document.querySelectorAll('#realLivePanel .ptt-actions button');
-  if (liveButtons[0]) liveButtons[0].textContent = isVi ? 'Dung' : 'Durdur';
-  if (liveButtons[1]) liveButtons[1].textContent = isVi ? 'Xoa' : 'Temizle';
   const liveLog = document.getElementById('realLiveLog');
   if (liveLog && /Hazir\.|San sang\./.test(liveLog.textContent)) liveLog.textContent = isVi ? 'San sang.' : 'Hazir.';
   const gear = document.querySelector('button[onclick="toggleTtsSettings()"]');
@@ -1662,7 +1712,7 @@ function applyLocaleUI() {
   if (save) save.textContent = isVi ? 'Luu' : 'Kaydet';
   document.querySelectorAll('.panel-close').forEach(b => b.textContent = isVi ? 'Dong' : 'Kapat');
   const liveStatus = document.getElementById('realLiveStatus');
-  if (liveStatus && /Gemini API|phien Live/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Mo phien Live that bang Gemini API key. Che do Text se hien ban dich tren man hinh.' : 'Gemini API key ile gercek Live oturumu acilir. Text modunda ceviri ekrana yazar; Ses modunda Gemini ses cevabi dener.';
+  if (liveStatus && /Gemini API|phien Live|Dinleniyor|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Chua nghe' : 'Dinleniyor degil';
   updateAutoReadUI();
   updateNotifySoundUI();
 }
@@ -1717,8 +1767,8 @@ function updateAutoReadUI() {
   if (!status || !myRole) return;
   const role = autoReadControlRole();
   const on = getAutoReadState(role);
-  if (myRole === 'vi') { status.textContent = on ? 'Tu doc bat' : 'Tu doc tat'; status.title = on ? 'Tu dong doc dang bat' : 'Tu dong doc dang tat'; }
-  else { status.textContent = on ? 'VN Acik' : 'VN Kapali'; status.title = on ? 'Vietnam tarafi otomatik ses acik' : 'Vietnam tarafi otomatik ses kapali'; }
+  if (myRole === 'vi') { status.textContent = on ? '✓ Tu doc' : '🔇 Tu doc'; status.title = on ? 'Tu dong doc dang bat' : 'Tu dong doc dang tat'; }
+  else { status.textContent = on ? '✓ VN' : '🔇 VN'; status.title = on ? 'Vietnam tarafi otomatik ses acik' : 'Vietnam tarafi otomatik ses kapali'; }
   status.classList.toggle('on', on);
 }
 function listenAutoReadConfig() {
@@ -1729,9 +1779,10 @@ function listenAutoReadConfig() {
 function relativePresence(ts) {
   if (!ts) return viMode() ? 'chua co du lieu' : 'bilgi yok';
   const mins = Math.floor((Date.now() - Number(ts)) / 60000);
-  if (mins < 1) return viMode() ? 'vua moi hoat dong' : 'az once aktifti';
-  if (mins < 60) return viMode() ? ('hoat dong ' + mins + ' phut truoc') : (mins + ' dk once aktifti');
-  return formatTime(ts);
+  if (mins < 1) return viMode() ? 'vua hoat dong' : 'az once aktifti';
+  if (mins < 60) return viMode() ? (mins + ' phut truoc') : (mins + ' dk once aktifti');
+  const d = new Date(Number(ts));
+  return d.getHours().toString().padStart(2,'0') + '.' + d.getMinutes().toString().padStart(2,'0');
 }
 function updatePresenceStatus(data) {
   const el = document.getElementById('presenceStatus');
@@ -1743,8 +1794,11 @@ function updatePresenceStatus(data) {
     counter.title = online ? 'Online' : 'Offline';
   }
   el.classList.toggle('online', online);
-  if (online) el.textContent = viMode() ? 'Dang online' : 'Cevrimici';
-  else el.textContent = (viMode() ? 'Hoat dong | ' : 'Son gorulme | ') + relativePresence(data && data.lastActive);
+  el.classList.toggle('seen', !online);
+  if (online) el.textContent = viMode() ? 'Dang hoat dong' : 'Su anda aktif';
+  else el.textContent = viMode()
+    ? ('Lan cuoi | ' + relativePresence(data && data.lastActive))
+    : ('Son gorulme | ' + relativePresence(data && data.lastActive));
 }
 function updateMyPresence(online=true) {
   if (!myRole) return;
@@ -1763,6 +1817,42 @@ function listenPresence() {
 
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null;
+let lastLiveText='', lastLiveTarget='vi';
+const REC_SILENCE_MS = 2000;
+function silenceCountdownText(start, now) {
+  if (!start) return '';
+  const left = Math.max(0, Math.ceil((REC_SILENCE_MS - (now - start)) / 1000));
+  return String(left);
+}
+function showRecCountdown(btn, start, now, kind) {
+  const left = silenceCountdownText(start, now);
+  if (!left) return;
+  if (kind === 'ptt') {
+    setPttLog(uiText('Kapanıyor: ', 'Sap dung: ') + left);
+  } else if (btn) {
+    btn.textContent = left;
+  }
+}
+function clearRecCountdown(btn, kind, listenText) {
+  if (kind === 'ptt') {
+    if (listenText) setPttLog(listenText);
+  } else if (btn) {
+    btn.textContent = '🎙';
+  }
+}
+
+function flashButton(btn){
+  if(!btn) return;
+  btn.classList.remove('flash');
+  void btn.offsetWidth;
+  btn.classList.add('pressed','flash');
+  setTimeout(()=>btn.classList.remove('pressed'),180);
+  setTimeout(()=>btn.classList.remove('flash'),320);
+}
+document.addEventListener('pointerdown',e=>{const b=e.target.closest('button');if(b){b.classList.add('pressed');try{unlockAudio()}catch{}}},{capture:true,passive:true});
+document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
+document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
+document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
@@ -1778,10 +1868,10 @@ async function ensureAudioCtx(){
 
 async function startVoice() {
   const btn = document.getElementById('micBtn');
-  // Zaten kayıt varsa durdur
   if(rec){stopRec();return;}
   recChunks=[];recHadSpeech=false;recSilentSince=0;
   btn.classList.add('mic-recording');
+  btn.textContent='??';
   try{
     const ctx=await ensureAudioCtx();
     recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
@@ -1798,14 +1888,14 @@ async function startVoice() {
       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
       btn.classList.remove('mic-recording');
       rec=null;
-      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
-    btn.textContent='Bekle';
+      if(!recHadSpeech||chunks.length===0){btn.textContent='??';return;}
+      btn.textContent='Bekle';
       try{
         const blob=new Blob(chunks,{type:mt});
         const text=await transcribeVoice(blob);
         if(text){document.getElementById('msgInput').value=text;sendMessage();}
       }catch(e){console.error(uiText('Ses hatasi:', 'Loi am thanh:'),e);}
-      btn.textContent='🎙';
+      btn.textContent='??';
     };
     rec.start(120);
     recStarted=Date.now();
@@ -1813,15 +1903,17 @@ async function startVoice() {
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
+      if(v>0.012){recHadSpeech=true;recSilentSince=0;clearRecCountdown(btn,'mic');return;}
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
-        if(now-recSilentSince>1500)stopRec();
+        showRecCountdown(btn,recSilentSince,now,'mic');
+        if(now-recSilentSince>REC_SILENCE_MS)stopRec();
       }else if(now-recStarted>2000)stopRec();
-      if(now-recStarted>12000)stopRec();
+      if(now-recStarted>30000)stopRec();
     },120);
   }catch(e){
     btn.classList.remove('mic-recording');
+    btn.textContent='??';
     if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
     alert(uiText('Mikrofon izni gerekli: ', 'Can quyen micro: ')+e.message);
   }
