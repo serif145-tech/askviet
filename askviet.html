@@ -103,6 +103,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* Çeviri — küçük ve soluk */
 .msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
+.msg-image{display:block;max-width:min(260px,70vw);max-height:360px;border-radius:14px;object-fit:cover;margin-top:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 
 .msg-time{font-size:10px;color:#999;padding:2px 14px 4px}
 .msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 14px 4px;box-shadow:0 1px 5px rgba(22,163,74,.35)}
@@ -435,6 +437,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="input-bar">
+    <input type="file" id="photoInput" accept="image/*" hidden onchange="handleImagePick(event)">
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden onchange="handleImagePick(event)">
+    <button class="send-btn media-btn" id="photoBtn" onclick="openPhotoPicker()" title="Fotoğraf">&#128247;</button>
+    <button class="send-btn media-btn" id="cameraBtn" onclick="openCameraPicker()" title="Kamera">&#128248;</button>
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
     <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">&#127908;</button>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
@@ -471,6 +477,7 @@ let unsubModel = null;
 let unsubAutoRead = null;
 let unsubPresence = null;
 let presenceTimer = null;
+let chatPollTimer = null;
 let unsubAudio = null;
 let renderedKeys = new Set();
 let autoReadDone = new Set();
@@ -664,6 +671,7 @@ function goBack() {
   if (unsubAutoRead) unsubAutoRead();
   if (unsubPresence) unsubPresence();
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   if (myRole) updateMyPresence(false);
   if (unsubAudio) unsubAudio();
   renderedKeys.clear();
@@ -680,12 +688,9 @@ function goBack() {
 // ── Chat ──────────────────────────────────────────────────────────────────
 function initChat() {
   chatListenStartedAt = Date.now();
-  fbGet(MSGS_PATH).then(data => {
-    if (data && typeof data === 'object') {
-      Object.entries(data).forEach(([k, v]) => { if (v) renderMessage(k, v); });
-      scrollToBottom();
-    }
-  });
+  pollMessagesSnapshot();
+  if (chatPollTimer) clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(pollMessagesSnapshot, 900);
 
   unsubMessages = fbListen(MSGS_PATH, event => {
     if (!event) return;
@@ -751,6 +756,14 @@ function initChat() {
   listenAudioRequests();
 }
 
+async function pollMessagesSnapshot() {
+  const data = await fbGet(MSGS_PATH).catch(() => null);
+  if (!data || typeof data !== 'object') return;
+  const before = renderedKeys.size;
+  Object.entries(data).forEach(([k, v]) => { if (v) updateOrRender(k, v); });
+  if (renderedKeys.size > before) scrollToBottom();
+}
+
 function setConnected(v) {
   const dot = document.getElementById('connDot');
   if (dot) dot.classList.toggle('off', !v);
@@ -769,6 +782,8 @@ function renderMessage(key, msg) {
   div.dataset.role = msg.role || '';
   div.dataset.text = msg.text || '';
   div.dataset.translation = msg.translation || '';
+  div.dataset.type = msg.type || '';
+  div.dataset.imageUrl = msg.imageUrl || '';
   div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
@@ -784,6 +799,13 @@ function renderMessage(key, msg) {
   orig.className = 'msg-original';
   orig.id = 'orig-' + key;
   orig.textContent = getMainText(msg);
+  if (msg.type === 'image' && msg.imageUrl) {
+    const img = document.createElement('img');
+    img.className = 'msg-image';
+    img.src = msg.imageUrl;
+    img.alt = myRole === 'vi' ? 'Anh' : 'Fotoğraf';
+    orig.appendChild(img);
+  }
   head.append(orig, flag);
   div.appendChild(head);
 
@@ -791,7 +813,10 @@ function renderMessage(key, msg) {
   trans.className = 'msg-translation';
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
-  if (msg.translation) {
+  if (msg.type === 'image') {
+    trans.textContent = '';
+    trans.style.display = 'none';
+  } else if (msg.translation) {
     trans.textContent = cleanVisibleText(msg.translation);
   } else {
   trans.textContent = myRole === 'vi' ? 'Dang dich...' : 'Ceviriliyor...';
@@ -849,6 +874,8 @@ function updateOrRender(key, msg) {
   if (box) {
     box.dataset.role = msg.role || box.dataset.role || '';
     box.dataset.text = msg.text || box.dataset.text || '';
+    box.dataset.type = msg.type || box.dataset.type || '';
+    box.dataset.imageUrl = msg.imageUrl || box.dataset.imageUrl || '';
     if (msg.translation) box.dataset.translation = msg.translation;
     if (msg.ts) box.dataset.ts = msg.ts;
     if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
@@ -867,12 +894,14 @@ function updateOrRender(key, msg) {
 }
 
 function getMainText(msg) {
+  if (msg.type === 'image') return msg.text || uiText('Fotoğraf', 'Ảnh');
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
   return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
 }
 
 function getSubText(msg) {
+  if (msg.type === 'image') return '';
   const isMine = msg.role === myRole;
   if (isMine) return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
   return msg.text || '';
@@ -884,13 +913,25 @@ function refreshMessageText(key) {
   const msg = {
     role: box.dataset.role || '',
     text: box.dataset.text || '',
-    translation: box.dataset.translation || ''
+    translation: box.dataset.translation || '',
+    type: box.dataset.type || '',
+    imageUrl: box.dataset.imageUrl || ''
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
-  if (orig) orig.textContent = getMainText(msg);
+  if (orig) {
+    orig.textContent = getMainText(msg);
+    if (msg.type === 'image' && msg.imageUrl) {
+      const img = document.createElement('img');
+      img.className = 'msg-image';
+      img.src = msg.imageUrl;
+      img.alt = myRole === 'vi' ? 'Anh' : 'Fotoğraf';
+      orig.appendChild(img);
+    }
+  }
   if (trans) {
     trans.textContent = getSubText(msg);
+    trans.style.display = msg.type === 'image' ? 'none' : '';
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
@@ -1096,6 +1137,59 @@ function formatTime(ts) {
 function scrollToBottom() {
   const m = document.getElementById('messages');
   if (m) setTimeout(() => { m.scrollTop = m.scrollHeight; }, 50);
+}
+
+function openPhotoPicker() {
+  document.getElementById('photoInput')?.click();
+}
+
+function openCameraPicker() {
+  document.getElementById('cameraInput')?.click();
+}
+
+async function handleImagePick(event) {
+  const input = event.target;
+  const file = input?.files?.[0];
+  if (!file) return;
+  input.value = '';
+  await sendImageMessage(file);
+}
+
+async function uploadImageToWonb(file) {
+  const form = new FormData();
+  form.append('file', file, file.name || ('askviet-' + Date.now() + '.jpg'));
+  form.append('image', file, file.name || ('askviet-' + Date.now() + '.jpg'));
+  const res = await fetch('https://wonb.de/upload.php', { method: 'POST', body: form });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || res.statusText);
+  const found = text.match(/https?:\/\/wonb\.de\/uploads\/[^\s"'<>]+/i) || text.match(/uploads\/[^\s"'<>]+/i);
+  if (found) {
+    const url = found[0].startsWith('http') ? found[0] : 'https://wonb.de/' + found[0].replace(/^\/+/, '');
+    return url;
+  }
+  const clean = text.trim();
+  if (/^[\w.-]+\.(png|jpe?g|webp|gif)$/i.test(clean)) return 'https://wonb.de/uploads/' + clean;
+  throw new Error('Fotoğraf yükleme cevabı okunamadı.');
+}
+
+async function sendImageMessage(file) {
+  const sendBtn = document.getElementById('sendBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const imageUrl = await uploadImageToWonb(file);
+    const msg = { role: myRole, type: 'image', text: myRole === 'vi' ? 'Ảnh' : 'Fotoğraf', imageUrl, ts: Date.now(), translation: '' };
+    const result = await fbPush(MSGS_PATH, msg);
+    const key = result?.name;
+    if (key) {
+      renderMessage(key, msg);
+      scrollToBottom();
+    }
+  } catch (e) {
+    console.error('Fotoğraf gönderilemedi:', e);
+    alert(myRole === 'vi' ? 'Không gửi được ảnh.' : 'Fotoğraf gönderilemedi.');
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
 }
 
 async function sendMessage() {
