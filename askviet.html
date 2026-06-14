@@ -97,7 +97,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-flag{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #ddd;box-shadow:0 1px 4px rgba(0,0,0,.12);font-size:11px;line-height:1;flex:0 0 18px}
 
 /* Okunacak dil — büyük ve belirgin */
-.msg-original{max-width:100%;padding:10px 14px;border-radius:var(--radius);font-size:16px;font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere}
+.msg-original{max-width:100%;padding:10px 14px;border-radius:var(--radius);font-size:16px;font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;position:relative}
 .msg.mine .msg-original{background:rgba(124,58,237,0.92);color:#fff;border-bottom-right-radius:4px}
 .msg.theirs .msg-original{background:rgba(185,28,110,0.92);color:#fff;border-bottom-left-radius:4px}
 
@@ -107,11 +107,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-media-video{min-width:min(240px,68vw)}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-17px;bottom:-15px;width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4}
-.msg.mine .msg-react-btn{left:-17px;right:auto}
+.msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.msg.mine .msg-react-btn{left:-34px;right:auto}
+.msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .msg-reactions.show{display:flex}
-.reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22)}
+.reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
 .reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
@@ -703,9 +704,15 @@ function goBack() {
 // ── Chat ──────────────────────────────────────────────────────────────────
 function initChat() {
   chatListenStartedAt = Date.now();
-  pollMessagesSnapshot();
   if (chatPollTimer) clearInterval(chatPollTimer);
-  chatPollTimer = setInterval(pollMessagesSnapshot, 900);
+  chatPollTimer = null;
+
+  fbGet(MSGS_PATH).then(data => {
+    if (data && typeof data === 'object') {
+      Object.entries(data).forEach(([k, v]) => { if (v) renderMessage(k, v); });
+      scrollToBottom();
+    }
+  });
 
   unsubMessages = fbListen(MSGS_PATH, event => {
     if (!event) return;
@@ -812,6 +819,7 @@ function renderMessage(key, msg) {
   div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
+  const isMedia = msg.type === 'image' || msg.type === 'video';
 
   const head = document.createElement('div');
   head.className = 'msg-head';
@@ -844,13 +852,15 @@ function renderMessage(key, msg) {
   } else if (msg.translation) {
     trans.textContent = cleanVisibleText(msg.translation);
   } else {
-  trans.textContent = myRole === 'vi' ? 'Dang dich...' : 'Ceviriliyor...';
+  trans.textContent = myRole === 'vi' ? 'Đang dịch...' : 'Çeviriliyor...';
     trans.style.color = 'var(--tr2)';
     trans.style.fontStyle = 'normal';
   }
   div.appendChild(trans);
 
-  const btnRow = document.createElement('div');
+  let btnRow = null;
+  if (!isMedia) {
+  btnRow = document.createElement('div');
   btnRow.className = 'btn-row';
   btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
@@ -885,16 +895,19 @@ function renderMessage(key, msg) {
 
   btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
   div.appendChild(btnRow);
+  }
 
   const time = document.createElement('div');
   time.className = 'msg-time';
   time.textContent = formatTime(msg.ts);
   div.appendChild(time);
 
-  const read = document.createElement('div');
-  read.className = 'msg-read';
-  read.id = 'read-' + key;
-  btnRow.appendChild(read);
+  if (btnRow) {
+    const read = document.createElement('div');
+    read.className = 'msg-read';
+    read.id = 'read-' + key;
+    btnRow.appendChild(read);
+  }
 
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
@@ -938,13 +951,13 @@ function getMainText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
-  return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
+  return cleanVisibleText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
 }
 
 function getSubText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
-  if (isMine) return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
+  if (isMine) return cleanVisibleText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
   return msg.text || '';
 }
 
@@ -985,16 +998,22 @@ function addReactionButton(parent, key) {
   let longPress = false, timer = null;
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
+    e.stopPropagation();
+    parent.classList.add('react-pressing');
     longPress = false;
     timer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
   });
   btn.addEventListener('pointerup', e => {
     e.preventDefault();
+    e.stopPropagation();
     clearTimeout(timer);
+    parent.classList.remove('react-pressing');
     if (!longPress) toggleHeartReaction(key);
   });
-  btn.addEventListener('pointercancel', () => clearTimeout(timer));
-  btn.onclick = e => e.preventDefault();
+  btn.addEventListener('pointercancel', () => { clearTimeout(timer); parent.classList.remove('react-pressing'); });
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+  btn.addEventListener('selectstart', e => e.preventDefault());
+  btn.onclick = e => { e.preventDefault(); e.stopPropagation(); };
   parent.appendChild(btn);
 }
 
@@ -1010,7 +1029,8 @@ function showReactionPicker(key, anchor) {
   reactionEmojis().forEach(emoji => {
     const b = document.createElement('button');
     b.textContent = emoji;
-    b.onclick = () => { setMessageReaction(key, emoji); picker.classList.remove('show'); };
+    b.onpointerdown = e => e.preventDefault();
+    b.onclick = e => { e.preventDefault(); setMessageReaction(key, emoji); picker.classList.remove('show'); };
     picker.appendChild(b);
   });
   const r = anchor.getBoundingClientRect();
@@ -1033,7 +1053,13 @@ async function toggleHeartReaction(key) {
 
 async function setMessageReaction(key, emoji) {
   if (!myRole) return;
-  await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null);
+  const el = document.getElementById('react-' + key);
+  let current = {};
+  try { current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch {}
+  if (emoji) current[myRole] = emoji;
+  else delete current[myRole];
+  updateReactions(key, current);
+  await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null).catch(console.error);
 }
 
 function updateReactions(key, reactions = {}) {
@@ -1085,13 +1111,44 @@ function closeMediaPreview() {
   if (box) box.classList.remove('show');
 }
 
-function retryMessageTranslation(key, btn) {
+async function retryMessageTranslation(key, btn) {
   const box = document.getElementById('msg-' + key);
   if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return;
-  btn.textContent = '...';
-  translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole)
-    .then(() => { btn.textContent = '✓'; btn.style.background = '#dcfce7'; btn.style.borderColor = '#22c55e'; btn.style.color = '#15803d'; })
-    .catch(() => { btn.innerHTML = '&#8635;'; });
+  if (btn?.dataset.busy === '1') return;
+  const idleHtml = '&#8635;';
+  const idleStyle = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#ea580c;cursor:pointer';
+  if (btn) {
+    btn.dataset.busy = '1';
+    btn.textContent = '...';
+  }
+  try {
+    await Promise.race([
+      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole),
+      sleep(25000).then(() => { throw new Error('timeout'); })
+    ]);
+    const latest = await fbGet(MSGS_PATH + '/' + key).catch(() => null);
+    if (latest) updateOrRender(key, latest);
+    if (btn) {
+      btn.textContent = '✓';
+      btn.style.background = '#dcfce7';
+      btn.style.borderColor = '#22c55e';
+      btn.style.color = '#15803d';
+    }
+  } catch (e) {
+    console.error('Tekrar ceviri hatasi:', e);
+    if (btn) {
+      btn.innerHTML = idleHtml;
+      btn.style.cssText = idleStyle;
+    }
+  } finally {
+    if (btn) {
+      setTimeout(() => {
+        btn.dataset.busy = '0';
+        btn.innerHTML = idleHtml;
+        btn.style.cssText = idleStyle;
+      }, 900);
+    }
+  }
 }
 
 async function copyOriginalMessage(key, btn) {
@@ -1249,7 +1306,7 @@ async function requestSpeakForMessage(key, btn) {
   if (btn && btn.dataset.busy === '1') { stopAudio(); btn.dataset.busy = '0'; setSpeakBtn(btn, false); return; }
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
-  if (!text || text.includes('Ceviriliyor') || text.includes('Dang dich') || text.includes('Ceviri hatasi') || text.includes('Loi dich')) return;
+  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
   if (targetRole === myRole) {
     btn.dataset.busy = '1';
     speak(text, myRole, btn).finally(() => { btn.dataset.busy = '0'; });
@@ -1317,7 +1374,7 @@ function maybeAutoReadMessage(key) {
     return;
   }
   const text = box.dataset.translation || '';
-  if (!text || text.includes('Ceviriliyor') || text.includes('Dang dich') || text.includes('Ceviri hatasi') || text.includes('Loi dich')) return;
+  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
   autoReadDone.add(key);
   speak(text, myRole, null, true);
 }
@@ -1469,7 +1526,7 @@ function isFatalTranslationError(e) {
 
 function isPendingTranslationText(text) {
   const s = String(text || '').toLowerCase();
-  return !s || s.includes('ceviriliyor') || s.includes('dang dich') || s.includes('çeviriliyor') || s.includes('gemini yogun') || s.includes('dang thu lai');
+  return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
 }
 
 function maybeRetryMissingTranslation(key, msg) {
@@ -1486,7 +1543,7 @@ function normalizeApiError(msg, role) {
   if (!raw) return isVi ? 'Loi khong xac dinh' : 'Bilinmeyen hata';
   if (/api key/i.test(raw)) return isVi ? 'Can API key' : raw;
   if (/bos cevap|empty response|no response/i.test(raw)) return isVi ? 'Dich vu tra loi trong. Thu lai.' : raw;
-  if (/Ses metne cevrilemedi|transcri/i.test(raw)) return isVi ? 'Khong chuyen duoc giong noi thanh chu.' : raw;
+  if (/Ses metne cevrilemedi|Ses metne çevrilemedi|transcri/i.test(raw)) return isVi ? 'Không chuyển được giọng nói thành chữ.' : raw;
   if (/adresine ulasilamadi|network|failed to fetch|abort/i.test(raw)) return isVi ? 'Khong ket noi duoc dich vu. Kiem tra mang va thu lai.' : raw;
   if (/[\u{1F300}-\u{1FAFF}]/u.test(raw)) return isVi ? 'Dich vu tam thoi khong kha dung. Thu lai sau.' : 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
   if (/temporar|unavailable|busy|overload|503/i.test(raw)) return isVi ? 'Dich vu tam thoi khong kha dung. Thu lai sau.' : 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
@@ -1496,19 +1553,19 @@ function normalizeApiError(msg, role) {
 function cleanVisibleText(text) {
   const raw = String(text || '');
   if (!raw) return raw;
-  if (/[\u0400-\u04FF]/.test(raw)) return uiText('Ceviri hatasi: Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.', 'Loi dich: Dich vu tam thoi khong kha dung. Thu lai sau.');
-  if (raw.indexOf('\ufffd') >= 0) return raw.replaceAll('\ufffd', '').trim() || uiText('Ceviri hatasi', 'Loi dich');
+  if (/[\u0400-\u04FF]/.test(raw)) return uiText('Çeviri hatası: Servis geçici olarak kullanılamıyor. Biraz sonra tekrar dene.', 'Lỗi dịch: Dịch vụ tạm thời không khả dụng. Thử lại sau.');
+  if (raw.indexOf('\ufffd') >= 0) return raw.replaceAll('\ufffd', '').trim() || uiText('Çeviri hatası', 'Lỗi dịch');
   return raw;
 }
 
 function retryText(role, attempt, total) {
   return role === 'vi'
-    ? 'Gemini dang ban, dang thu lai... (' + attempt + '/' + total + ')'
-    : 'Gemini yogun, tekrar deneniyor... (' + attempt + '/' + total + ')';
+    ? 'Gemini đang bận, đang thử lại... (' + attempt + '/' + total + ')'
+    : 'Gemini yoğun, tekrar deneniyor... (' + attempt + '/' + total + ')';
 }
 
 function errorText(role, msg) {
-  return (role === 'vi' ? 'Loi dich: ' : 'Ceviri hatasi: ') + normalizeApiError(msg, role);
+  return (role === 'vi' ? 'Lỗi dịch: ' : 'Çeviri hatası: ') + normalizeApiError(msg, role);
 }
 
 function isRetryableGeminiError(e) {
@@ -1633,6 +1690,7 @@ function updateModePanelState() {
 }
 
 function setPttLog(text) { const el = document.getElementById('pttLog'); if (el) el.textContent = text || ''; }
+function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
 function appendPttLog(text) {
   const el = document.getElementById('pttLog');
   const ready = uiText('Hazir.', 'San sang.');
@@ -1644,7 +1702,7 @@ function appendPttLog(text) {
 }
 async function pttTranslate(text, from) {
   const target = from === 'tr' ? 'vi' : 'tr';
-  setPttLog(uiText('Çeviriliyor...', 'Đang dịch...'));
+  setPttLog(roleText(from, 'Çeviriliyor...', 'Đang dịch...'));
   const out = await translateText(text, from);
   renderPttTurn(text, out, from, target);
   if (out) speak(out, target, null, true).catch(()=>{});
@@ -1679,7 +1737,7 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
     copy.classList.add('confirm');
   });
 
-  const speakBtn = makeToolButton('▶ Ses', () => speak(translatedText, targetRole, speakBtn));
+  const speakBtn = makeToolButton('▶', () => speak(translatedText, targetRole, speakBtn));
   speakBtn.classList.add('speakBtn');
 
   const block = makeToolButton('Engelle', () => {
@@ -1747,8 +1805,8 @@ function clearPttLog() {
 }
 function pttManual(from) {
   const text = (document.getElementById('pttInput')?.value || '').trim();
-  if (!text) { setPttLog(uiText('Once bir sey yaz ya da bayraga basip konus.', 'Hay viet truoc hoac bam co de noi.')); return; }
-  pttTranslate(text, from).catch(e => setPttLog(uiText('Bas-konus hatasi: ', 'Loi bam noi: ') + normalizeApiError(e && e.message ? e.message : String(e), myRole)));
+  if (!text) { setPttLog(roleText(from, 'Önce bir şey yaz ya da bayrağa basıp konuş.', 'Hãy viết trước hoặc bấm cờ để nói.')); return; }
+  pttTranslate(text, from).catch(e => setPttLog(roleText(from, 'Bas-konuş hatası: ', 'Lỗi bấm nói: ') + normalizeApiError(e && e.message ? e.message : String(e), from)));
 }
 async function startPttVoice(from) {
   const btn = document.getElementById(from === 'tr' ? 'pttTrBtn' : 'pttViBtn');
@@ -1756,8 +1814,9 @@ async function startPttVoice(from) {
   if (rec) { stopRec(); return; }
   recChunks=[]; recHadSpeech=false; recSilentSince=0;
   if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
+  btn.dataset.recRole = from;
   btn.classList.add('recording');
-  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': ' + uiText('Dinliyorum...', 'Dang nghe...');
+  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': ' + roleText(from, 'Dinliyorum...', 'Đang nghe...');
   setPttLog(listenText);
   try {
     const ctx = await ensureAudioCtx();
@@ -1774,16 +1833,18 @@ async function startPttVoice(from) {
       if(recNode){try{recNode.disconnect()}catch{} recNode=null;}
       if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
       btn.classList.remove('recording');
+      if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
+      delete btn.dataset.recRole;
       rec=null;
-      if(!recHadSpeech || chunks.length===0){ setPttLog(uiText('Ses algilanmadi. Tekrar dene.', 'Khong nghe thay tieng. Thu lai.')); return; }
+      if(!recHadSpeech || chunks.length===0){ setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy tiếng. Thử lại.')); return; }
       try {
         const blob = new Blob(chunks,{type:mt});
         const text = await transcribeVoice(blob, from);
-        if(!text){ setPttLog(uiText('Ses metne cevrilemedi.', 'Khong chuyen duoc giong noi thanh chu.')); return; }
+        if(!text){ setPttLog(roleText(from, 'Ses metne çevrilemedi.', 'Không chuyển được giọng nói thành chữ.')); return; }
         const input = document.getElementById('pttInput'); if (input) input.value = text;
         await pttTranslate(text, from);
       } catch(e) {
-        setPttLog(uiText('Bas-konus hatasi: ', 'Loi bam noi: ') + normalizeApiError(e && e.message ? e.message : String(e), myRole));
+        setPttLog(roleText(from, 'Bas-konuş hatası: ', 'Lỗi bấm nói: ') + normalizeApiError(e && e.message ? e.message : String(e), from));
       }
     };
     rec.start(120);
@@ -1798,8 +1859,10 @@ async function startPttVoice(from) {
     },120);
   } catch(e) {
     btn.classList.remove('recording');
+    if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
+    delete btn.dataset.recRole;
     if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
-    setPttLog(uiText('Mikrofon izni gerekli: ', 'Can quyen micro: ') + (e.message || e));
+    setPttLog(roleText(from, 'Mikrofon izni gerekli: ', 'Cần quyền micro: ') + (e.message || e));
   }
 }
 
@@ -1994,7 +2057,7 @@ async function unlockAudio(){
     }
   }catch{}
 }
-function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':uiText('▶ Ses','▶ Đọc');if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
@@ -2248,10 +2311,10 @@ function listenAutoReadConfig() {
   unsubAutoRead = fbListen(AUTO_READ_PATH, event => { if (!event) return; applyAutoReadData(event.data, event.path || '/'); });
 }
 function relativePresence(ts) {
-  if (!ts) return viMode() ? 'chua co du lieu' : 'bilgi yok';
+  if (!ts) return viMode() ? 'chưa có dữ liệu' : 'bilgi yok';
   const mins = Math.floor((Date.now() - Number(ts)) / 60000);
-  if (mins < 1) return viMode() ? 'vua hoat dong' : 'az once aktifti';
-  if (mins < 60) return viMode() ? (mins + ' phut truoc') : (mins + ' dk once aktifti');
+  if (mins < 1) return viMode() ? 'vừa hoạt động' : 'az önce aktifti';
+  if (mins < 60) return viMode() ? (mins + ' phút trước') : (mins + ' dk önce aktifti');
   const d = new Date(Number(ts));
   return d.getHours().toString().padStart(2,'0') + '.' + d.getMinutes().toString().padStart(2,'0');
 }
@@ -2266,10 +2329,10 @@ function updatePresenceStatus(data) {
   }
   el.classList.toggle('online', online);
   el.classList.toggle('seen', !online);
-  if (online) el.textContent = viMode() ? 'Dang hoat dong' : 'Su anda aktif';
+  if (online) el.textContent = viMode() ? 'Đang hoạt động' : 'Şu anda aktif';
   else el.textContent = viMode()
-    ? ('Lan cuoi | ' + relativePresence(data && data.lastActive))
-    : ('Son gorulme | ' + relativePresence(data && data.lastActive));
+    ? ('Lần cuối | ' + relativePresence(data && data.lastActive))
+    : ('Son görülme | ' + relativePresence(data && data.lastActive));
 }
 function updateMyPresence(online=true) {
   if (!myRole) return;
@@ -2304,8 +2367,9 @@ function showRecCountdown(btn, start, now, kind) {
   const left = silenceCountdownText(start, now);
   if (!left) return;
   if (kind === 'ptt') {
-    setPttLog(uiText('Kapanıyor: ', 'Sap dung: ') + left);
-    if (btn) btn.innerHTML = '<span style="font-size:42px;font-weight:950">' + left + '</span><small>' + uiText('Kapanıyor', 'Sap dung') + '</small>';
+    const role = btn?.dataset.recRole || myRole;
+    setPttLog(roleText(role, 'Kapanıyor: ', 'Sắp dừng: ') + left);
+    if (btn) btn.innerHTML = '<span style="font-size:42px;font-weight:950">' + left + '</span><small>' + roleText(role, 'Kapanıyor', 'Sắp dừng') + '</small>';
   } else if (btn) {
     btn.textContent = left;
   }
@@ -2333,7 +2397,7 @@ document.addEventListener('pointercancel',e=>{const b=e.target.closest('button')
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
-function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
+function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}else{document.querySelectorAll('.roundflag.recording').forEach(btn=>{btn.classList.remove('recording');if(btn.dataset.defaultHtml)btn.innerHTML=btn.dataset.defaultHtml;delete btn.dataset.recRole;});}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 async function ensureAudioCtx(){
@@ -2422,7 +2486,7 @@ async function transcribeVoice(blob, sourceOverride) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
     const out = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
-    if (!out) throw new Error('Ses metne cevrilemedi');
+    if (!out) throw new Error('Ses metne çevrilemedi');
     return out;
   }
 
