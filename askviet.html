@@ -1,4 +1,4 @@
-?<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -120,6 +120,22 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
+.live-panel{display:none;flex-shrink:0;margin:8px 10px 0;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.28);z-index:6}
+.live-panel.open{display:block}
+.live-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.live-title{font-size:14px;font-weight:900;color:var(--tr2)}
+.live-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
+.live-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.live-talk{min-height:48px;border-radius:12px;border:1px solid var(--border);font-size:14px;font-weight:900;color:#fff;cursor:pointer}
+.live-talk.tr{background:var(--tr)}
+.live-talk.vi{background:var(--vi)}
+.live-talk.recording{animation:pulse .8s infinite;outline:2px solid #fff8}
+.live-input{width:100%;min-height:74px;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;line-height:1.35;resize:vertical;outline:none;font-family:inherit;margin-bottom:8px}
+.live-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.live-action{padding:10px;border-radius:12px;border:1px solid var(--tr);background:var(--tr);color:#fff;font-weight:900;cursor:pointer}
+.live-action.secondary{border-color:var(--vi);background:var(--vi)}
+.live-result{white-space:pre-wrap;word-break:break-word;min-height:42px;padding:10px;border-radius:12px;background:#f0ece8;color:#211f24;font-size:14px;line-height:1.35}
+@media (max-width: 520px){.live-buttons,.live-actions{grid-template-columns:1fr}.live-panel{margin:6px 8px 0}}
 .tts-panel{display:none;position:absolute;right:0;top:48px;width:min(310px,calc(100vw - 18px));padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 35px rgba(0,0,0,.45);z-index:20}
 .tts-panel.open{display:grid;gap:8px}
 .tts-panel label{font-size:11px;font-weight:800;color:var(--muted)}
@@ -176,11 +192,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="openai:gpt-5.5">GPT-5.5</option>
           <option value="openai:gpt-5.4">GPT-5.4</option>
           <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
-          <option value="openai:gpt-4o">GPT-4o</option>
-          <option value="openai:gpt-4o-mini">GPT-4o mini</option>
         </optgroup>
-        <optgroup label="Google">
-          <option value="gemini:gemini-2.5-flash">Gemini 2.5 Flash</option>
+        <optgroup label="Gemini">
+          <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+          <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
+          <option value="gemini:gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
         </optgroup>
       </select>
     </div>
@@ -194,8 +210,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="setup-label">Gemini API Key</div>
     <div class="paste-row">
       <input class="setup-input" type="password" id="geminiKeyInput" placeholder="AIza...">
-      <button class="paste-btn" onclick="pasteGeminiKey()">📋 Yapıştır</button>
+      <button class="paste-btn" onclick="pasteGeminiKey()">Yapistir</button>
     </div>
+
   </div>
 
     <div class="role-cards">
@@ -229,30 +246,21 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
         <div class="settings-actions">
           <div class="conn-dot off" id="connDot"></div>
-          <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
+          <select class="chat-model-select" id="chatModelSelect" title="Model se?imi">
             <option value="openai:gpt-5.5">GPT-5.5</option>
             <option value="openai:gpt-5.4">5.4</option>
             <option value="openai:gpt-5.4-mini">5.4 mini</option>
-            <option value="openai:gpt-4o">GPT-4o</option>
-            <option value="openai:gpt-4o-mini">4o mini</option>
-            <option value="gemini:gemini-2.5-flash">Gemini</option>
+            <option value="gemini:gemini-3.1-pro-preview">G 3.1 Pro</option>
+            <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
+            <option value="gemini:gemini-3.1-flash-lite">G 3.1 Lite</option>
           </select>
+          <button class="status-pill" id="liveTranslateBtn" onclick="startLiveTranslate()" title="Canli konusma">Canli</button>
           <button class="status-pill" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 Kapalı</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
           <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarlari">&#9881;</button>
           <button class="back-btn" onclick="goBack()" title="API ve taraf secimine don">&#8617;</button>
         </div>
         <div class="tts-panel" id="ttsPanel">
-          <label>Ses saglayici</label>
-          <select id="ttsProviderSelect" onchange="saveTtsSettings()">
-            <option value="openai">OpenAI 4o ses</option>
-            <option value="external">Harici ses endpoint</option>
-          </select>
-          <label>Ses API Key</label>
-          <div class="paste-row">
-            <input class="setup-input" type="password" id="ttsKeyInput" placeholder="Bos ise OpenAI key kullanilir">
-            <button class="paste-btn" onclick="pasteTtsKey()">Yapistir</button>
-          </div>
           <label>Ses modeli</label>
           <select id="ttsModelSelect" onchange="saveTtsSettings()">
             <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
@@ -294,6 +302,23 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
   </div>
 
+  <div class="live-panel" id="livePanel">
+    <div class="live-top">
+      <div class="live-title">Canli ceviri modu</div>
+      <button class="live-close" onclick="toggleLiveTranslate(false)">Kapat</button>
+    </div>
+    <div class="live-buttons">
+      <button class="live-talk tr" id="liveTrBtn" onclick="startLiveSpeech('tr')">Turkce konus</button>
+      <button class="live-talk vi" id="liveViBtn" onclick="startLiveSpeech('vi')">Vietnamca konus</button>
+    </div>
+    <textarea class="live-input" id="liveInput" placeholder="Konusma calismazsa buraya yaz..."></textarea>
+    <div class="live-actions">
+      <button class="live-action" onclick="liveTranslateManual('tr')">TR -> VI</button>
+      <button class="live-action secondary" onclick="liveTranslateManual('vi')">VI -> TR</button>
+    </div>
+    <div class="live-result" id="liveResult">Hazir.</div>
+  </div>
+
   <div class="messages" id="messages">
     <div class="empty-state" id="emptyState">
       <div class="empty-emoji">💬</div>
@@ -329,6 +354,8 @@ let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),audioUrl=null,a
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let theirRole = null;
 let apiKey = '';
+let geminiApiKey = '';
+let liveRecognizer = null;
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
 let isTyping = false;
@@ -346,7 +373,6 @@ let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 
 const TTS_DEFAULTS = {
-  provider: 'openai',
   model: 'gpt-4o-mini-tts',
   voiceTr: 'nova',
   voiceVi: 'cedar',
@@ -397,14 +423,6 @@ document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key 
 // model change - artık ayrı alanlar var, listener gerekmez
 
 // ── Paste ─────────────────────────────────────────────────────────────────
-async function pasteTtsKey() {
-  try {
-    const text = await navigator.clipboard.readText();
-    document.getElementById('ttsKeyInput').value = text.trim();
-  } catch {
-    alert('Yapıştırma izni gerekli. Manuel yapıştır.');
-  }
-}
 async function pasteGeminiKey() {
   try { const t=await navigator.clipboard.readText(); document.getElementById('geminiKeyInput').value=t.trim(); }
   catch { alert('Yapıştırma izni gerekli.'); }
@@ -420,7 +438,6 @@ async function pasteKey() {
 
 function getTtsSettings() {
   return {
-    provider: localStorage.getItem('askviet_tts_provider') || TTS_DEFAULTS.provider,
     model: localStorage.getItem('askviet_tts_model') || TTS_DEFAULTS.model,
     voiceTr: localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr,
     voiceVi: localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi,
@@ -435,32 +452,23 @@ function setSelectValue(id, value) {
 
 function syncTtsSettingsUI() {
   const s = getTtsSettings();
-  setSelectValue('ttsProviderSelect', s.provider);
   setSelectValue('ttsModelSelect', s.model);
   setSelectValue('ttsVoiceTrSelect', s.voiceTr);
   setSelectValue('ttsVoiceViSelect', s.voiceVi);
   setSelectValue('ttsSpeedSelect', String(s.speed));
-  const keyInput = document.getElementById('ttsKeyInput');
-  if (keyInput) keyInput.value = localStorage.getItem('askviet_tts_key') || '';
 }
 
 function saveTtsSettings() {
-  const provider = document.getElementById('ttsProviderSelect')?.value || TTS_DEFAULTS.provider;
   const model = document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model;
   const voiceTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
   const voiceVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
   const speed = document.getElementById('ttsSpeedSelect')?.value || TTS_DEFAULTS.speed;
-  const key = document.getElementById('ttsKeyInput')?.value.trim() || '';
-  localStorage.setItem('askviet_tts_provider', provider);
   localStorage.setItem('askviet_tts_model', model);
   localStorage.setItem('askviet_tts_voice_tr', voiceTr);
   localStorage.setItem('askviet_tts_voice_vi', voiceVi);
   localStorage.setItem('askviet_tts_speed', speed);
-  if (key) localStorage.setItem('askviet_tts_key', key);
-  else localStorage.removeItem('askviet_tts_key');
   ttsCache.clear();
 }
-
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
   if (!panel) return;
@@ -472,18 +480,12 @@ function toggleTtsSettings(force) {
 function loadSaved() {
   const savedKey = localStorage.getItem('askviet_key');
   let savedModel = localStorage.getItem('askviet_model');
-  if (savedModel === 'gemini:gemini-2.5-flash-preview-05-20') {
-    savedModel = 'gemini:gemini-2.5-flash';
-    localStorage.setItem('askviet_model', savedModel);
-  }
-  if (savedModel === 'codex:gpt-5.5' || savedModel === 'codex:gpt-5.4' || savedModel === 'codex:gpt-5.4-mini') {
+  if (savedModel === 'gemini:gemini-2.5-flash-preview-05-20' || savedModel === 'gemini:gemini-2.5-flash' || savedModel === 'openai:gpt-4o' || savedModel === 'openai:gpt-4o-mini' || savedModel === 'codex:gpt-5.5' || savedModel === 'codex:gpt-5.4' || savedModel === 'codex:gpt-5.4-mini') {
     savedModel = 'openai:gpt-5.5';
     localStorage.setItem('askviet_model', savedModel);
   }
-  const savedTtsKey = localStorage.getItem('askviet_tts_key');
-  const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-  if (savedTtsKey) { const t=document.getElementById('ttsKeyInput'); if(t) t.value=savedTtsKey; }
+  const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=savedGeminiKey; }
   syncTtsSettingsUI();
   if (savedModel) {
@@ -522,49 +524,35 @@ function fbListen(path, cb) {
 function start(role) {
   try { unlockAudio(); } catch(e) {}
   requestNotifyPermission();
-  const openaiKey = document.getElementById('apiKeyInput')?.value.trim()||localStorage.getItem('askviet_key')||'';
-  const geminiKey = document.getElementById('geminiKeyInput')?.value.trim()||localStorage.getItem('askviet_gemini_key')||'';
-  if(!openaiKey){alert('OpenAI API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
-  if(!geminiKey){alert('Gemini API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
-  apiKey=openaiKey; // translateText içinde model'e göre seçilecek
-  localStorage.setItem('askviet_key', openaiKey);
-  localStorage.setItem('askviet_gemini_key', geminiKey);
-  saveTtsSettings();
-    selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5';
+  if (role === 'tr') {
+    const pass = prompt('Turkce tarafi sifresi');
+    if (pass !== '1453') { alert('Hatali sifre'); return; }
+  }
+  selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5';
+  const [provider] = selectedModel.split(':');
+  const openaiKey = document.getElementById('apiKeyInput')?.value.trim() || localStorage.getItem('askviet_key') || '';
+  const geminiKey = document.getElementById('geminiKeyInput')?.value.trim() || localStorage.getItem('askviet_gemini_key') || '';
+  if (provider === 'openai' && !openaiKey) { alert('OpenAI API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
+  if (provider === 'gemini' && !geminiKey) { alert('Gemini API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
+  apiKey = openaiKey;
+  geminiApiKey = geminiKey;
+  if (openaiKey) localStorage.setItem('askviet_key', openaiKey);
+  if (geminiKey) localStorage.setItem('askviet_gemini_key', geminiKey);
   localStorage.setItem('askviet_model', selectedModel);
+  saveTtsSettings();
   myRole = role;
   theirRole = role === 'tr' ? 'vi' : 'tr';
-
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
-
-
-
   try{
-    const ct=document.getElementById('chatTitle');
-    const cs=document.getElementById('chatSubtitle');
-    const mi=document.getElementById('msgInput');
-    if(role === 'tr'){
-      if(ct) ct.textContent='🇹🇷 → 🇻🇳';
-      if(cs) cs.textContent='Mesajların Vietnamca çevriliyor';
-      if(mi) mi.placeholder='Türkçe yaz...';
-      try{const sa=document.getElementById('settingsBtnArea');if(sa)sa.style.display='flex';}catch(e){}
-    }else{
-      if(ct) ct.textContent='🇻🇳 → 🇹🇷';
-      if(cs) cs.textContent='Tin nhắn được dịch sang tiếng Thổ';
-      if(mi) mi.placeholder='Viết tiếng Việt...';
-      try{const sa=document.getElementById('settingsBtnArea');if(sa)sa.style.display='flex';}catch(e){}
-  // VI: model alanı setup'ta gizli kalsın
-    }
+    const ct=document.getElementById('chatTitle'); const cs=document.getElementById('chatSubtitle'); const mi=document.getElementById('msgInput');
+    if(role === 'tr'){ if(ct) ct.textContent='TR -> VI'; if(cs) cs.textContent='Mesajlar Vietnamcaya cevriliyor'; if(mi) mi.placeholder='Turkce yaz...'; }
+    else { if(ct) ct.textContent='VI -> TR'; if(cs) cs.textContent='Tin nhan duoc dich sang tieng Tho'; if(mi) mi.placeholder='Viet tieng Viet...'; }
+    const sa=document.getElementById('settingsBtnArea'); if(sa) sa.style.display='flex';
   }catch(e){console.error('start UI error:',e)}
   setupChatControls();
-  // boş mesaj metni dile göre
-  setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henüz mesaj yok.<br>İlk mesajı gönder!' : 'Chưa có tin nhắn.<br>Gửi tin nhắn đầu tiên!';},100);
-  // model badge
-  try{
-    const myBadge = document.getElementById('myModelBadge');
-    if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
-  }catch(e){}
+  setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henuz mesaj yok.<br>Ilk mesaji gonder!' : 'Chua co tin nhan.<br>Gui tin nhan dau tien!';},100);
+  try{ const myBadge = document.getElementById('myModelBadge'); if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1]; }catch(e){}
   if (myRole === 'tr') syncMyModel(selectedModel);
   updateAutoReadUI();
   listenModelConfig();
@@ -627,7 +615,7 @@ function initChat() {
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
-        if (el) { el.textContent = event.data; el.style.color = ''; el.style.fontStyle = 'italic'; }
+        if (el) { el.textContent = cleanVisibleText(event.data); el.style.color = ''; el.style.fontStyle = 'italic'; }
         refreshMessageText(key);
         maybeAutoReadMessage(key);
         scrollToBottom();
@@ -701,7 +689,7 @@ function renderMessage(key, msg) {
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
   if (msg.translation) {
-    trans.textContent = msg.translation;
+    trans.textContent = cleanVisibleText(msg.translation);
   } else {
   trans.textContent = 'Ceviriliyor...';
     trans.style.color = 'var(--tr2)';
@@ -771,7 +759,7 @@ function updateOrRender(key, msg) {
   }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
-    el.textContent = msg.translation;
+    el.textContent = cleanVisibleText(msg.translation);
     el.style.color = '';
     el.style.fontStyle = 'italic';
   }
@@ -784,12 +772,12 @@ function updateOrRender(key, msg) {
 function getMainText(msg) {
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
-  return msg.translation || 'Ceviriliyor...';
+  return cleanVisibleText(msg.translation) || 'Ceviriliyor...';
 }
 
 function getSubText(msg) {
   const isMine = msg.role === myRole;
-  if (isMine) return msg.translation || 'Ceviriliyor...';
+  if (isMine) return cleanVisibleText(msg.translation) || 'Ceviriliyor...';
   return msg.text || '';
 }
 
@@ -910,7 +898,7 @@ function getReadableLang(senderRole) {
 function getReadableText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  return box.dataset.translation || box.dataset.text || '';
+  return cleanVisibleText(box.dataset.translation) || box.dataset.text || '';
 }
 
 function getRecipientRole(senderRole) {
@@ -920,7 +908,7 @@ function getRecipientRole(senderRole) {
 function getRecipientText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  return box.dataset.translation || '';
+  return cleanVisibleText(box.dataset.translation) || '';
 }
 
 async function requestSpeakForMessage(key, btn) {
@@ -1043,7 +1031,7 @@ async function translateAndUpdate(key, text, fromRole) {
       await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
       return;
     } catch (e) {
-      const msg = (e && e.message ? e.message : String(e)).slice(0, 120);
+      const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
       const retry = selectedModel.startsWith('gemini:') && isRetryableGeminiError(e) && attempt < maxAttempts;
       if (retry) {
         const waitMs = attempt * 2500;
@@ -1058,14 +1046,28 @@ async function translateAndUpdate(key, text, fromRole) {
   }
 }
 
+function normalizeApiError(msg) {
+  const raw = String(msg || '');
+  if (!raw) return 'Bilinmeyen hata';
+  if (/[?-??-???]/.test(raw)) return 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
+  if (/temporar|unavailable|busy|overload|503/i.test(raw)) return 'Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
+  return raw;
+}
+
+function cleanVisibleText(text) {
+  const raw = String(text || '');
+  if (!raw) return raw;
+  if (/[\u0400-\u04FF]/.test(raw)) return 'Ceviri hatasi: Servis gecici olarak kullanilamiyor. Biraz sonra tekrar dene.';
+  if (raw.indexOf('\ufffd') >= 0) return raw.replaceAll('\ufffd', '').trim() || 'Ceviri hatasi';
+  return raw;
+}
+
 function retryText(role, attempt, total) {
   return 'Gemini yogun, tekrar deneniyor... (' + attempt + '/' + total + ')';
 }
 
 function errorText(role, msg) {
-  return role === 'vi'
-    ? 'Ceviri hatasi: ' + msg
-    : 'Ceviri hatasi: ' + msg;
+  return 'Ceviri hatasi: ' + normalizeApiError(msg);
 }
 
 function isRetryableGeminiError(e) {
@@ -1074,56 +1076,67 @@ function isRetryableGeminiError(e) {
 }
 
 async function translateText(text, from) {
-  const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
-  const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt — samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
+  const fromName = from === 'tr' ? 'Turkce' : 'Vietnamca';
+  const toName = from === 'tr' ? 'Vietnamca' : 'Turkce';
+  const sysPrompt = `Sen sadece ceviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Iki kisi sabittir: Turkce taraf erkektir/anh, Vietnamca taraf kadindir/em. TR->VI cevirirken Turk erkek Vietnamli kadina konusur: kadina her zaman "em" diye hitap et; erkek kendinden soz ederse "anh" kullan. "Askim/sevgilim" gibi hitaplari kadina soyleniyorsa "em yeu", "em yeu cua anh" gibi cevir; "anh yeu" kullanma. VI->TR cevirirken Vietnamli kadin Turk erkege konusur: erkege "anh", kendine "em" kullanildigini varsay. Metnin tonunu, uslubunu ve duygusunu birebir yansit; samimi yazilmissa samimi, kaba yazilmissa kaba, kufurlu yazilmissa kufurlu cevir. Hicbir seyi sansurleme veya degistirme. Sadece ceviriyi dondur, baska hicbir sey yazma.`;
 
-  let [provider, model] = selectedModel.split(':');
-  if (provider === 'gemini' && model === 'gemini-2.5-flash-preview-05-20') {
-    model = 'gemini-2.5-flash';
-    selectedModel = 'gemini:' + model;
-    localStorage.setItem('askviet_model', selectedModel);
-    if (myRole === 'tr') syncMyModel(selectedModel);
-  }
-  const useKey = provider==='gemini' ? (localStorage.getItem('askviet_gemini_key')||'') : (localStorage.getItem('askviet_key')||'');
-
+  let [provider, model] = (selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${useKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: sysPrompt }] },
-        contents: [{ parts: [{ text }] }],
-        generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error?.message || r.statusText);
-    return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-  } else {
-    const endpoint = 'https://api.openai.com/v1/chat/completions';
+    const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
+    if (!key) throw new Error('Gemini API key gerekli');
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
     let r;
     try {
       r = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: sysPrompt },
-            { role: 'user', content: text }
-          ]
+          systemInstruction: { parts: [{ text: sysPrompt }] },
+          contents: [{ role: 'user', parts: [{ text }] }]
         })
       });
     } catch (e) {
-      throw new Error('OpenAI adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+      throw new Error('Gemini adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
     }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
-    return (data.choices?.[0]?.message?.content || '').trim();
+    const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
+    if (!out) throw new Error('Gemini bos cevap dondu');
+    return out;
   }
-}
 
+  if (provider !== 'openai') {
+    provider = 'openai';
+    model = 'gpt-5.5';
+    selectedModel = 'openai:gpt-5.5';
+    localStorage.setItem('askviet_model', selectedModel);
+    if (myRole === 'tr') syncMyModel(selectedModel);
+  }
+  const key = apiKey || localStorage.getItem('askviet_key') || '';
+  if (!key) throw new Error('OpenAI API key gerekli');
+  const endpoint = 'https://api.openai.com/v1/chat/completions';
+  let r;
+  try {
+    r = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: text }
+        ]
+      })
+    });
+  } catch (e) {
+    throw new Error('OpenAI adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
+  const out = (data.choices?.[0]?.message?.content || '').trim();
+  if (!out) throw new Error('OpenAI bos cevap dondu');
+  return out;
+}
 // ── Typing ────────────────────────────────────────────────────────────────
 function setMyTyping(val) {
   if (isTyping === val) return;
@@ -1147,6 +1160,48 @@ if(msgInputEl){
 }
 
 // ── PWA Manifest ─────────────────────────────────────────────────────────
+function toggleLiveTranslate(force) {
+  const panel = document.getElementById('livePanel');
+  const btn = document.getElementById('liveTranslateBtn');
+  if (!panel || myRole !== 'tr') return;
+  const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+  if (btn) btn.classList.toggle('on', open);
+  if (!open) stopLiveSpeech();
+}
+function startLiveTranslate() { if (myRole === 'tr') toggleLiveTranslate(); }
+function stopLiveSpeech() { if (liveRecognizer) { try { liveRecognizer.stop(); } catch(e) {} liveRecognizer = null; } document.querySelectorAll('.live-talk').forEach(b => b.classList.remove('recording')); }
+function setLiveResult(text) { const el = document.getElementById('liveResult'); if (el) el.textContent = text || ''; }
+async function liveTranslateText(text, from) {
+  const input = document.getElementById('liveInput');
+  if (input) input.value = text;
+  const sourceLabel = from === 'tr' ? 'TR' : 'VI';
+  const targetLabel = from === 'tr' ? 'VI' : 'TR';
+  setLiveResult(sourceLabel + ': ' + text + '\n' + targetLabel + ': Cevriliyor...');
+  try {
+    const out = await translateText(text, from);
+    setLiveResult(sourceLabel + ': ' + text + '\n' + targetLabel + ': ' + (out || 'Bos cevap geldi.'));
+    const target = from === 'tr' ? 'vi' : 'tr';
+    if (out) speak(out, target, null, true).catch(()=>{});
+  } catch (e) {
+    setLiveResult('Ceviri hatasi: ' + normalizeApiError(e && e.message ? e.message : String(e)));
+  }
+}
+function liveTranslateManual(from) { const text = (document.getElementById('liveInput')?.value || '').trim(); if (!text) { setLiveResult('Once bir sey yaz ya da konus.'); return; } liveTranslateText(text, from); }
+function startLiveSpeech(from) {
+  if (myRole !== 'tr') return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { setLiveResult('Bu tarayici konusma tanimayi desteklemiyor. Alttaki kutuya yazip cevir.'); return; }
+  stopLiveSpeech();
+  const btn = document.getElementById(from === 'tr' ? 'liveTrBtn' : 'liveViBtn');
+  const rec = new SpeechRecognition(); liveRecognizer = rec; rec.lang = from === 'tr' ? 'tr-TR' : 'vi-VN'; rec.interimResults = true; rec.continuous = false; let finalText = '';
+  if (btn) btn.classList.add('recording'); setLiveResult('Dinliyorum...');
+  rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { const part = e.results[i][0].transcript; if (e.results[i].isFinal) finalText += part; else interim += part; } const shown = (finalText || interim || '').trim(); const input = document.getElementById('liveInput'); if (input && shown) input.value = shown; };
+  rec.onerror = () => setLiveResult('Mikrofon acilamadi. Kutudan yazip cevir.');
+  rec.onend = () => { if (btn) btn.classList.remove('recording'); const text = (finalText || document.getElementById('liveInput')?.value || '').trim(); liveRecognizer = null; if (text) liveTranslateText(text, from); else setLiveResult('Ses algilanmadi. Tekrar dene ya da yaz.'); };
+  try { rec.start(); } catch(e) { setLiveResult('Mikrofon baslatilamadi. Kutudan yazip cevir.'); }
+}
+
 function initPWA() {
   const manifest = {
     name: 'AskViet',
@@ -1182,7 +1237,7 @@ async function unlockAudio(){
     }
   }catch{}
 }
-function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'Durdur':'? Ses';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'Durdur':'Ses';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
@@ -1194,25 +1249,22 @@ async function speakOpenAI(text, target, btn, silent=false) {
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
   const settings = getTtsSettings();
-  const key = localStorage.getItem('askviet_tts_key') || localStorage.getItem('askviet_key') || '';
-  if (!key) { console.warn('TTS key yok'); return false; }
+  const key = localStorage.getItem('askviet_key') || '';
+  if (!key) { console.warn('OpenAI key yok'); return false; }
   const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
   const speed = settings.speed;
   const model = settings.model;
-  const endpoint = settings.provider === 'external'
-    ? 'https://codex.sale/v1/audio/speech'
-    : 'https://api.openai.com/v1/audio/speech';
   const instructions = target === 'vi'
     ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
     : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
   const token = ++ttsToken;
-  const ck = cacheKey(text, target, settings.provider + ':' + model, voice, speed);
+  const ck = cacheKey(text, target, model, voice, speed);
   setSpeakBtn(btn, true);
   try {
     let blob = ttsCache.get(ck);
     if (!blob) {
       ttsAbort = new AbortController();
-  const r = await fetch(endpoint, {
+      const r = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
         signal: ttsAbort.signal,
         headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
@@ -1220,7 +1272,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
       });
       if (!r.ok) {
         const d = await r.json().catch(()=>({}));
-        throw new Error(d.error?.message || r.statusText);
+        throw new Error(normalizeApiError(d.error?.message || r.statusText));
       }
       blob = await r.blob();
       if (token !== ttsToken) return false;
@@ -1233,7 +1285,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
     const em = String(e);
     if (/abort|iptal/i.test(em)) return false;
     if (silent && /NotAllowedError|not allowed|autoplay/i.test(em)) return false;
-    console.error('TTS hatası:', e);
+    console.error('TTS hatasi:', e);
     return false;
   } finally {
     if (token === ttsToken) {
@@ -1248,10 +1300,9 @@ const MODEL_NAMES = {
   'openai:gpt-5.5': 'GPT-5.5',
   'openai:gpt-5.4': 'GPT-5.4',
   'openai:gpt-5.4-mini': 'GPT-5.4 mini',
-  'openai:gpt-4o': 'GPT-4o',
-  'openai:gpt-4o-mini': '4o mini',
-  'gemini:gemini-2.5-flash': 'Gemini Flash',
-  'gemini:gemini-2.5-flash-preview-05-20': 'Gemini Flash'
+  'gemini:gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
+  'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini:gemini-3.1-flash-lite': 'Gemini 3.1 Lite'
 };
 
 function modelName(model) {
@@ -1260,8 +1311,8 @@ function modelName(model) {
 
 function setSelectedModel(model, fromRemote=false) {
   if (!model) return;
-  if (model === 'gemini:gemini-2.5-flash-preview-05-20') model = 'gemini:gemini-2.5-flash';
-  if (model === 'codex:gpt-5.5' || model === 'codex:gpt-5.4' || model === 'codex:gpt-5.4-mini') model = 'openai:gpt-5.5';
+  if (model === 'gemini:gemini-2.5-flash-preview-05-20' || model === 'gemini:gemini-2.5-flash') model = 'gemini:gemini-3.5-flash';
+  if (model === 'openai:gpt-4o' || model === 'openai:gpt-4o-mini' || model === 'codex:gpt-5.5' || model === 'codex:gpt-5.4' || model === 'codex:gpt-5.4-mini') model = 'openai:gpt-5.5';
   selectedModel = model;
   localStorage.setItem('askviet_model', model);
   const setupSelect = document.getElementById('modelSelect');
@@ -1286,6 +1337,9 @@ function setupChatControls() {
     chatSelect.disabled = myRole !== 'tr';
     chatSelect.onchange = () => setSelectedModel(chatSelect.value);
   }
+    const liveBtn = document.getElementById('liveTranslateBtn');
+  if (liveBtn) liveBtn.style.display = myRole === 'tr' ? '' : 'none';
+  if (myRole !== 'tr') toggleLiveTranslate(false);
   setSelectedModel(selectedModel, true);
   updateAutoReadUI();
   updateNotifySoundUI();
@@ -1467,56 +1521,53 @@ async function startVoice() {
 }
 
 async function transcribeVoice(blob) {
-  const [provider] = selectedModel.split(':');
+  const [provider] = (selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
-    // Gemini için base64
+    const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
+    if (!key) throw new Error('Gemini API key gerekli');
+    const model = selectedModel.split(':')[1] || 'gemini-3.5-flash';
     const base64 = await new Promise(res => {
       const r = new FileReader();
-      r.onload = () => res(r.result.split(',')[1]);
+      r.onload = () => res(String(r.result || '').split(',')[1] || '');
       r.readAsDataURL(blob);
     });
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`, {
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         contents: [{parts: [
-          {inline_data: {mime_type: 'audio/webm', data: base64}},
+          {inline_data: {mime_type: blob.type || 'audio/webm', data: base64}},
           {text: myRole === 'tr' ? 'Bu Turkce sesi metne cevir, sadece metni dondur.' : 'Chuyen giong noi tieng Viet nay thanh van ban, chi tra ve van ban.'}
-        ]}],
-        generationConfig: {thinkingConfig: {thinkingBudget: 0}}
+        ]}]
       })
     });
-    const data = await resp.json();
-    return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-  } else {
-    // OpenAI-compatible transcription
-    const ttsSettings = getTtsSettings();
-    const transcribeEndpoint = ttsSettings.provider === 'external'
-      ? 'https://codex.sale/v1/audio/transcriptions'
-      : 'https://api.openai.com/v1/audio/transcriptions';
-    const transcribeModel = ttsSettings.provider === 'external' ? 'gpt-4o-transcribe' : 'whisper-1';
-    const fd = new FormData();
-    fd.append('file', blob, 'audio.webm');
-    fd.append('model', transcribeModel);
-    fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
-    const resp = await fetch(transcribeEndpoint, {
-      method: 'POST',
-      headers: {'Authorization': 'Bearer ' + apiKey},
-      body: fd
-    });
-    const data = await resp.json();
-    return (data.text || '').trim();
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
+    const out = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
+    if (!out) throw new Error('Ses metne cevrilemedi');
+    return out;
   }
-}
 
-async function transcribeVoiceOpenAI(blob) {
-  const settings = getTtsSettings();
-  const key = localStorage.getItem('askviet_tts_key') || localStorage.getItem('askviet_key') || '';
+  const key = apiKey || localStorage.getItem('askviet_key') || '';
   if (!key) throw new Error('OpenAI API key gerekli');
-  const endpoint = settings.provider === 'external'
-    ? 'https://codex.sale/v1/audio/transcriptions'
-    : 'https://api.openai.com/v1/audio/transcriptions';
-  const model = settings.provider === 'external' ? 'gpt-4o-transcribe' : 'whisper-1';
+  const fd = new FormData();
+  fd.append('file', blob, 'audio.webm');
+  fd.append('model', 'whisper-1');
+  fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
+  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + key},
+    body: fd
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
+  return (data.text || '').trim();
+}
+async function transcribeVoiceOpenAI(blob) {
+  const key = localStorage.getItem('askviet_key') || '';
+  if (!key) throw new Error('OpenAI API key gerekli');
+  const endpoint = 'https://api.openai.com/v1/audio/transcriptions';
+  const model = 'whisper-1';
   const fd = new FormData();
   fd.append('file', blob, 'audio.webm');
   fd.append('model', model);
@@ -1530,7 +1581,6 @@ async function transcribeVoiceOpenAI(blob) {
   if (!resp.ok) throw new Error(data.error?.message || resp.statusText);
   return (data.text || '').trim();
 }
-transcribeVoice = transcribeVoiceOpenAI;
 
 window.addEventListener('beforeunload', () => {
   if (myRole) fbSet(TYPING_PATH + '/' + myRole, false);
