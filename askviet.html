@@ -30,10 +30,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .hearts{font-size:18px;text-align:center;letter-spacing:4px;margin:4px 0}
 #pwscreen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:auto;width:auto;min-width:0;gap:14px;padding:24px;overflow-y:auto;position:fixed;inset:0}
 .pw-logo{font-size:38px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,var(--tr2),var(--vi2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.pw-box{display:flex;gap:8px;width:100%;max-width:320px}
-.pw-input{flex:1;padding:12px 14px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-size:16px;outline:none;text-align:center;letter-spacing:4px}
+.pw-box{display:flex;gap:8px;width:100%;max-width:min(320px,calc(100vw - 32px))}
+.pw-input{flex:1;min-width:0;padding:12px 14px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-size:16px;outline:none;text-align:center;letter-spacing:4px}
 .pw-input:focus{border-color:var(--tr)}
-.pw-btn{padding:12px 20px;border-radius:12px;background:var(--tr);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.pw-btn{flex:0 0 auto;white-space:nowrap;padding:12px 20px;border-radius:12px;background:var(--tr);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
 .pw-err{color:#ef4444;font-size:13px;display:none}
 
 /* SETUP */
@@ -61,7 +61,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
 .chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 12px 12px 10px;padding-top:max(env(safe-area-inset-top),12px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;gap:10px;flex-shrink:0}
-.header-main{min-width:0;display:flex;flex-direction:column;gap:3px}
+.header-main{min-width:0;display:flex;flex-direction:column;gap:3px;padding-right:104px}
 .chat-title{font-weight:900;font-size:17px;line-height:1.15}
 .chat-subtitle{font-size:12px;color:var(--muted);margin-top:0;line-height:1.25}
 .header-models{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:nowrap}
@@ -81,6 +81,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+.chat-header{position:relative}
+.settings-controls>img{position:absolute!important;top:max(env(safe-area-inset-top),10px);right:54px;width:42px!important;height:42px!important;z-index:3}
+.settings-actions .back-btn{position:absolute;top:max(env(safe-area-inset-top),10px);right:10px;z-index:3}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch;background:#f0ece8}
 
@@ -147,6 +150,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
 .btn-row button{touch-action:manipulation}
+.speakBtn[data-playing="1"]{background:#7c3aed!important;border-color:#a78bfa!important;color:#fff!important;box-shadow:0 0 0 2px rgba(124,58,237,.22)}
 .input-bar{position:relative;z-index:5}
 @media (max-width: 520px){
   .settings-controls>img{width:36px!important;height:36px!important}
@@ -203,6 +207,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="setup-label">Model</div>
       <select class="model-select" id="modelSelect">
         <optgroup label="OpenAI">
+          <option value="openai:gpt-5.5">GPT-5.5</option>
+          <option value="openai:gpt-5.4">GPT-5.4</option>
+          <option value="openai:gpt-5.2">GPT-5.2</option>
+          <option value="openai:gpt-5.4-mini">GPT-5.4-mini</option>
           <option value="openai:gpt-4o">GPT-4o</option>
           <option value="openai:gpt-4o-mini">GPT-4o-mini</option>
         </optgroup>
@@ -262,6 +270,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <div class="settings-actions">
           <div class="conn-dot off" id="connDot"></div>
           <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
+            <option value="openai:gpt-5.5">GPT-5.5</option>
+            <option value="openai:gpt-5.4">GPT-5.4</option>
+            <option value="openai:gpt-5.2">GPT-5.2</option>
+            <option value="openai:gpt-5.4-mini">GPT-5.4-mini</option>
             <option value="openai:gpt-4o">GPT-4o</option>
             <option value="openai:gpt-4o-mini">4o-mini</option>
             <option value="gemini:gemini-2.5-flash">Gemini</option>
@@ -287,8 +299,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="input-bar">
-    <input type="file" id="galleryInput" accept="image/*,video/*" style="display:none" onchange="handleImageInput(event)">
-    <input type="file" id="cameraInput" accept="image/*,video/*" capture="environment" style="display:none" onchange="handleImageInput(event)">
+    <input type="file" id="galleryInput" accept="image/*,video/*,.webp,.gif,.png,.jpg,.jpeg,.heic,.heif,.mp4,.mov,.m4v,.webm" style="display:none" onchange="handleImageInput(event)">
+    <input type="file" id="cameraInput" accept="image/*,video/*,.webp,.gif,.png,.jpg,.jpeg,.heic,.heif,.mp4,.mov,.m4v,.webm" capture="environment" style="display:none" onchange="handleImageInput(event)">
     <button class="send-btn" id="galleryBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openGallery()" title="Fotoğraf / sticker">🖼</button>
     <button class="send-btn" id="cameraBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openCamera()" title="Kamera">📷</button>
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
@@ -697,42 +709,46 @@ function renderMessage(key, msg) {
   }
   div.appendChild(trans);
 
-  // Butonlar — ▶ Ses, ⚠↻ Anlamadım, ✕ Sil
-  const btnRow = document.createElement('div');
-  btnRow.className = 'btn-row';
-  btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+  const isMedia = msg.type === 'image' || msg.type === 'video';
+  let btnRow = null;
+  if (!isMedia) {
+    // Butonlar — ▶ Ses, ⚠ Anlamadım, ↻ Yeniden çevir, ⧉ Kopyala, ✕ Sil
+    btnRow = document.createElement('div');
+    btnRow.className = 'btn-row';
+    btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
-  const spBtn = document.createElement('button');
-  spBtn.className = 'speakBtn';
-  spBtn.textContent = '▶';
-  spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
+    const spBtn = document.createElement('button');
+    spBtn.className = 'speakBtn';
+    spBtn.textContent = '▶';
+    spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+    spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
 
-  const misBtn = document.createElement('button');
-  misBtn.textContent = '⚠';
-  misBtn.title = 'Anlamadım, tekrar söyler misin?';
-  misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  misBtn.onclick = () => {
-    const lang = isMine ? myRole : theirRole;
-    const misText = lang === 'vi' ? 'Em không hiểu, anh nói lại được không? 🥺' : 'Anlamadım aşkım, tekrar söyler misin? 🥺';
-    document.getElementById('msgInput').value = misText;
-  };
+    const misBtn = document.createElement('button');
+    misBtn.textContent = '⚠';
+    misBtn.title = 'Anlamadım, tekrar söyler misin?';
+    misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+    misBtn.onclick = () => sendQuickMisunderstood();
 
-  misBtn.onclick = () => sendQuickMisunderstood();
+    const retryBtn = document.createElement('button');
+    retryBtn.textContent = '↻';
+    retryBtn.title = myRole === 'vi' ? 'Dịch lại' : 'Yeniden çevir';
+    retryBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#c2410c;cursor:pointer';
+    retryBtn.onclick = () => retranslateMessage(key, retryBtn);
 
-  const delBtn = document.createElement('button');
-  delBtn.textContent = '✕';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
-  delBtn.onclick = () => deleteMessage(key);
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '✕';
+    delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+    delBtn.onclick = () => deleteMessage(key);
 
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = '⧉';
-  copyBtn.title = 'Orijinal mesajı kopyala';
-  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0e7490;cursor:pointer';
-  copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '⧉';
+    copyBtn.title = 'Orijinal mesajı kopyala';
+    copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0e7490;cursor:pointer';
+    copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
 
-  btnRow.append(spBtn, misBtn, copyBtn, delBtn);
-  div.appendChild(btnRow);
+    btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
+    div.appendChild(btnRow);
+  }
 
   const time = document.createElement('div');
   time.className = 'msg-time';
@@ -742,7 +758,7 @@ function renderMessage(key, msg) {
   const read = document.createElement('div');
   read.className = 'msg-read';
   read.id = 'read-' + key;
-  btnRow.appendChild(read);
+  if (btnRow) btnRow.appendChild(read);
 
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
@@ -1117,19 +1133,35 @@ async function requestSpeakForMessage(key, btn) {
   const text = getRecipientText(key);
   if (!text || text.includes('⏳') || text.includes('⚠')) return;
   if (targetRole === myRole) {
-    speak(text, myRole, btn);
+    await speak(text, myRole, btn);
     return;
   }
   setSpeakBtn(btn, true);
-  await fbPush(AUDIO_PATH, {
-    key,
-    from: myRole,
-    target: targetRole,
-    text,
-    lang: targetRole,
-    ts: Date.now()
-  });
-  setTimeout(() => setSpeakBtn(btn, false), 700);
+  try {
+    const pushed = await fbPush(AUDIO_PATH, {
+      key,
+      from: myRole,
+      target: targetRole,
+      text,
+      lang: targetRole,
+      ts: Date.now()
+    });
+    const reqId = pushed && pushed.name;
+    if (reqId) await waitAudioRequestDone(reqId, 60000);
+    else await sleep(1800);
+  } finally {
+    setSpeakBtn(btn, false);
+  }
+}
+
+async function waitAudioRequestDone(id, timeoutMs) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    await sleep(650);
+    const req = await fbGet(AUDIO_PATH + '/' + id);
+    if (!req) return true;
+  }
+  return false;
 }
 
 function listenAudioRequests() {
@@ -1147,14 +1179,17 @@ function listenAudioRequests() {
   });
 }
 
-function handleAudioRequest(id, req) {
+async function handleAudioRequest(id, req) {
   if (!req || handledAudioRequests.has(id)) return;
   if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
   if (Date.now() - req.ts > 15000) return;
   if (req.target !== myRole) return;
   handledAudioRequests.add(id);
-  speak(req.text, req.lang || myRole, null, true);
-  fbRemove(AUDIO_PATH + '/' + id);
+  try {
+    await speak(req.text, req.lang || myRole, null, true);
+  } finally {
+    await fbRemove(AUDIO_PATH + '/' + id);
+  }
 }
 
 function getMisunderstoodText() {
@@ -1193,6 +1228,17 @@ function formatTime(ts) {
   return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
 }
 
+function initAutoScroll() {
+  const box = document.getElementById('messages');
+  if (!box || box.dataset.autoScrollReady === '1') return;
+  box.dataset.autoScrollReady = '1';
+  const stick = () => { box.scrollTop = box.scrollHeight; };
+  const obs = new MutationObserver(() => requestAnimationFrame(stick));
+  obs.observe(box, { childList:true, subtree:true, characterData:true });
+  window.addEventListener('resize', () => setTimeout(stick, 80));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(stick, 120); });
+  setTimeout(stick, 120);
+}
 function scrollToBottom() {
   const m = document.getElementById('messages');
   if (m) setTimeout(() => { m.scrollTop = m.scrollHeight; }, 50);
@@ -1223,6 +1269,11 @@ async function handleImageInput(event) {
   const file = input.files && input.files[0];
   input.value = '';
   if (!file) return;
+  await sendPickedMedia(file);
+}
+
+async function sendPickedMedia(file) {
+  if (!file || !myRole) return;
   try {
     const isVideo = /^video\//i.test(file.type);
     showMediaStatus(myRole === 'vi' ? (isVideo ? 'Đang gửi video...' : 'Đang gửi ảnh...') : (isVideo ? 'Video gönderiliyor...' : 'Fotoğraf gönderiliyor...'));
@@ -1235,6 +1286,33 @@ async function handleImageInput(event) {
     hideMediaStatus();
   }
 }
+
+function pickMediaFileFromItems(items) {
+  return Array.from(items || [])
+    .filter(item => item && (item.kind === 'file' || item.getAsFile))
+    .map(item => item.getAsFile ? item.getAsFile() : item)
+    .find(file => file && /^(image|video)\//i.test(file.type || '')) || null;
+}
+
+document.addEventListener('paste', e => {
+  if (!myRole || document.getElementById('chat')?.style.display === 'none') return;
+  const file = pickMediaFileFromItems(e.clipboardData?.items);
+  if (!file) return;
+  e.preventDefault();
+  sendPickedMedia(file);
+});
+
+document.addEventListener('drop', e => {
+  if (!myRole || document.getElementById('chat')?.style.display === 'none') return;
+  const file = pickMediaFileFromItems(e.dataTransfer?.items) || Array.from(e.dataTransfer?.files || []).find(f => /^(image|video)\//i.test(f.type || ''));
+  if (!file) return;
+  e.preventDefault();
+  sendPickedMedia(file);
+});
+
+document.addEventListener('dragover', e => {
+  if (myRole && document.getElementById('chat')?.style.display !== 'none') e.preventDefault();
+});
 
 async function prepareImageForUpload(file) {
   if (/^video\//i.test(file.type)) return { blob: file, name: safeMediaName(file.name || 'video') };
@@ -1320,6 +1398,23 @@ async function translateAndUpdate(key, text, fromRole) {
       console.error(e);
       return;
     }
+  }
+}
+
+async function retranslateMessage(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return;
+  const text = box.dataset.text || '';
+  const fromRole = box.dataset.role || myRole;
+  if (!text || !fromRole) return;
+  const old = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
+  try {
+    await fbSet(MSGS_PATH + '/' + key + '/translation', targetRole === 'vi' ? '⏳ Đang dịch lại...' : '⏳ Yeniden çevriliyor...');
+    await translateAndUpdate(key, text, fromRole);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old || '↻'; }
   }
 }
 
@@ -1447,7 +1542,7 @@ async function unlockAudio(){
     }
   }catch{}
 }
-function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶ Ses';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
@@ -1505,6 +1600,10 @@ async function speakOpenAI(text, target, btn, silent=false) {
 speak = speakOpenAI;
 
 const MODEL_NAMES = {
+  'openai:gpt-5.5': 'GPT-5.5',
+  'openai:gpt-5.4': 'GPT-5.4',
+  'openai:gpt-5.2': 'GPT-5.2',
+  'openai:gpt-5.4-mini': '5.4-mini',
   'openai:gpt-4o': 'GPT-4o',
   'openai:gpt-4o-mini': '4o-mini',
   'gemini:gemini-2.5-flash': 'Gemini Flash',
@@ -1677,9 +1776,22 @@ function updateNotifySoundUI() {
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0;
+let recFrameCount=0,recVoiceFrames=0,recRmsSum=0,recPeak=0;
 let micNoSpeechTimes=[];
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
+function resetRecStats(){recFrameCount=0;recVoiceFrames=0;recRmsSum=0;recPeak=0}
+function noteRecFrame(v){recFrameCount++;recRmsSum+=v;recPeak=Math.max(recPeak,v);if(v>0.012)recVoiceFrames++}
+function shouldKeepRecordingForWhisper(had,blob){
+  const duration=(Date.now()-recStarted)/1000;
+  const avg=recFrameCount?recRmsSum/recFrameCount:0;
+  if(!had||!blob||!blob.size)return false;
+  if(duration<0.35)return false;
+  if(recPeak>0.16&&duration<0.75&&recVoiceFrames<2)return false;
+  if(recVoiceFrames<2&&recPeak<0.045)return false;
+  if(avg<0.004&&recPeak<0.035)return false;
+  return true;
+}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
 function stopRecorder(){stopRec()}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
@@ -1702,6 +1814,7 @@ function cancelRecorderSilent(){
   recHadSpeech=false;
   recSilentSince=0;
   recLoudFrames=0;
+  resetRecStats();
 }
 
 function showMicReloadNotice(){
@@ -1758,6 +1871,7 @@ async function startRecorder(source,button,onDone,autoSilence=false){
   recHadSpeech=false;
   recSilentSince=0;
   recLoudFrames=0;
+  resetRecStats();
   button.classList.add('mic-recording');
   try{
     const ctx=await ensureAudioCtx();
@@ -1780,13 +1894,15 @@ async function startRecorder(source,button,onDone,autoSilence=false){
       rec=null;
       recButton=null;
       await sleep(260);
-      await onDone(new Blob(chunks,{type:mt}),had);
+      const blob=new Blob(chunks,{type:mt});
+      await onDone(blob,shouldKeepRecordingForWhisper(had,blob));
     };
     rec.start(120);
     recStarted=Date.now();
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
+      noteRecFrame(v);
       const speech=v>0.012;
       if(speech){
         recHadSpeech=true;
@@ -1970,8 +2086,8 @@ async function transcribeVoice(blob) {
     fd.append('model', 'whisper-1');
     fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
     fd.append('prompt', myRole === 'tr'
-      ? 'Türkçe günlük sohbet. Bu bir YouTube videosu, kanal kapanışı veya altyazı değil. Sadece gerçek konuşmayı yaz.'
-      : 'Tiếng Việt hội thoại hằng ngày. Đây không phải video YouTube, không phải lời chào/kết thúc video. Chỉ chép lại lời nói thật.');
+      ? 'Türkçe günlük konuşma. Duyduğun konuşmayı aynen yaz, ekleme yapma.'
+      : 'Tiếng Việt hội thoại hằng ngày. Chỉ chép lại đúng lời nói nghe được, không thêm nội dung.');
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {'Authorization': 'Bearer ' + apiKey},
@@ -1990,8 +2106,8 @@ async function transcribeVoiceOpenAI(blob) {
   fd.append('model', 'whisper-1');
   fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
   fd.append('prompt', myRole === 'tr'
-    ? 'Türkçe günlük sohbet. Bu bir YouTube videosu, kanal kapanışı veya altyazı değil. Sadece gerçek konuşmayı yaz.'
-    : 'Tiếng Việt hội thoại hằng ngày. Đây không phải video YouTube, không phải lời chào/kết thúc video. Chỉ chép lại lời nói thật.');
+    ? 'Türkçe günlük konuşma. Duyduğun konuşmayı aynen yaz, ekleme yapma.'
+    : 'Tiếng Việt hội thoại hằng ngày. Chỉ chép lại đúng lời nói nghe được, không thêm nội dung.');
   const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: {'Authorization': 'Bearer ' + key},
@@ -2032,3 +2148,6 @@ window.addEventListener('pagehide', () => {
 </script>
 </body>
 </html>
+
+
+
