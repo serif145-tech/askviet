@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+?<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -30,10 +30,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .hearts{font-size:18px;text-align:center;letter-spacing:4px;margin:4px 0}
 #pwscreen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:auto;width:auto;min-width:0;gap:14px;padding:24px;overflow-y:auto;position:fixed;inset:0}
 .pw-logo{font-size:38px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,var(--tr2),var(--vi2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.pw-box{display:flex;gap:8px;width:100%;max-width:min(320px,calc(100vw - 32px))}
-.pw-input{flex:1;min-width:0;padding:12px 14px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-size:16px;outline:none;text-align:center;letter-spacing:4px}
+.pw-box{display:flex;gap:8px;width:100%;max-width:320px}
+.pw-input{flex:1;padding:12px 14px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-size:16px;outline:none;text-align:center;letter-spacing:4px}
 .pw-input:focus{border-color:var(--tr)}
-.pw-btn{flex:0 0 auto;white-space:nowrap;padding:12px 20px;border-radius:12px;background:var(--tr);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.pw-btn{padding:12px 20px;border-radius:12px;background:var(--tr);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
 .pw-err{color:#ef4444;font-size:13px;display:none}
 
 /* SETUP */
@@ -60,30 +60,16 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* CHAT */
 #chat{display:none;flex-direction:column;height:auto;width:auto;min-width:0;max-width:100vw;position:fixed;inset:0;overflow:hidden}
-.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 12px 12px 10px;padding-top:max(env(safe-area-inset-top),12px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;gap:10px;flex-shrink:0}
-.header-main{min-width:0;display:flex;flex-direction:column;gap:3px;padding-right:104px}
-.chat-title{font-weight:900;font-size:17px;line-height:1.15}
-.chat-subtitle{font-size:12px;color:var(--muted);margin-top:0;line-height:1.25}
-.header-models{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:nowrap}
-.last-seen{font-size:12px;color:#9ca3af;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:800;display:flex;align-items:center;gap:7px}
-.last-seen .presence-sep{color:#3f3f46;margin:0 8px}
-.last-seen .presence-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;box-shadow:0 0 8px rgba(239,68,68,.35)}
-.last-seen.online{color:#22c55e;font-weight:900;text-shadow:0 0 8px rgba(34,197,94,.25)}
-.last-seen.online .presence-dot{background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.45)}
-.header-right{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-width:0;width:100%;padding-top:4px;border-top:1px solid rgba(255,255,255,.06);overflow:hidden}
-.tr-guard{display:none;align-items:center;gap:6px;flex:0 0 auto}
-.vn-voice-toggle{font-size:12px;font-weight:800;border:1px solid #374151;background:#171722;color:#e5e7eb;border-radius:999px;padding:6px 9px;cursor:pointer;white-space:nowrap}
-.vn-voice-toggle.on{border-color:#22c55e;background:#14532d;color:#dcfce7}
-.vn-voice-toggle.off{border-color:#ef4444;background:#3b1118;color:#fecdd3}
-.online-count{width:28px;height:28px;border-radius:50%;border:2px solid #22c55e;background:#06130b;color:#4ade80;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;box-shadow:0 0 8px rgba(34,197,94,.25)}
-.settings-controls{display:none;align-items:center;gap:7px;min-width:0;flex:1 1 auto}
-.settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto;flex-wrap:nowrap}
+.chat-header{width:100%;min-width:0;padding:env(safe-area-inset-top) 10px 10px;padding-top:max(env(safe-area-inset-top),10px);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.header-main{min-width:150px;flex:1 1 150px}
+.chat-title{font-weight:900;font-size:16px}
+.chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
+.header-right{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 auto}
+.settings-controls{display:none;align-items:center;gap:5px;min-width:0;position:relative}
+.settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;flex-wrap:wrap}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
-.chat-header{position:relative}
-.settings-controls>img{position:absolute!important;top:max(env(safe-area-inset-top),10px);right:54px;width:42px!important;height:42px!important;z-index:3}
-.settings-actions .back-btn{position:absolute;top:max(env(safe-area-inset-top),10px);right:10px;z-index:3}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch;background:#f0ece8}
 
@@ -104,24 +90,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
 
 .msg-time{font-size:10px;color:#999;padding:2px 14px 4px}
-.msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 0 0 2px;box-shadow:0 1px 5px rgba(22,163,74,.35);align-self:center;white-space:nowrap}
+.msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 14px 4px;box-shadow:0 1px 5px rgba(22,163,74,.35)}
 .msg.mine .msg-read{background:#2563eb;border-color:#60a5fa;box-shadow:0 1px 5px rgba(37,99,235,.35)}
 .msg-read.show{display:inline-block}
-.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:14px;object-fit:cover;background:#111;cursor:pointer}
-.msg-media-video{min-width:min(240px,68vw)}
-.media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-36px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:rgba(255,255,255,.9);color:#c02668;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-.msg.mine .msg-react-btn{right:auto;left:-36px}
-.msg.theirs .msg-react-btn{right:-36px;left:auto}
-.msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
-.msg-reactions.show{display:flex}
-.reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22)}
-.reaction-picker.show{display:flex}
-.reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
-.media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
-.media-lightbox.show{display:flex}
-.media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
-.media-lightbox-close{position:fixed;top:max(env(safe-area-inset-top),14px);right:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,20,.75);color:#fff;font-size:24px;font-weight:900;z-index:100001}
 
 .typing-indicator{display:none;align-self:flex-start;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px}
 .typing-indicator.show{display:flex;gap:4px;align-items:center}
@@ -149,23 +120,18 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
+.tts-panel{display:none;position:absolute;right:0;top:48px;width:min(310px,calc(100vw - 18px));padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 35px rgba(0,0,0,.45);z-index:20}
+.tts-panel.open{display:grid;gap:8px}
+.tts-panel label{font-size:11px;font-weight:800;color:var(--muted)}
+.tts-panel select,.tts-panel input{width:100%;padding:8px 9px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none}
+.tts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tts-save{padding:8px 10px;border-radius:9px;border:1px solid var(--tr);background:var(--tr);color:#fff;font-weight:900;cursor:pointer}
 .btn-row button{touch-action:manipulation}
-.speakBtn[data-playing="1"]{background:#7c3aed!important;border-color:#a78bfa!important;color:#fff!important;box-shadow:0 0 0 2px rgba(124,58,237,.22)}
 .input-bar{position:relative;z-index:5}
 @media (max-width: 520px){
-  .settings-controls>img{width:36px!important;height:36px!important}
+  .settings-controls>img{width:38px!important;height:38px!important}
   .back-btn{font-size:18px;padding:3px}
   .model-badge{font-size:10px;padding:2px 6px}
-  .chat-header{gap:8px;padding-left:9px;padding-right:9px}
-  .header-main{min-width:0}
-  .header-right{padding-top:7px;gap:5px}
-  .last-seen{max-width:210px}
-  .vn-voice-toggle{font-size:11px;padding:5px 7px}
-  .online-count{width:25px;height:25px;font-size:12px}
-  .chat-model-select{max-width:78px;font-size:11px;padding:5px 5px}
-  .status-pill,.notify-toggle{font-size:10px;padding:5px 6px}
-  .settings-actions{gap:4px}
-  .settings-controls{gap:5px}
 }
 @media (min-width: 900px){
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
@@ -192,7 +158,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <input class="pw-input" type="password" id="pwInput" placeholder="••••••••" maxlength="20">
     <button class="pw-btn" onclick="checkPw()">✨ Gir</button>
   </div>
-  <div class="pw-err" id="pwErr">Hatalı şifre 🙅‍♀️</div>
+  <div class="pw-err" id="pwErr">Hatali sifre</div>
 </div>
 
 <!-- SETUP -->
@@ -206,13 +172,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div id="modelArea">
       <div class="setup-label">Model</div>
       <select class="model-select" id="modelSelect">
-        <optgroup label="OpenAI">
+        <optgroup label="OpenAI Resmi">
           <option value="openai:gpt-5.5">GPT-5.5</option>
           <option value="openai:gpt-5.4">GPT-5.4</option>
-          <option value="openai:gpt-5.2">GPT-5.2</option>
-          <option value="openai:gpt-5.4-mini">GPT-5.4-mini</option>
+          <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
           <option value="openai:gpt-4o">GPT-4o</option>
-          <option value="openai:gpt-4o-mini">GPT-4o-mini</option>
+          <option value="openai:gpt-4o-mini">GPT-4o mini</option>
         </optgroup>
         <optgroup label="Google">
           <option value="gemini:gemini-2.5-flash">Gemini 2.5 Flash</option>
@@ -253,34 +218,77 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="header-main">
       <div class="chat-title" id="chatTitle">🇹🇷 → 🇻🇳</div>
       <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
-      <div class="header-models">
+      <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
         <span class="model-badge active" id="myModelBadge">-</span>
         <span style="color:var(--muted);font-size:10px">vs</span>
         <span class="model-badge" id="theirModelBadge">?</span>
       </div>
-      <div class="last-seen" id="lastSeenStatus">-</div>
     </div>
     <div class="header-right">
-      <div id="trGuard" class="tr-guard">
-        <div class="online-count" id="onlineCount" title="Online kişi sayısı">1</div>
-        <button class="vn-voice-toggle off" id="vnAutoReadBtn" onclick="toggleVnAutoRead()" title="Vietnam tarafı otomatik ses">🔇 VN</button>
-      </div>
       <div id="settingsBtnArea" class="settings-controls">
         <img src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 10px #7c3aed55" alt="">
         <div class="settings-actions">
           <div class="conn-dot off" id="connDot"></div>
           <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
             <option value="openai:gpt-5.5">GPT-5.5</option>
-            <option value="openai:gpt-5.4">GPT-5.4</option>
-            <option value="openai:gpt-5.2">GPT-5.2</option>
-            <option value="openai:gpt-5.4-mini">GPT-5.4-mini</option>
+            <option value="openai:gpt-5.4">5.4</option>
+            <option value="openai:gpt-5.4-mini">5.4 mini</option>
             <option value="openai:gpt-4o">GPT-4o</option>
-            <option value="openai:gpt-4o-mini">4o-mini</option>
+            <option value="openai:gpt-4o-mini">4o mini</option>
             <option value="gemini:gemini-2.5-flash">Gemini</option>
           </select>
           <button class="status-pill" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 Kapalı</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
-          <button class="back-btn" onclick="goBack()">⚙</button>
+          <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarlari">&#9881;</button>
+          <button class="back-btn" onclick="goBack()" title="API ve taraf secimine don">&#8617;</button>
+        </div>
+        <div class="tts-panel" id="ttsPanel">
+          <label>Ses saglayici</label>
+          <select id="ttsProviderSelect" onchange="saveTtsSettings()">
+            <option value="openai">OpenAI 4o ses</option>
+            <option value="external">Harici ses endpoint</option>
+          </select>
+          <label>Ses API Key</label>
+          <div class="paste-row">
+            <input class="setup-input" type="password" id="ttsKeyInput" placeholder="Bos ise OpenAI key kullanilir">
+            <button class="paste-btn" onclick="pasteTtsKey()">Yapistir</button>
+          </div>
+          <label>Ses modeli</label>
+          <select id="ttsModelSelect" onchange="saveTtsSettings()">
+            <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
+            <option value="gpt-4o-tts">GPT-4o TTS</option>
+          </select>
+          <div class="tts-grid">
+            <div>
+              <label>TR sesi</label>
+              <select id="ttsVoiceTrSelect" onchange="saveTtsSettings()">
+                <option value="nova">Nova</option>
+                <option value="alloy">Alloy</option>
+                <option value="echo">Echo</option>
+                <option value="fable">Fable</option>
+                <option value="onyx">Onyx</option>
+                <option value="shimmer">Shimmer</option>
+              </select>
+            </div>
+            <div>
+              <label>VI sesi</label>
+              <select id="ttsVoiceViSelect" onchange="saveTtsSettings()">
+                <option value="cedar">Cedar</option>
+                <option value="nova">Nova</option>
+                <option value="alloy">Alloy</option>
+                <option value="shimmer">Shimmer</option>
+                <option value="fable">Fable</option>
+                <option value="onyx">Onyx</option>
+              </select>
+            </div>
+          </div>
+          <label>Hiz</label>
+          <select id="ttsSpeedSelect" onchange="saveTtsSettings()">
+            <option value="0.9">0.9x</option>
+            <option value="1">1x</option>
+            <option value="1.1">1.1x</option>
+          </select>
+          <button class="tts-save" onclick="saveTtsSettings();toggleTtsSettings(false)">Kaydet</button>
         </div>
       </div>
     </div>
@@ -299,19 +307,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="input-bar">
-    <input type="file" id="galleryInput" accept="image/*,video/*,.webp,.gif,.png,.jpg,.jpeg,.heic,.heif,.mp4,.mov,.m4v,.webm" style="display:none" onchange="handleImageInput(event)">
-    <input type="file" id="cameraInput" accept="image/*,video/*,.webp,.gif,.png,.jpg,.jpeg,.heic,.heif,.mp4,.mov,.m4v,.webm" capture="environment" style="display:none" onchange="handleImageInput(event)">
-    <button class="send-btn" id="galleryBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openGallery()" title="Fotoğraf / sticker">🖼</button>
-    <button class="send-btn" id="cameraBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="openCamera()" title="Kamera">📷</button>
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
     <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">🎙</button>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
   </div>
-</div>
-
-<div class="media-lightbox" id="mediaLightbox" onclick="closeMediaPreview()">
-  <button class="media-lightbox-close" onclick="event.stopPropagation();closeMediaPreview()">×</button>
-  <div id="mediaLightboxBody" onclick="event.stopPropagation()"></div>
 </div>
 
 <script>
@@ -322,12 +321,7 @@ const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
-const VN_AUTO_READ_PATH = AUTO_READ_PATH + '/vi';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
-const PRESENCE_PATH = '/rooms/' + ROOM + '/presence';
-const PRESENCE_LAST_PATH = '/rooms/' + ROOM + '/presenceLast';
-const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
-const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -335,7 +329,7 @@ let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),audioUrl=null,a
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let theirRole = null;
 let apiKey = '';
-let selectedModel = 'openai:gpt-4o';
+let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
 let isTyping = false;
 let unsubMessages = null;
@@ -350,13 +344,14 @@ let audioListenStartedAt = 0;
 let chatListenStartedAt = 0;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
-let notifyAudioCtx = null;
-let vnAutoRead = true;
-let autoReadPollTimer = null;
-let presenceHeartbeatTimer = null;
-let presencePollTimer = null;
-let presenceId = localStorage.getItem('askviet_presence_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
-localStorage.setItem('askviet_presence_id', presenceId);
+
+const TTS_DEFAULTS = {
+  provider: 'openai',
+  model: 'gpt-4o-mini-tts',
+  voiceTr: 'nova',
+  voiceVi: 'cedar',
+  speed: '1'
+};
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
@@ -398,18 +393,6 @@ if (localStorage.getItem('askviet_auth') === '1') {
 }
 document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
 
-function tryAutoResumeReloadRole() {
-  const role = localStorage.getItem('askviet_reload_role');
-  if (role !== 'tr' && role !== 'vi') return;
-  const hasAuth = localStorage.getItem('askviet_auth') === '1';
-  const hasOpenai = !!localStorage.getItem('askviet_key');
-  const hasGemini = !!localStorage.getItem('askviet_gemini_key');
-  if (!hasAuth || !hasOpenai || !hasGemini) return;
-  localStorage.removeItem('askviet_reload_role');
-  setTimeout(() => start(role), 180);
-}
-tryAutoResumeReloadRole();
-
 // ── Model değişince label güncelle ────────────────────────────────────────
 // model change - artık ayrı alanlar var, listener gerekmez
 
@@ -435,6 +418,57 @@ async function pasteKey() {
   }
 }
 
+function getTtsSettings() {
+  return {
+    provider: localStorage.getItem('askviet_tts_provider') || TTS_DEFAULTS.provider,
+    model: localStorage.getItem('askviet_tts_model') || TTS_DEFAULTS.model,
+    voiceTr: localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr,
+    voiceVi: localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi,
+    speed: parseFloat(localStorage.getItem('askviet_tts_speed') || TTS_DEFAULTS.speed) || 1
+  };
+}
+
+function setSelectValue(id, value) {
+  const el = document.getElementById(id);
+  if (el && value) el.value = value;
+}
+
+function syncTtsSettingsUI() {
+  const s = getTtsSettings();
+  setSelectValue('ttsProviderSelect', s.provider);
+  setSelectValue('ttsModelSelect', s.model);
+  setSelectValue('ttsVoiceTrSelect', s.voiceTr);
+  setSelectValue('ttsVoiceViSelect', s.voiceVi);
+  setSelectValue('ttsSpeedSelect', String(s.speed));
+  const keyInput = document.getElementById('ttsKeyInput');
+  if (keyInput) keyInput.value = localStorage.getItem('askviet_tts_key') || '';
+}
+
+function saveTtsSettings() {
+  const provider = document.getElementById('ttsProviderSelect')?.value || TTS_DEFAULTS.provider;
+  const model = document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model;
+  const voiceTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
+  const voiceVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
+  const speed = document.getElementById('ttsSpeedSelect')?.value || TTS_DEFAULTS.speed;
+  const key = document.getElementById('ttsKeyInput')?.value.trim() || '';
+  localStorage.setItem('askviet_tts_provider', provider);
+  localStorage.setItem('askviet_tts_model', model);
+  localStorage.setItem('askviet_tts_voice_tr', voiceTr);
+  localStorage.setItem('askviet_tts_voice_vi', voiceVi);
+  localStorage.setItem('askviet_tts_speed', speed);
+  if (key) localStorage.setItem('askviet_tts_key', key);
+  else localStorage.removeItem('askviet_tts_key');
+  ttsCache.clear();
+}
+
+function toggleTtsSettings(force) {
+  const panel = document.getElementById('ttsPanel');
+  if (!panel) return;
+  syncTtsSettingsUI();
+  const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+}
+
 function loadSaved() {
   const savedKey = localStorage.getItem('askviet_key');
   let savedModel = localStorage.getItem('askviet_model');
@@ -442,10 +476,16 @@ function loadSaved() {
     savedModel = 'gemini:gemini-2.5-flash';
     localStorage.setItem('askviet_model', savedModel);
   }
+  if (savedModel === 'codex:gpt-5.5' || savedModel === 'codex:gpt-5.4' || savedModel === 'codex:gpt-5.4-mini') {
+    savedModel = 'openai:gpt-5.5';
+    localStorage.setItem('askviet_model', savedModel);
+  }
   const savedTtsKey = localStorage.getItem('askviet_tts_key');
   const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  if (savedTtsKey) { const t=document.getElementById('ttsKeyInput'); if(t) t.value=savedTtsKey; }
   if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=savedGeminiKey; }
+  syncTtsSettingsUI();
   if (savedModel) {
     document.getElementById('modelSelect').value = savedModel;
     const isGemini = savedModel.startsWith('gemini');
@@ -472,7 +512,7 @@ async function fbRemove(path) {
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
   es.addEventListener('put', e => { try { cb(JSON.parse(e.data)); } catch {} });
-  es.addEventListener('patch', e => { try { cb(JSON.parse(e.data)); } catch {} });
+  es.addEventListener('patch', e => { try { cb({ path: '/', data: JSON.parse(e.data) }); } catch {} });
   es.onerror = () => setConnected(false);
   es.onopen = () => setConnected(true);
   return () => es.close();
@@ -482,7 +522,6 @@ function fbListen(path, cb) {
 function start(role) {
   try { unlockAudio(); } catch(e) {}
   requestNotifyPermission();
-  if (notifySoundOn) unlockNotifySound(false);
   const openaiKey = document.getElementById('apiKeyInput')?.value.trim()||localStorage.getItem('askviet_key')||'';
   const geminiKey = document.getElementById('geminiKeyInput')?.value.trim()||localStorage.getItem('askviet_gemini_key')||'';
   if(!openaiKey){alert('OpenAI API key gerekli!');const c=document.querySelector('.setup-card');if(c)c.style.display='flex';return;}
@@ -490,10 +529,10 @@ function start(role) {
   apiKey=openaiKey; // translateText içinde model'e göre seçilecek
   localStorage.setItem('askviet_key', openaiKey);
   localStorage.setItem('askviet_gemini_key', geminiKey);
-  selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-4o';
+  saveTtsSettings();
+    selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5';
   localStorage.setItem('askviet_model', selectedModel);
   myRole = role;
-  localStorage.setItem('askviet_last_role', role);
   theirRole = role === 'tr' ? 'vi' : 'tr';
 
   document.getElementById('setup').style.display = 'none';
@@ -527,10 +566,7 @@ function start(role) {
     if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1];
   }catch(e){}
   if (myRole === 'tr') syncMyModel(selectedModel);
-  setupTrGuard();
   updateAutoReadUI();
-  listenAutoReadConfig();
-  initPresence();
   listenModelConfig();
   initChat();
 }
@@ -541,8 +577,6 @@ function goBack() {
   if (unsubModel) unsubModel();
   if (unsubAutoRead) unsubAutoRead();
   if (unsubAudio) unsubAudio();
-  stopPresence();
-  stopAutoReadPolling();
   renderedKeys.clear();
   autoReadDone.clear();
   handledAudioRequests.clear();
@@ -572,23 +606,8 @@ function initChat() {
         autoReadDone.clear();
         stopAudio();
       } else {
-        const parts = path.replace(/^\//, '').split('/');
-        const key = parts[0];
-        if (parts.length === 3 && parts[1] === 'reactions') {
-          const el = document.getElementById('react-' + key);
-          const current = el?.dataset?.reactions ? JSON.parse(el.dataset.reactions) : {};
-          delete current[parts[2]];
-          updateReactions(key, current);
-        } else if (parts.length === 3 && parts[1] === 'read') {
-          const box = document.getElementById('msg-' + key);
-          if (box) {
-            if (parts[2] === 'tr') box.dataset.readTr = '';
-            if (parts[2] === 'vi') box.dataset.readVi = '';
-            updateReadStatus(key);
-          }
-        } else if (parts.length === 1) {
-          removeMessageElement(key);
-        }
+        const key = path.replace(/^\//, '').split('/')[0];
+        removeMessageElement(key);
       }
       return;
     }
@@ -618,14 +637,6 @@ function initChat() {
           if (parts[2] === 'tr') box.dataset.readTr = event.data || '';
           if (parts[2] === 'vi') box.dataset.readVi = event.data || '';
           updateReadStatus(key);
-        }
-      } else if (parts.length === 3 && parts[1] === 'reactions') {
-        const el = document.getElementById('react-' + key);
-        if (el) {
-          const current = el.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
-          if (event.data) current[parts[2]] = event.data;
-          else delete current[parts[2]];
-          updateReactions(key, current);
         }
       }
     }
@@ -668,8 +679,6 @@ function renderMessage(key, msg) {
   div.dataset.text = msg.text || '';
   div.dataset.translation = msg.translation || '';
   div.dataset.ts = msg.ts || '';
-  div.dataset.type = msg.type || 'text';
-  div.dataset.mediaUrl = msg.mediaUrl || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
 
@@ -683,72 +692,53 @@ function renderMessage(key, msg) {
   const orig = document.createElement('div');
   orig.className = 'msg-original';
   orig.id = 'orig-' + key;
-  orig.style.position = 'relative';
-  setMessageContent(orig, msg);
-  addReactionButton(orig, key);
+  orig.textContent = getMainText(msg);
   head.append(orig, flag);
   div.appendChild(head);
-
-  const reactions = document.createElement('div');
-  reactions.className = 'msg-reactions';
-  reactions.id = 'react-' + key;
-  div.appendChild(reactions);
 
   const trans = document.createElement('div');
   trans.className = 'msg-translation';
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
-  if (msg.type === 'image' || msg.type === 'video') {
-    trans.style.display = 'none';
-  } else if (msg.translation) {
+  if (msg.translation) {
     trans.textContent = msg.translation;
   } else {
-    trans.textContent = '⏳ çevriliyor...';
+  trans.textContent = 'Ceviriliyor...';
     trans.style.color = 'var(--tr2)';
     trans.style.fontStyle = 'normal';
   }
   div.appendChild(trans);
 
-  const isMedia = msg.type === 'image' || msg.type === 'video';
-  let btnRow = null;
-  if (!isMedia) {
-    // Butonlar — ▶ Ses, ⚠ Anlamadım, ↻ Yeniden çevir, ⧉ Kopyala, ✕ Sil
-    btnRow = document.createElement('div');
-    btnRow.className = 'btn-row';
-    btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+  // Butonlar — ▶ Ses, ⚠↻ Anlamadım, ✕ Sil
+  const btnRow = document.createElement('div');
+  btnRow.className = 'btn-row';
+  btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
-    const spBtn = document.createElement('button');
-    spBtn.className = 'speakBtn';
-    spBtn.textContent = '▶';
-    spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-    spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
+  const spBtn = document.createElement('button');
+  spBtn.className = 'speakBtn';
+  spBtn.textContent = '▶';
+  spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
 
-    const misBtn = document.createElement('button');
-    misBtn.textContent = '⚠';
-    misBtn.title = 'Anlamadım, tekrar söyler misin?';
-    misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-    misBtn.onclick = () => sendQuickMisunderstood();
+  const misBtn = document.createElement('button');
+  misBtn.textContent = '⚠';
+  misBtn.title = 'Anlamadım, tekrar söyler misin?';
+  misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  misBtn.onclick = () => {
+    const lang = isMine ? myRole : theirRole;
+    const misText = lang === 'vi' ? 'Em không hiểu, anh nói lại được không? 🥺' : 'Anlamadım aşkım, tekrar söyler misin? 🥺';
+    document.getElementById('msgInput').value = misText;
+  };
 
-    const retryBtn = document.createElement('button');
-    retryBtn.textContent = '↻';
-    retryBtn.title = myRole === 'vi' ? 'Dịch lại' : 'Yeniden çevir';
-    retryBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#c2410c;cursor:pointer';
-    retryBtn.onclick = () => retranslateMessage(key, retryBtn);
+  misBtn.onclick = () => sendQuickMisunderstood();
 
-    const delBtn = document.createElement('button');
-    delBtn.textContent = '✕';
-    delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
-    delBtn.onclick = () => deleteMessage(key);
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '✕';
+  delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+  delBtn.onclick = () => deleteMessage(key);
 
-    const copyBtn = document.createElement('button');
-    copyBtn.textContent = '⧉';
-    copyBtn.title = 'Orijinal mesajı kopyala';
-    copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0e7490;cursor:pointer';
-    copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
-
-    btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
-    div.appendChild(btnRow);
-  }
+  btnRow.append(spBtn, misBtn, delBtn);
+  div.appendChild(btnRow);
 
   const time = document.createElement('div');
   time.className = 'msg-time';
@@ -758,12 +748,11 @@ function renderMessage(key, msg) {
   const read = document.createElement('div');
   read.className = 'msg-read';
   read.id = 'read-' + key;
-  if (btnRow) btnRow.appendChild(read);
+  div.appendChild(read);
 
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
   refreshMessageText(key);
-  updateReactions(key, msg.reactions);
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
@@ -777,8 +766,6 @@ function updateOrRender(key, msg) {
     box.dataset.text = msg.text || box.dataset.text || '';
     if (msg.translation) box.dataset.translation = msg.translation;
     if (msg.ts) box.dataset.ts = msg.ts;
-    if (msg.type) box.dataset.type = msg.type;
-    if (msg.mediaUrl) box.dataset.mediaUrl = msg.mediaUrl;
     if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
     if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
   }
@@ -789,162 +776,21 @@ function updateOrRender(key, msg) {
     el.style.fontStyle = 'italic';
   }
   refreshMessageText(key);
-  updateReactions(key, msg.reactions);
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeAutoReadMessage(key);
 }
 
 function getMainText(msg) {
-  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
-  return msg.translation || '⏳ çevriliyor...';
+  return msg.translation || 'Ceviriliyor...';
 }
 
 function getSubText(msg) {
-  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
-  if (isMine) return msg.translation || '⏳ çevriliyor...';
+  if (isMine) return msg.translation || 'Ceviriliyor...';
   return msg.text || '';
-}
-
-function setMessageContent(el, msg) {
-  if (!el) return;
-  el.textContent = '';
-  if (msg.type === 'image' && msg.mediaUrl) {
-    const img = document.createElement('img');
-    img.className = 'msg-media-img';
-    img.src = msg.mediaUrl;
-    img.alt = msg.text || 'Fotoğraf';
-    img.onclick = () => openMediaPreview(msg.mediaUrl, 'image');
-    el.appendChild(img);
-    return;
-  }
-  if (msg.type === 'video' && msg.mediaUrl) {
-    const video = document.createElement('video');
-    video.className = 'msg-media-video';
-    video.src = msg.mediaUrl;
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = 'metadata';
-    video.onclick = () => openMediaPreview(msg.mediaUrl, 'video');
-    el.appendChild(video);
-    return;
-  }
-  el.textContent = getMainText(msg);
-}
-
-function reactionEmojis(){return ['👍','❤️','😂','😳','😭','😡']}
-
-function addReactionButton(parent, key) {
-  if (parent.querySelector('.msg-react-btn')) return;
-  const btn = document.createElement('button');
-  btn.className = 'msg-react-btn';
-  btn.id = 'reactBtn-' + key;
-  btn.textContent = '♡';
-  btn.dataset.reaction = '';
-  btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
-  let longPress = false, timer = null;
-  btn.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    longPress = false;
-    timer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
-  });
-  btn.addEventListener('pointerup', e => {
-    e.preventDefault();
-    clearTimeout(timer);
-    if (!longPress) {
-      const current = btn.dataset.reaction || '';
-      setMessageReaction(key, current ? '' : '❤️');
-    }
-  });
-  btn.addEventListener('pointercancel', () => clearTimeout(timer));
-  btn.oncontextmenu = e => e.preventDefault();
-  btn.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
-  btn.addEventListener('selectstart', e => e.preventDefault());
-  btn.onclick = e => e.preventDefault();
-  parent.appendChild(btn);
-}
-
-function showReactionPicker(key, anchor) {
-  let picker = document.getElementById('reactionPicker');
-  if (!picker) {
-    picker = document.createElement('div');
-    picker.id = 'reactionPicker';
-    picker.className = 'reaction-picker';
-    document.body.appendChild(picker);
-  }
-  picker.innerHTML = '';
-  reactionEmojis().forEach(emoji => {
-    const b = document.createElement('button');
-    b.textContent = emoji;
-    b.onclick = () => { setMessageReaction(key, emoji); picker.classList.remove('show'); };
-    picker.appendChild(b);
-  });
-  const r = anchor.getBoundingClientRect();
-  picker.style.left = Math.min(window.innerWidth - 245, Math.max(8, r.left - 190)) + 'px';
-  picker.style.top = Math.max(8, r.top - 54) + 'px';
-  picker.classList.add('show');
-}
-
-document.addEventListener('pointerdown', e => {
-  const picker = document.getElementById('reactionPicker');
-  if (picker && picker.classList.contains('show') && !picker.contains(e.target) && !e.target.closest('.msg-react-btn')) picker.classList.remove('show');
-}, { passive: true });
-
-async function setMessageReaction(key, emoji) {
-  if (!myRole) return;
-  await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null);
-}
-
-function updateReactions(key, reactions = {}) {
-  const el = document.getElementById('react-' + key);
-  const btn = document.getElementById('reactBtn-' + key);
-  if (!el && !btn) return;
-  if (el) el.dataset.reactions = JSON.stringify(reactions || {});
-  const values = Object.values(reactions || {}).filter(Boolean);
-  if (!values.length) {
-    if (el) { el.classList.remove('show'); el.textContent = ''; }
-    if (btn) { btn.textContent = '♡'; btn.dataset.reaction = ''; }
-    return;
-  }
-  const counts = {};
-  values.forEach(e => counts[e] = (counts[e] || 0) + 1);
-  const label = Object.entries(counts).map(([e,c]) => c > 1 ? e + ' ' + c : e).join(' ');
-  if (el) { el.classList.remove('show'); el.textContent = ''; }
-  if (btn) {
-    const mine = reactions?.[myRole] || values[values.length - 1] || label || '❤️';
-    btn.textContent = mine;
-    btn.dataset.reaction = mine;
-  }
-}
-
-function openMediaPreview(src, type='image') {
-  const box = document.getElementById('mediaLightbox');
-  const body = document.getElementById('mediaLightboxBody');
-  if (!box || !body || !src) return;
-  body.innerHTML = '';
-  if (type === 'video') {
-    const video = document.createElement('video');
-    video.src = src;
-    video.controls = true;
-    video.autoplay = true;
-    video.playsInline = true;
-    body.appendChild(video);
-  } else {
-    const img = document.createElement('img');
-    img.src = src;
-    body.appendChild(img);
-  }
-  box.classList.add('show');
-}
-
-function closeMediaPreview() {
-  const box = document.getElementById('mediaLightbox');
-  const body = document.getElementById('mediaLightboxBody');
-  if (body) body.innerHTML = '';
-  if (box) box.classList.remove('show');
 }
 
 function refreshMessageText(key) {
@@ -953,19 +799,12 @@ function refreshMessageText(key) {
   const msg = {
     role: box.dataset.role || '',
     text: box.dataset.text || '',
-    translation: box.dataset.translation || '',
-    type: box.dataset.type || 'text',
-    mediaUrl: box.dataset.mediaUrl || ''
+    translation: box.dataset.translation || ''
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
-  if (orig) {
-    setMessageContent(orig, msg);
-    addReactionButton(orig, key);
-  }
+  if (orig) orig.textContent = getMainText(msg);
   if (trans) {
-    if (msg.type === 'image' || msg.type === 'video') { trans.style.display = 'none'; return; }
-    trans.style.display = '';
     trans.textContent = getSubText(msg);
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
@@ -986,7 +825,7 @@ function updateReadStatus(key) {
   if (!box || !read || box.dataset.role !== myRole) return;
   const targetRole = myRole === 'tr' ? 'vi' : 'tr';
   const seen = targetRole === 'tr' ? box.dataset.readTr : box.dataset.readVi;
-  read.textContent = seen ? (myRole === 'vi' ? 'Đã đọc' : 'Okundu') : '';
+  read.textContent = seen ? 'Okundu' : '';
   read.classList.toggle('show', !!seen);
 }
 
@@ -1009,11 +848,11 @@ function maybeNotifyIncoming(key, msg) {
   if (!msg || msg.role === myRole) return;
   const ts = Number(msg.ts || 0);
   if (!ts || ts < chatListenStartedAt - 1500) return;
-  playNotifySound();
   if (document.visibilityState === 'visible') return;
   unreadCount += 1;
   setBadgeCount(unreadCount);
   document.title = `(${unreadCount}) AskViet`;
+  playNotifySound();
   showIncomingNotification(msg);
 }
 
@@ -1022,30 +861,16 @@ function playNotifySound() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
-    const ctx = notifyAudioCtx || (notifyAudioCtx = new Ctx());
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const ctx = new Ctx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    gain.gain.value = 0.045;
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {} }, 220);
-  } catch {}
-}
-
-async function unlockNotifySound(test = false) {
-  if (!notifySoundOn) return;
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = notifyAudioCtx || (notifyAudioCtx = new Ctx());
-    if (ctx.state === 'suspended') await ctx.resume();
-    if (test) playNotifySound();
+    setTimeout(() => { try { osc.stop(); ctx.close(); } catch {} }, 160);
   } catch {}
 }
 
@@ -1054,7 +879,7 @@ function showIncomingNotification(msg) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const title = msg.role === 'tr' ? '🇹🇷 AskViet' : '🇻🇳 AskViet';
     const body = msg.translation || msg.text || 'Yeni mesaj';
-    new Notification(title, { body, tag: 'askviet-new-message', silent: false });
+    new Notification(title, { body, tag: 'askviet-new-message', silent: true });
   } catch {}
 }
 
@@ -1072,33 +897,6 @@ function removeMessageElement(key) {
   stopAudio();
 }
 
-async function copyOriginalMessage(key, btn) {
-  const box = document.getElementById('msg-' + key);
-  const text = (box?.dataset?.type === 'image' || box?.dataset?.type === 'video') ? (box?.dataset?.mediaUrl || '') : (box?.dataset?.text || '');
-  if (!text) return;
-  try {
-    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
-    else {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-    }
-    if (btn) {
-      const old = btn.textContent;
-      btn.textContent = '✓';
-      setTimeout(() => { btn.textContent = old; }, 900);
-    }
-  } catch (e) {
-    console.warn('copy failed', e);
-  }
-}
-
 async function deleteMessage(key) {
   stopAudio();
   removeMessageElement(key);
@@ -1112,7 +910,6 @@ function getReadableLang(senderRole) {
 function getReadableText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  if (box.dataset.type === 'image' || box.dataset.type === 'video') return '';
   return box.dataset.translation || box.dataset.text || '';
 }
 
@@ -1131,37 +928,21 @@ async function requestSpeakForMessage(key, btn) {
   if (!box) return;
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
-  if (!text || text.includes('⏳') || text.includes('⚠')) return;
+  if (!text || text.includes('Ceviriliyor') || text.includes('Ceviri hatasi')) return;
   if (targetRole === myRole) {
-    await speak(text, myRole, btn);
+    speak(text, myRole, btn);
     return;
   }
   setSpeakBtn(btn, true);
-  try {
-    const pushed = await fbPush(AUDIO_PATH, {
-      key,
-      from: myRole,
-      target: targetRole,
-      text,
-      lang: targetRole,
-      ts: Date.now()
-    });
-    const reqId = pushed && pushed.name;
-    if (reqId) await waitAudioRequestDone(reqId, 60000);
-    else await sleep(1800);
-  } finally {
-    setSpeakBtn(btn, false);
-  }
-}
-
-async function waitAudioRequestDone(id, timeoutMs) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    await sleep(650);
-    const req = await fbGet(AUDIO_PATH + '/' + id);
-    if (!req) return true;
-  }
-  return false;
+  await fbPush(AUDIO_PATH, {
+    key,
+    from: myRole,
+    target: targetRole,
+    text,
+    lang: targetRole,
+    ts: Date.now()
+  });
+  setTimeout(() => setSpeakBtn(btn, false), 700);
 }
 
 function listenAudioRequests() {
@@ -1179,17 +960,14 @@ function listenAudioRequests() {
   });
 }
 
-async function handleAudioRequest(id, req) {
+function handleAudioRequest(id, req) {
   if (!req || handledAudioRequests.has(id)) return;
   if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
   if (Date.now() - req.ts > 15000) return;
   if (req.target !== myRole) return;
   handledAudioRequests.add(id);
-  try {
-    await speak(req.text, req.lang || myRole, null, true);
-  } finally {
-    await fbRemove(AUDIO_PATH + '/' + id);
-  }
+  speak(req.text, req.lang || myRole, null, true);
+  fbRemove(AUDIO_PATH + '/' + id);
 }
 
 function getMisunderstoodText() {
@@ -1208,7 +986,6 @@ async function sendQuickMisunderstood() {
 function maybeAutoReadMessage(key) {
   const box = document.getElementById('msg-' + key);
   if (!box || !autoRead || autoReadDone.has(key)) return;
-  if (box.dataset.type === 'image' || box.dataset.type === 'video') { autoReadDone.add(key); return; }
   const senderRole = box.dataset.role;
   if (!senderRole || senderRole === myRole) return;
   const ts = Number(box.dataset.ts || 0);
@@ -1217,7 +994,7 @@ function maybeAutoReadMessage(key) {
     return;
   }
   const text = box.dataset.translation || '';
-  if (!text || text.includes('⏳') || text.includes('⚠')) return;
+  if (!text || text.includes('Ceviriliyor') || text.includes('Ceviri hatasi')) return;
   autoReadDone.add(key);
   speak(text, myRole, null, true);
 }
@@ -1228,129 +1005,9 @@ function formatTime(ts) {
   return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
 }
 
-function initAutoScroll() {
-  const box = document.getElementById('messages');
-  if (!box || box.dataset.autoScrollReady === '1') return;
-  box.dataset.autoScrollReady = '1';
-  const stick = () => { box.scrollTop = box.scrollHeight; };
-  const obs = new MutationObserver(() => requestAnimationFrame(stick));
-  obs.observe(box, { childList:true, subtree:true, characterData:true });
-  window.addEventListener('resize', () => setTimeout(stick, 80));
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(stick, 120); });
-  setTimeout(stick, 120);
-}
 function scrollToBottom() {
   const m = document.getElementById('messages');
   if (m) setTimeout(() => { m.scrollTop = m.scrollHeight; }, 50);
-}
-
-function openGallery(){document.getElementById('galleryInput')?.click()}
-function openCamera(){document.getElementById('cameraInput')?.click()}
-
-function showMediaStatus(text) {
-  let box = document.getElementById('mediaUploadStatus');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'mediaUploadStatus';
-    box.className = 'media-uploading';
-    document.body.appendChild(box);
-  }
-  box.textContent = text;
-  box.style.display = 'block';
-}
-
-function hideMediaStatus() {
-  const box = document.getElementById('mediaUploadStatus');
-  if (box) box.style.display = 'none';
-}
-
-async function handleImageInput(event) {
-  const input = event.target;
-  const file = input.files && input.files[0];
-  input.value = '';
-  if (!file) return;
-  await sendPickedMedia(file);
-}
-
-async function sendPickedMedia(file) {
-  if (!file || !myRole) return;
-  try {
-    const isVideo = /^video\//i.test(file.type);
-    showMediaStatus(myRole === 'vi' ? (isVideo ? 'Đang gửi video...' : 'Đang gửi ảnh...') : (isVideo ? 'Video gönderiliyor...' : 'Fotoğraf gönderiliyor...'));
-    const media = await prepareImageForUpload(file);
-    const uploaded = await uploadMediaFile(media.blob, media.name);
-    await sendMediaMessage(uploaded.url || uploaded.mediaUrl, file.name, uploaded.mime || file.type);
-  } catch (e) {
-    alert((myRole === 'vi' ? 'Không gửi được media: ' : 'Medya gönderilemedi: ') + (e.message || e));
-  } finally {
-    hideMediaStatus();
-  }
-}
-
-function pickMediaFileFromItems(items) {
-  return Array.from(items || [])
-    .filter(item => item && (item.kind === 'file' || item.getAsFile))
-    .map(item => item.getAsFile ? item.getAsFile() : item)
-    .find(file => file && /^(image|video)\//i.test(file.type || '')) || null;
-}
-
-document.addEventListener('paste', e => {
-  if (!myRole || document.getElementById('chat')?.style.display === 'none') return;
-  const file = pickMediaFileFromItems(e.clipboardData?.items);
-  if (!file) return;
-  e.preventDefault();
-  sendPickedMedia(file);
-});
-
-document.addEventListener('drop', e => {
-  if (!myRole || document.getElementById('chat')?.style.display === 'none') return;
-  const file = pickMediaFileFromItems(e.dataTransfer?.items) || Array.from(e.dataTransfer?.files || []).find(f => /^(image|video)\//i.test(f.type || ''));
-  if (!file) return;
-  e.preventDefault();
-  sendPickedMedia(file);
-});
-
-document.addEventListener('dragover', e => {
-  if (myRole && document.getElementById('chat')?.style.display !== 'none') e.preventDefault();
-});
-
-async function prepareImageForUpload(file) {
-  if (/^video\//i.test(file.type)) return { blob: file, name: safeMediaName(file.name || 'video') };
-  const keepOriginal = /image\/(gif|webp|png)/i.test(file.type) && file.size <= 1800000;
-  if (keepOriginal) return { blob: file, name: safeMediaName(file.name || 'image') };
-  const bmp = await createImageBitmap(file);
-  const maxSide = 1280;
-  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bmp.width * scale));
-  canvas.height = Math.max(1, Math.round(bmp.height * scale));
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
-  return { blob, name: safeMediaName((file.name || 'image').replace(/\.[^.]+$/, '') + '.jpg') };
-}
-
-function safeMediaName(name) {
-  return String(name || 'image').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
-}
-
-async function uploadMediaFile(blob, fileName) {
-  const fd = new FormData();
-  fd.append('token', MEDIA_UPLOAD_TOKEN);
-  fd.append('file', blob, fileName);
-  const res = await fetch(MEDIA_UPLOAD_URL, { method:'POST', body: fd });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !(data.ok || data.success)) throw new Error(data.error || res.statusText || 'Upload failed');
-  return data;
-}
-
-async function sendMediaMessage(url, name='', mime='') {
-  if (!url) throw new Error('Upload URL yok');
-  const type = /^video\//i.test(mime) || /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'video' : 'image';
-  const label = name || (type === 'video' ? 'Video' : 'Fotoğraf');
-  const msg = { role: myRole, type, text:label, mediaUrl:url, mime:mime || null, ts:Date.now(), translation:null };
-  await fbPush(MSGS_PATH, msg);
-  setMyTyping(false);
 }
 
 async function sendMessage() {
@@ -1401,33 +1058,14 @@ async function translateAndUpdate(key, text, fromRole) {
   }
 }
 
-async function retranslateMessage(key, btn) {
-  const box = document.getElementById('msg-' + key);
-  if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return;
-  const text = box.dataset.text || '';
-  const fromRole = box.dataset.role || myRole;
-  if (!text || !fromRole) return;
-  const old = btn?.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
-  const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
-  try {
-    await fbSet(MSGS_PATH + '/' + key + '/translation', targetRole === 'vi' ? '⏳ Đang dịch lại...' : '⏳ Yeniden çevriliyor...');
-    await translateAndUpdate(key, text, fromRole);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = old || '↻'; }
-  }
-}
-
 function retryText(role, attempt, total) {
-  return role === 'vi'
-    ? `⏳ Gemini đang bận, đang thử lại... (${attempt}/${total})`
-    : `⏳ Gemini yoğun, tekrar deneniyor... (${attempt}/${total})`;
+  return 'Gemini yogun, tekrar deneniyor... (' + attempt + '/' + total + ')';
 }
 
 function errorText(role, msg) {
   return role === 'vi'
-    ? '⚠️ Lỗi dịch: ' + msg
-    : '⚠️ Çeviri hatası: ' + msg;
+    ? 'Ceviri hatasi: ' + msg
+    : 'Ceviri hatasi: ' + msg;
 }
 
 function isRetryableGeminiError(e) {
@@ -1456,30 +1094,32 @@ async function translateText(text, from) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: sysPrompt }] },
         contents: [{ parts: [{ text }] }],
-        generationConfig: {
-          temperature: 0.2,
-          thinkingConfig: { thinkingBudget: 0 }
-        }
+        generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
       })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error?.message || r.statusText);
     return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
   } else {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: sysPrompt },
-          { role: 'user', content: text }
-        ]
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error?.message || r.statusText);
+    const endpoint = 'https://api.openai.com/v1/chat/completions';
+    let r;
+    try {
+      r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: sysPrompt },
+            { role: 'user', content: text }
+          ]
+        })
+      });
+    } catch (e) {
+      throw new Error('OpenAI adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+    }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
     return (data.choices?.[0]?.message?.content || '').trim();
   }
 }
@@ -1542,7 +1182,7 @@ async function unlockAudio(){
     }
   }catch{}
 }
-function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'Durdur':'? Ses';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
 function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
 async function playBlob(blob,token,btn,text=''){const a=getAudioPlayer();if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioUrl=URL.createObjectURL(blob);a.pause();a.src=audioUrl;a.defaultPlaybackRate=1.0;a.playbackRate=1.0;a.volume=1.0;a.muted=false;a.load();isSpeaking=true;setSpeakBtn(btn,true);await new Promise((resolve,reject)=>{const limit=Math.max(45000,(text||'').length*180);const timer=setTimeout(()=>resolve(),limit);a.onended=()=>{clearTimeout(timer);resolve()};a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};a.play().catch(err=>{clearTimeout(timer);reject(err)})});if(token===ttsToken){isSpeaking=false}return true}
@@ -1553,25 +1193,30 @@ async function speakOpenAI(text, target, btn, silent=false) {
   try { await unlockAudio(); } catch {}
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
-  const key = localStorage.getItem('askviet_key') || '';
+  const settings = getTtsSettings();
+  const key = localStorage.getItem('askviet_tts_key') || localStorage.getItem('askviet_key') || '';
   if (!key) { console.warn('TTS key yok'); return false; }
-  const voice = target === 'vi' ? 'cedar' : 'nova';
-  const speed = target === 'vi' ? 0.93 : 1;
+  const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
+  const speed = settings.speed;
+  const model = settings.model;
+  const endpoint = settings.provider === 'external'
+    ? 'https://codex.sale/v1/audio/speech'
+    : 'https://api.openai.com/v1/audio/speech';
   const instructions = target === 'vi'
     ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
     : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
   const token = ++ttsToken;
-  const ck = cacheKey(text, target, 'gpt-4o-mini-tts', voice, speed);
+  const ck = cacheKey(text, target, settings.provider + ':' + model, voice, speed);
   setSpeakBtn(btn, true);
   try {
     let blob = ttsCache.get(ck);
     if (!blob) {
       ttsAbort = new AbortController();
-      const r = await fetch('https://api.openai.com/v1/audio/speech', {
+  const r = await fetch(endpoint, {
         method: 'POST',
         signal: ttsAbort.signal,
         headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
-        body: JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})
+        body: JSON.stringify({model,input:text,voice,instructions,response_format:'mp3',speed})
       });
       if (!r.ok) {
         const d = await r.json().catch(()=>({}));
@@ -1602,10 +1247,9 @@ speak = speakOpenAI;
 const MODEL_NAMES = {
   'openai:gpt-5.5': 'GPT-5.5',
   'openai:gpt-5.4': 'GPT-5.4',
-  'openai:gpt-5.2': 'GPT-5.2',
-  'openai:gpt-5.4-mini': '5.4-mini',
+  'openai:gpt-5.4-mini': 'GPT-5.4 mini',
   'openai:gpt-4o': 'GPT-4o',
-  'openai:gpt-4o-mini': '4o-mini',
+  'openai:gpt-4o-mini': '4o mini',
   'gemini:gemini-2.5-flash': 'Gemini Flash',
   'gemini:gemini-2.5-flash-preview-05-20': 'Gemini Flash'
 };
@@ -1617,6 +1261,7 @@ function modelName(model) {
 function setSelectedModel(model, fromRemote=false) {
   if (!model) return;
   if (model === 'gemini:gemini-2.5-flash-preview-05-20') model = 'gemini:gemini-2.5-flash';
+  if (model === 'codex:gpt-5.5' || model === 'codex:gpt-5.4' || model === 'codex:gpt-5.4-mini') model = 'openai:gpt-5.5';
   selectedModel = model;
   localStorage.setItem('askviet_model', model);
   const setupSelect = document.getElementById('modelSelect');
@@ -1650,7 +1295,6 @@ function toggleNotifySound() {
   notifySoundOn = !notifySoundOn;
   localStorage.setItem('askviet_notify_sound', notifySoundOn ? '1' : '0');
   updateNotifySoundUI();
-  if (notifySoundOn) unlockNotifySound(true);
 }
 
 function updateNotifySoundUI() {
@@ -1710,54 +1354,36 @@ function toggleAutoRead() {
   autoRead = !autoRead;
   localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
   updateAutoReadUI();
-  if (myRole === 'vi') fbSet(VN_AUTO_READ_PATH, autoRead);
 }
 
 function updateAutoReadUI() {
   const status = document.getElementById('autoReadStatus');
   const text = myRole === 'vi'
-    ? (autoRead ? '🔊 Tự đọc' : '🔇 Tắt đọc')
+    ? (autoRead ? 'Tu doc acik' : 'Tu doc kapali')
     : (autoRead ? '🔊 Açık' : '🔇 Kapalı');
   if (status) {
     status.textContent = text;
     status.classList.toggle('on', autoRead);
     status.title = myRole === 'vi'
-      ? 'Tự động đọc tin nhắn mới'
+      ? 'Tu dong doc tin nhan moi'
       : 'Yeni mesajları otomatik seslendir';
   }
 }
 
 function listenAutoReadConfig() {
-  stopAutoReadPolling();
-  const poll = async () => {
-    try {
-      const value = await fbGet(VN_AUTO_READ_PATH);
-      const enabled = value !== false;
-      vnAutoRead = enabled;
-      if (myRole === 'vi') {
-        autoRead = enabled;
-        localStorage.setItem('askviet_autoread', autoRead ? '1' : '0');
-        updateAutoReadUI();
-      }
-      updateVnAutoReadUI();
-    } catch (e) {
-      console.warn('auto read status error', e);
-    }
-  };
-  poll();
-  autoReadPollTimer = setInterval(poll, 2500);
+  updateAutoReadUI();
 }
 
 function updateAutoReadUI() {
   const status = document.getElementById('autoReadStatus');
   const text = myRole === 'vi'
-    ? (autoRead ? '🔊 Tự đọc' : '🔇 Tắt đọc')
+    ? (autoRead ? 'Tu doc acik' : 'Tu doc kapali')
     : (autoRead ? '🔊 Açık' : '🔇 Kapalı');
   if (status) {
     status.textContent = text;
     status.classList.toggle('on', autoRead);
     status.title = myRole === 'vi'
-      ? (autoRead ? 'Tự động đọc: bật' : 'Tự động đọc: tắt')
+      ? (autoRead ? 'Tu dong doc: bat' : 'Tu dong doc: tat')
       : 'Yeni mesajları otomatik seslendir';
   }
 }
@@ -1775,80 +1401,11 @@ function updateNotifySoundUI() {
 
 // ── Sesli Mesaj (PTT mantığı) ─────────────────────────────────────────────
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
-let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recLoudFrames=0;
-let recFrameCount=0,recVoiceFrames=0,recRmsSum=0,recPeak=0;
-let micNoSpeechTimes=[];
+let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null;
 
 function rms(analyser,data){analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v}return Math.sqrt(sum/data.length)}
-function resetRecStats(){recFrameCount=0;recVoiceFrames=0;recRmsSum=0;recPeak=0}
-function noteRecFrame(v){recFrameCount++;recRmsSum+=v;recPeak=Math.max(recPeak,v);if(v>0.012)recVoiceFrames++}
-function shouldKeepRecordingForWhisper(had,blob){
-  const duration=(Date.now()-recStarted)/1000;
-  const avg=recFrameCount?recRmsSum/recFrameCount:0;
-  if(!had||!blob||!blob.size)return false;
-  if(duration<0.35)return false;
-  if(recPeak>0.16&&duration<0.75&&recVoiceFrames<2)return false;
-  if(recVoiceFrames<2&&recPeak<0.045)return false;
-  if(avg<0.004&&recPeak<0.035)return false;
-  return true;
-}
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}}
-function stopRecorder(){stopRec()}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-
-function cancelRecorderSilent(){
-  if(recTimer){clearInterval(recTimer);recTimer=null}
-  if(rec){
-    try{
-      rec.ondataavailable=null;
-      rec.onstop=null;
-      if(rec.state==='recording')rec.stop();
-    }catch{}
-    rec=null;
-  }
-  if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-  recAnalyser=null;recData=null;
-  if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-  if(recButton){recButton.classList.remove('mic-recording');recButton=null}
-  recChunks=[];
-  recHadSpeech=false;
-  recSilentSince=0;
-  recLoudFrames=0;
-  resetRecStats();
-}
-
-function showMicReloadNotice(){
-  const text=myRole==='vi'?'Đang làm mới micro...':'Mikrofon yenileniyor...';
-  let box=document.getElementById('micReloadNotice');
-  if(!box){
-    box=document.createElement('div');
-    box.id='micReloadNotice';
-    box.style.cssText='position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #22c55e;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap';
-    document.body.appendChild(box);
-  }
-  box.textContent=text;
-}
-
-function handleNoSpeechStop(btn){
-  const now=Date.now();
-  micNoSpeechTimes=micNoSpeechTimes.filter(t=>now-t<30000);
-  micNoSpeechTimes.push(now);
-  if(micNoSpeechTimes.length>=2){
-    showMicReloadNotice();
-    if(myRole) localStorage.setItem('askviet_reload_role', myRole);
-    if(btn)btn.textContent='⏳';
-    setTimeout(()=>location.reload(),800);
-    return true;
-  }
-  return false;
-}
-
-async function resetRecAudioCtx(){
-  if(recAudioCtx){
-    try{await recAudioCtx.close()}catch{}
-    recAudioCtx=null;
-  }
-}
 
 async function ensureAudioCtx(){
   try{
@@ -1858,203 +1415,55 @@ async function ensureAudioCtx(){
   return recAudioCtx;
 }
 
-async function startRecorder(source,button,onDone,autoSilence=false){
-  try{await unlockAudio()}catch{}
-  if(rec){
-    if(recButton===button){stopRecorder();return}
-    stopRecorder();
-    await sleep(180);
-  }
-  stopAudio();
-  recButton=button;
-  recChunks=[];
-  recHadSpeech=false;
-  recSilentSince=0;
-  recLoudFrames=0;
-  resetRecStats();
-  button.classList.add('mic-recording');
+async function startVoice() {
+  const btn = document.getElementById('micBtn');
+  // Zaten kayıt varsa durdur
+  if(rec){stopRec();return;}
+  recChunks=[];recHadSpeech=false;recSilentSince=0;
+  btn.classList.add('mic-recording');
   try{
     const ctx=await ensureAudioCtx();
     recStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
-    if(ctx&&ctx.state==='suspended') await ctx.resume();
     recNode=ctx.createMediaStreamSource(recStream);
-    recAnalyser=ctx.createAnalyser();
-    recAnalyser.fftSize=1024;
+    recAnalyser=ctx.createAnalyser();recAnalyser.fftSize=1024;
     recData=new Uint8Array(recAnalyser.fftSize);
     recNode.connect(recAnalyser);
     rec=new MediaRecorder(recStream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
     rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
     rec.onstop=async()=>{
-      const chunks=recChunks.slice(),had=recHadSpeech,mt=rec?.mimeType||'audio/webm';
+      const chunks=recChunks.slice(),mt=rec?.mimeType||'audio/webm';
       clearInterval(recTimer);recTimer=null;
       if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-      recAnalyser=null;recData=null;
-      if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-      button.classList.remove('mic-recording');
+      if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
+      btn.classList.remove('mic-recording');
       rec=null;
-      recButton=null;
-      await sleep(260);
-      const blob=new Blob(chunks,{type:mt});
-      await onDone(blob,shouldKeepRecordingForWhisper(had,blob));
+      if(!recHadSpeech||chunks.length===0){btn.textContent='🎙';return;}
+    btn.textContent='Bekle';
+      try{
+        const blob=new Blob(chunks,{type:mt});
+        const text=await transcribeVoice(blob);
+        if(text){document.getElementById('msgInput').value=text;sendMessage();}
+      }catch(e){console.error('Ses hatası:',e);}
+      btn.textContent='🎙';
     };
     rec.start(120);
     recStarted=Date.now();
+    recButton=btn;
     recTimer=setInterval(()=>{
       if(!recAnalyser||!recData)return;
       const v=rms(recAnalyser,recData),now=Date.now();
-      noteRecFrame(v);
-      const speech=v>0.012;
-      if(speech){
-        recHadSpeech=true;
-        recSilentSince=0;
-        return;
-      }
-      if(!autoSilence)return;
+      if(v>0.012){recHadSpeech=true;recSilentSince=0;return;}
       if(recHadSpeech){
         if(!recSilentSince)recSilentSince=now;
-        if(now-recSilentSince>1500)stopRecorder();
-      }else if(now-recStarted>2000)stopRecorder();
-      if(now-recStarted>12000)stopRecorder();
+        if(now-recSilentSince>1500)stopRec();
+      }else if(now-recStarted>2000)stopRec();
+      if(now-recStarted>12000)stopRec();
     },120);
   }catch(e){
-    if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-    recAnalyser=null;recData=null;
-    if(recStream){try{recStream.getTracks().forEach(t=>t.stop())}catch{}recStream=null}
-    button.classList.remove('mic-recording');
-    rec=null;
-    recButton=null;
+    btn.classList.remove('mic-recording');
+    if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
     alert('Mikrofon izni gerekli: '+e.message);
   }
-}
-
-function stopAutoReadPolling() {
-  if (autoReadPollTimer) {
-    clearInterval(autoReadPollTimer);
-    autoReadPollTimer = null;
-  }
-}
-
-function setupTrGuard() {
-  const guard = document.getElementById('trGuard');
-  if (guard) guard.style.display = myRole === 'tr' ? 'flex' : 'none';
-  updateVnAutoReadUI();
-  updateOnlineCount(1);
-}
-
-function updateVnAutoReadUI() {
-  const btn = document.getElementById('vnAutoReadBtn');
-  if (!btn) return;
-  btn.textContent = (vnAutoRead ? '🔊 VN' : '🔇 VN');
-  btn.classList.toggle('on', vnAutoRead);
-  btn.classList.toggle('off', !vnAutoRead);
-  btn.title = vnAutoRead ? 'Vietnam tarafı otomatik ses açık' : 'Vietnam tarafı otomatik ses kapalı';
-}
-
-async function toggleVnAutoRead() {
-  if (myRole !== 'tr') return;
-  try { unlockAudio(); } catch(e) {}
-  vnAutoRead = !vnAutoRead;
-  updateVnAutoReadUI();
-  await fbSet(VN_AUTO_READ_PATH, vnAutoRead);
-}
-
-function updateOnlineCount(count) {
-  const el = document.getElementById('onlineCount');
-  if (!el) return;
-  el.textContent = String(Math.max(1, count || 1));
-}
-
-function lastSeenOnlineText() {
-  return myRole === 'vi' ? 'Đang hoạt động' : 'Şu anda aktif';
-}
-
-function formatLastSeen(ts) {
-  const el = document.getElementById('lastSeenStatus');
-  if (!el) return;
-  el.classList.remove('online');
-  if (!ts) {
-    el.innerHTML = (myRole === 'vi' ? 'Lần hoạt động cuối' : 'Son görülme') + '<span class="presence-sep">|</span>' + (myRole === 'vi' ? 'Chưa có' : 'Yok');
-    return;
-  }
-  const diff = Math.max(0, Date.now() - Number(ts));
-  const min = Math.floor(diff / 60000);
-  if (min < 60) {
-    const n = Math.max(1, min);
-    el.innerHTML = (myRole === 'vi' ? 'Lần hoạt động cuối' : 'Son görülme') + '<span class="presence-sep">|</span>' + (myRole === 'vi' ? `${n} phút trước hoạt động` : `${n} dk önce aktifti`);
-    return;
-  }
-  const d = new Date(Number(ts));
-  const time = d.toLocaleTimeString(myRole === 'vi' ? 'vi-VN' : 'tr-TR', { hour:'2-digit', minute:'2-digit' });
-  el.innerHTML = (myRole === 'vi' ? 'Lần hoạt động cuối ' : 'Son görülme ') + time;
-}
-
-function updateLastSeenStatus(isOnline, lastTs) {
-  const el = document.getElementById('lastSeenStatus');
-  if (!el) return;
-  el.classList.toggle('online', !!isOnline);
-  if (isOnline) el.innerHTML = (myRole === 'vi' ? 'Lần hoạt động cuối' : 'Son görülme') + '<span class="presence-sep">|</span><span class="presence-dot"></span>' + lastSeenOnlineText();
-  else formatLastSeen(lastTs);
-}
-
-function initPresence() {
-  stopPresence(false);
-  const heartbeat = () => {
-    if (!myRole) return;
-    const ts = Date.now();
-    fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts }).catch(() => {});
-    fbSet(PRESENCE_LAST_PATH + '/' + myRole, ts).catch(() => {});
-  };
-  heartbeat();
-  presenceHeartbeatTimer = setInterval(heartbeat, 20000);
-  const poll = async () => {
-    try {
-      const data = await fbGet(PRESENCE_PATH);
-      const last = await fbGet(PRESENCE_LAST_PATH + '/' + theirRole);
-      const now = Date.now();
-      const active = data && typeof data === 'object' ? Object.values(data).filter(v => v && Number(v.ts) > now - 45000) : [];
-      const count = active.length || 1;
-      const theirOnline = active.some(v => v && v.role === theirRole);
-      if (myRole === 'tr') updateOnlineCount(count);
-      updateLastSeenStatus(theirOnline, last);
-    } catch (e) {
-      if (myRole === 'tr') updateOnlineCount(1);
-      updateLastSeenStatus(false, null);
-    }
-  };
-  poll();
-  presencePollTimer = setInterval(poll, 10000);
-}
-
-function stopPresence(removeOwn = true) {
-  if (presenceHeartbeatTimer) {
-    clearInterval(presenceHeartbeatTimer);
-    presenceHeartbeatTimer = null;
-  }
-  if (presencePollTimer) {
-    clearInterval(presencePollTimer);
-    presencePollTimer = null;
-  }
-  if (removeOwn && myRole) {
-    fbSet(PRESENCE_LAST_PATH + '/' + myRole, Date.now()).catch(() => {});
-    fbRemove(PRESENCE_PATH + '/' + presenceId).catch(() => {});
-  }
-}
-
-async function startVoice() {
-  const btn = document.getElementById('micBtn');
-  return startRecorder(myRole,btn,async(blob,had)=>{
-    if(!had||!blob||!blob.size){
-      if(!handleNoSpeechStop(btn))btn.textContent='🎙';
-      return;
-    }
-    micNoSpeechTimes=[];
-    btn.textContent='⏳';
-    try{
-      const text=await transcribeVoice(blob);
-      if(text){document.getElementById('msgInput').value=text;sendMessage();}
-    }catch(e){console.error('Ses hatası:',e);}
-    btn.textContent='🎙';
-  },true);
 }
 
 async function transcribeVoice(blob) {
@@ -2072,7 +1481,7 @@ async function transcribeVoice(blob) {
       body: JSON.stringify({
         contents: [{parts: [
           {inline_data: {mime_type: 'audio/webm', data: base64}},
-          {text: myRole === 'tr' ? 'Bu Türkçe sesi metne çevir, sadece metni döndür.' : 'Chuyển giọng nói tiếng Việt này thành văn bản, chỉ trả về văn bản.'}
+          {text: myRole === 'tr' ? 'Bu Turkce sesi metne cevir, sadece metni dondur.' : 'Chuyen giong noi tieng Viet nay thanh van ban, chi tra ve van ban.'}
         ]}],
         generationConfig: {thinkingConfig: {thinkingBudget: 0}}
       })
@@ -2080,15 +1489,17 @@ async function transcribeVoice(blob) {
     const data = await resp.json();
     return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
   } else {
-    // OpenAI Whisper
+    // OpenAI-compatible transcription
+    const ttsSettings = getTtsSettings();
+    const transcribeEndpoint = ttsSettings.provider === 'external'
+      ? 'https://codex.sale/v1/audio/transcriptions'
+      : 'https://api.openai.com/v1/audio/transcriptions';
+    const transcribeModel = ttsSettings.provider === 'external' ? 'gpt-4o-transcribe' : 'whisper-1';
     const fd = new FormData();
     fd.append('file', blob, 'audio.webm');
-    fd.append('model', 'whisper-1');
+    fd.append('model', transcribeModel);
     fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
-    fd.append('prompt', myRole === 'tr'
-      ? 'Türkçe günlük konuşma. Duyduğun konuşmayı aynen yaz, ekleme yapma.'
-      : 'Tiếng Việt hội thoại hằng ngày. Chỉ chép lại đúng lời nói nghe được, không thêm nội dung.');
-    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const resp = await fetch(transcribeEndpoint, {
       method: 'POST',
       headers: {'Authorization': 'Bearer ' + apiKey},
       body: fd
@@ -2099,16 +1510,18 @@ async function transcribeVoice(blob) {
 }
 
 async function transcribeVoiceOpenAI(blob) {
-  const key = localStorage.getItem('askviet_key') || '';
+  const settings = getTtsSettings();
+  const key = localStorage.getItem('askviet_tts_key') || localStorage.getItem('askviet_key') || '';
   if (!key) throw new Error('OpenAI API key gerekli');
+  const endpoint = settings.provider === 'external'
+    ? 'https://codex.sale/v1/audio/transcriptions'
+    : 'https://api.openai.com/v1/audio/transcriptions';
+  const model = settings.provider === 'external' ? 'gpt-4o-transcribe' : 'whisper-1';
   const fd = new FormData();
   fd.append('file', blob, 'audio.webm');
-  fd.append('model', 'whisper-1');
+  fd.append('model', model);
   fd.append('language', myRole === 'tr' ? 'tr' : 'vi');
-  fd.append('prompt', myRole === 'tr'
-    ? 'Türkçe günlük konuşma. Duyduğun konuşmayı aynen yaz, ekleme yapma.'
-    : 'Tiếng Việt hội thoại hằng ngày. Chỉ chép lại đúng lời nói nghe được, không thêm nội dung.');
-  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const resp = await fetch(endpoint, {
     method: 'POST',
     headers: {'Authorization': 'Bearer ' + key},
     body: fd
@@ -2121,33 +1534,10 @@ transcribeVoice = transcribeVoiceOpenAI;
 
 window.addEventListener('beforeunload', () => {
   if (myRole) fbSet(TYPING_PATH + '/' + myRole, false);
-  stopPresence(true);
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    clearUnreadCount();
-    if (myRole) fbSet(PRESENCE_PATH + '/' + presenceId, { role: myRole, ts: Date.now() }).catch(() => {});
-    if (myRole) fbSet(PRESENCE_LAST_PATH + '/' + myRole, Date.now()).catch(() => {});
-    if (recAudioCtx && recAudioCtx.state === 'suspended') {
-      try { recAudioCtx.resume(); } catch {}
-    }
-  } else {
-    if (rec) cancelRecorderSilent();
-    stopAudio();
-    if (myRole) fbSet(TYPING_PATH + '/' + myRole, false).catch(() => {});
-  }
-});
-window.addEventListener('pagehide', () => {
-  if (rec) cancelRecorderSilent();
-});
-['pointerdown','touchstart','click'].forEach(type => {
-  document.addEventListener(type, () => {
-    if (notifySoundOn) unlockNotifySound(false);
-  }, { passive: true });
+  if (document.visibilityState === 'visible') clearUnreadCount();
 });
 </script>
 </body>
 </html>
-
-
-
