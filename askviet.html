@@ -103,11 +103,24 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 /* Çeviri — küçük ve soluk */
 .msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
-.msg-image{display:block;max-width:min(260px,70vw);max-height:360px;border-radius:14px;object-fit:cover;margin-top:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:14px;object-fit:cover;background:#111;cursor:pointer;margin-top:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.msg-media-video{min-width:min(240px,68vw)}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
+.media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
+.msg-react-btn{position:absolute;right:-17px;bottom:-15px;width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4}
+.msg.mine .msg-react-btn{left:-17px;right:auto}
+.msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.msg-reactions.show{display:flex}
+.reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22)}
+.reaction-picker.show{display:flex}
+.reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
+.media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
+.media-lightbox.show{display:flex}
+.media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
+.media-lightbox-close{position:fixed;top:max(env(safe-area-inset-top),14px);right:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,20,.75);color:#fff;font-size:24px;font-weight:900;z-index:100001}
 
 .msg-time{font-size:10px;color:#999;padding:2px 14px 4px}
-.msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 14px 4px;box-shadow:0 1px 5px rgba(22,163,74,.35)}
+.msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 0 0 2px;box-shadow:0 1px 5px rgba(22,163,74,.35);align-self:center;white-space:nowrap}
 .msg.mine .msg-read{background:#2563eb;border-color:#60a5fa;box-shadow:0 1px 5px rgba(37,99,235,.35)}
 .msg-read.show{display:inline-block}
 
@@ -437,10 +450,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="input-bar">
-    <input type="file" id="photoInput" accept="image/*" hidden onchange="handleImagePick(event)">
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden onchange="handleImagePick(event)">
-    <button class="send-btn media-btn" id="photoBtn" onclick="openPhotoPicker()" title="Fotoğraf">&#128247;</button>
-    <button class="send-btn media-btn" id="cameraBtn" onclick="openCameraPicker()" title="Kamera">&#128248;</button>
+    <input type="file" id="galleryInput" accept="image/*,video/*" hidden onchange="handleMediaInput(event)">
+    <input type="file" id="cameraInput" accept="image/*,video/*" capture="environment" hidden onchange="handleMediaInput(event)">
+    <button class="send-btn media-btn" id="galleryBtn" onclick="openGallery()" title="Fotoğraf / sticker / video">🖼</button>
+    <button class="send-btn media-btn" id="cameraBtn" onclick="openCamera()" title="Kamera">📷</button>
     <textarea class="msg-input" id="msgInput" rows="1" placeholder="Mesaj yaz..."></textarea>
     <button class="send-btn" id="micBtn" style="background:var(--surface2);border:1.5px solid var(--border)" onclick="startVoice()">&#127908;</button>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
@@ -457,6 +470,8 @@ const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
 const PRESENCE_PATH = CONFIG_PATH + '/presence';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
+const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
+const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
 
 let myRole = null;
@@ -615,7 +630,7 @@ async function fbRemove(path) {
 function fbListen(path, cb) {
   const es = new EventSource(DB_URL + path + '.json');
   es.addEventListener('put', e => { try { cb(JSON.parse(e.data)); } catch {} });
-  es.addEventListener('patch', e => { try { cb({ path: '/', data: JSON.parse(e.data) }); } catch {} });
+  es.addEventListener('patch', e => { try { cb(JSON.parse(e.data)); } catch {} });
   es.onerror = () => setConnected(false);
   es.onopen = () => setConnected(true);
   return () => es.close();
@@ -734,6 +749,14 @@ function initChat() {
           if (parts[2] === 'vi') box.dataset.readVi = event.data || '';
           updateReadStatus(key);
         }
+      } else if (parts.length === 3 && parts[1] === 'reactions') {
+        const el = document.getElementById('react-' + key);
+        if (el) {
+          const current = el.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
+          if (event.data) current[parts[2]] = event.data;
+          else delete current[parts[2]];
+          updateReactions(key, current);
+        }
       }
     }
   });
@@ -784,6 +807,8 @@ function renderMessage(key, msg) {
   div.dataset.translation = msg.translation || '';
   div.dataset.type = msg.type || '';
   div.dataset.imageUrl = msg.imageUrl || '';
+  div.dataset.mediaUrl = msg.mediaUrl || msg.imageUrl || '';
+  div.dataset.mime = msg.mime || '';
   div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
@@ -798,22 +823,22 @@ function renderMessage(key, msg) {
   const orig = document.createElement('div');
   orig.className = 'msg-original';
   orig.id = 'orig-' + key;
-  orig.textContent = getMainText(msg);
-  if (msg.type === 'image' && msg.imageUrl) {
-    const img = document.createElement('img');
-    img.className = 'msg-image';
-    img.src = msg.imageUrl;
-    img.alt = myRole === 'vi' ? 'Anh' : 'Fotoğraf';
-    orig.appendChild(img);
-  }
+  orig.style.position = 'relative';
+  setMessageContent(orig, msg);
+  addReactionButton(orig, key);
   head.append(orig, flag);
   div.appendChild(head);
+
+  const reactions = document.createElement('div');
+  reactions.className = 'msg-reactions';
+  reactions.id = 'react-' + key;
+  div.appendChild(reactions);
 
   const trans = document.createElement('div');
   trans.className = 'msg-translation';
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
-  if (msg.type === 'image') {
+  if (msg.type === 'image' || msg.type === 'video') {
     trans.textContent = '';
     trans.style.display = 'none';
   } else if (msg.translation) {
@@ -841,12 +866,24 @@ function renderMessage(key, msg) {
   misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
   misBtn.onclick = () => sendQuickMisunderstood();
 
+  const retryBtn = document.createElement('button');
+  retryBtn.innerHTML = '&#8635;';
+  retryBtn.title = myRole === 'vi' ? 'Dịch lại' : 'Tekrar çevir';
+  retryBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#ea580c;cursor:pointer';
+  retryBtn.onclick = () => retryMessageTranslation(key, retryBtn);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.innerHTML = '&#10697;';
+  copyBtn.title = myRole === 'vi' ? 'Sao chép' : 'Kopyala';
+  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0891b2;cursor:pointer';
+  copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
+
   const delBtn = document.createElement('button');
   delBtn.innerHTML = '&times;';
   delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
   delBtn.onclick = () => deleteMessage(key);
 
-  btnRow.append(spBtn, misBtn, delBtn);
+  btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
   div.appendChild(btnRow);
 
   const time = document.createElement('div');
@@ -857,11 +894,12 @@ function renderMessage(key, msg) {
   const read = document.createElement('div');
   read.className = 'msg-read';
   read.id = 'read-' + key;
-  div.appendChild(read);
+  btnRow.appendChild(read);
 
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
   refreshMessageText(key);
+  updateReactions(key, msg.reactions);
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
@@ -876,6 +914,8 @@ function updateOrRender(key, msg) {
     box.dataset.text = msg.text || box.dataset.text || '';
     box.dataset.type = msg.type || box.dataset.type || '';
     box.dataset.imageUrl = msg.imageUrl || box.dataset.imageUrl || '';
+    box.dataset.mediaUrl = msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '';
+    box.dataset.mime = msg.mime || box.dataset.mime || '';
     if (msg.translation) box.dataset.translation = msg.translation;
     if (msg.ts) box.dataset.ts = msg.ts;
     if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
@@ -888,23 +928,184 @@ function updateOrRender(key, msg) {
     el.style.fontStyle = 'italic';
   }
   refreshMessageText(key);
+  updateReactions(key, msg.reactions);
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeAutoReadMessage(key);
 }
 
 function getMainText(msg) {
-  if (msg.type === 'image') return msg.text || uiText('Fotoğraf', 'Ảnh');
+  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
   return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
 }
 
 function getSubText(msg) {
-  if (msg.type === 'image') return '';
+  if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return cleanVisibleText(msg.translation) || uiText('Ceviriliyor...', 'Dang dich...');
   return msg.text || '';
+}
+
+function setMessageContent(el, msg) {
+  if (!el) return;
+  const existingReact = el.querySelector('.msg-react-btn');
+  el.textContent = '';
+  const mediaUrl = msg.mediaUrl || msg.imageUrl || '';
+  if (msg.type === 'image' && mediaUrl) {
+    const img = document.createElement('img');
+    img.className = 'msg-media-img';
+    img.src = mediaUrl;
+    img.alt = msg.text || (myRole === 'vi' ? 'Ảnh' : 'Fotoğraf');
+    img.onclick = () => openMediaPreview(mediaUrl, 'image');
+    el.appendChild(img);
+  } else if (msg.type === 'video' && mediaUrl) {
+    const video = document.createElement('video');
+    video.className = 'msg-media-video';
+    video.src = mediaUrl;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.onclick = () => openMediaPreview(mediaUrl, 'video');
+    el.appendChild(video);
+  } else {
+    el.textContent = getMainText(msg);
+  }
+  if (existingReact) el.appendChild(existingReact);
+}
+
+function reactionEmojis(){ return ['👍','❤️','😂','😳','😭','😡']; }
+
+function addReactionButton(parent, key) {
+  const btn = document.createElement('button');
+  btn.className = 'msg-react-btn';
+  btn.textContent = '♡';
+  btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
+  let longPress = false, timer = null;
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    longPress = false;
+    timer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
+  });
+  btn.addEventListener('pointerup', e => {
+    e.preventDefault();
+    clearTimeout(timer);
+    if (!longPress) toggleHeartReaction(key);
+  });
+  btn.addEventListener('pointercancel', () => clearTimeout(timer));
+  btn.onclick = e => e.preventDefault();
+  parent.appendChild(btn);
+}
+
+function showReactionPicker(key, anchor) {
+  let picker = document.getElementById('reactionPicker');
+  if (!picker) {
+    picker = document.createElement('div');
+    picker.id = 'reactionPicker';
+    picker.className = 'reaction-picker';
+    document.body.appendChild(picker);
+  }
+  picker.innerHTML = '';
+  reactionEmojis().forEach(emoji => {
+    const b = document.createElement('button');
+    b.textContent = emoji;
+    b.onclick = () => { setMessageReaction(key, emoji); picker.classList.remove('show'); };
+    picker.appendChild(b);
+  });
+  const r = anchor.getBoundingClientRect();
+  picker.style.left = Math.min(window.innerWidth - 245, Math.max(8, r.left - 190)) + 'px';
+  picker.style.top = Math.max(8, r.top - 54) + 'px';
+  picker.classList.add('show');
+}
+
+document.addEventListener('pointerdown', e => {
+  const picker = document.getElementById('reactionPicker');
+  if (picker && picker.classList.contains('show') && !picker.contains(e.target) && !e.target.closest('.msg-react-btn')) picker.classList.remove('show');
+}, { passive: true });
+
+async function toggleHeartReaction(key) {
+  const el = document.getElementById('react-' + key);
+  let current = {};
+  try { current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch {}
+  await setMessageReaction(key, current[myRole] ? null : '❤️');
+}
+
+async function setMessageReaction(key, emoji) {
+  if (!myRole) return;
+  await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null);
+}
+
+function updateReactions(key, reactions = {}) {
+  const el = document.getElementById('react-' + key);
+  const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
+  if (!el) return;
+  el.dataset.reactions = JSON.stringify(reactions || {});
+  const own = reactions && reactions[myRole];
+  if (btn) btn.textContent = own || '♡';
+  const values = Object.values(reactions || {}).filter(Boolean);
+  if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
+  const counts = {};
+  values.forEach(e => counts[e] = (counts[e] || 0) + 1);
+  el.textContent = Object.entries(counts).map(([e,c]) => c > 1 ? e + ' ' + c : e).join(' ');
+  el.classList.add('show');
+}
+
+function openMediaPreview(src, type='image') {
+  let box = document.getElementById('mediaLightbox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'mediaLightbox';
+    box.className = 'media-lightbox';
+    box.innerHTML = '<button class="media-lightbox-close" onclick="closeMediaPreview()">×</button><div id="mediaLightboxBody"></div>';
+    document.body.appendChild(box);
+  }
+  const body = document.getElementById('mediaLightboxBody');
+  if (!body || !src) return;
+  body.innerHTML = '';
+  if (type === 'video') {
+    const video = document.createElement('video');
+    video.src = src;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    body.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    body.appendChild(img);
+  }
+  box.classList.add('show');
+}
+
+function closeMediaPreview() {
+  const box = document.getElementById('mediaLightbox');
+  const body = document.getElementById('mediaLightboxBody');
+  if (body) body.innerHTML = '';
+  if (box) box.classList.remove('show');
+}
+
+function retryMessageTranslation(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return;
+  btn.textContent = '...';
+  translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole)
+    .then(() => { btn.textContent = '✓'; btn.style.background = '#dcfce7'; btn.style.borderColor = '#22c55e'; btn.style.color = '#15803d'; })
+    .catch(() => { btn.innerHTML = '&#8635;'; });
+}
+
+async function copyOriginalMessage(key, btn) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const text = box.dataset.type === 'image' || box.dataset.type === 'video'
+    ? (box.dataset.mediaUrl || box.dataset.imageUrl || '')
+    : (cleanVisibleText(box.dataset.translation) || box.dataset.text || '');
+  if (!text) return;
+  await navigator.clipboard.writeText(text).catch(()=>{});
+  btn.textContent = '✓';
+  btn.style.background = '#dcfce7';
+  btn.style.borderColor = '#22c55e';
+  btn.style.color = '#15803d';
 }
 
 function refreshMessageText(key) {
@@ -915,23 +1116,16 @@ function refreshMessageText(key) {
     text: box.dataset.text || '',
     translation: box.dataset.translation || '',
     type: box.dataset.type || '',
-    imageUrl: box.dataset.imageUrl || ''
+    imageUrl: box.dataset.imageUrl || '',
+    mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
+    mime: box.dataset.mime || ''
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
-  if (orig) {
-    orig.textContent = getMainText(msg);
-    if (msg.type === 'image' && msg.imageUrl) {
-      const img = document.createElement('img');
-      img.className = 'msg-image';
-      img.src = msg.imageUrl;
-      img.alt = myRole === 'vi' ? 'Anh' : 'Fotoğraf';
-      orig.appendChild(img);
-    }
-  }
+  if (orig) setMessageContent(orig, msg);
   if (trans) {
     trans.textContent = getSubText(msg);
-    trans.style.display = msg.type === 'image' ? 'none' : '';
+    trans.style.display = (msg.type === 'image' || msg.type === 'video') ? 'none' : '';
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
@@ -1139,57 +1333,83 @@ function scrollToBottom() {
   if (m) setTimeout(() => { m.scrollTop = m.scrollHeight; }, 50);
 }
 
-function openPhotoPicker() {
-  document.getElementById('photoInput')?.click();
-}
+function openGallery(){document.getElementById('galleryInput')?.click()}
+function openCamera(){document.getElementById('cameraInput')?.click()}
 
-function openCameraPicker() {
-  document.getElementById('cameraInput')?.click();
+function showMediaStatus(text) {
+  let box = document.getElementById('mediaUploadStatus');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'mediaUploadStatus';
+    box.className = 'media-uploading';
+    document.body.appendChild(box);
+  }
+  box.textContent = text;
+  box.style.display = 'block';
 }
+function hideMediaStatus() { const box = document.getElementById('mediaUploadStatus'); if (box) box.style.display = 'none'; }
 
-async function handleImagePick(event) {
+async function handleMediaInput(event) {
   const input = event.target;
-  const file = input?.files?.[0];
-  if (!file) return;
+  const file = input.files && input.files[0];
   input.value = '';
-  await sendImageMessage(file);
+  if (!file) return;
+  await handleMediaFile(file);
 }
 
-async function uploadImageToWonb(file) {
-  const form = new FormData();
-  form.append('file', file, file.name || ('askviet-' + Date.now() + '.jpg'));
-  form.append('image', file, file.name || ('askviet-' + Date.now() + '.jpg'));
-  const res = await fetch('https://wonb.de/upload.php', { method: 'POST', body: form });
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || res.statusText);
-  const found = text.match(/https?:\/\/wonb\.de\/uploads\/[^\s"'<>]+/i) || text.match(/uploads\/[^\s"'<>]+/i);
-  if (found) {
-    const url = found[0].startsWith('http') ? found[0] : 'https://wonb.de/' + found[0].replace(/^\/+/, '');
-    return url;
-  }
-  const clean = text.trim();
-  if (/^[\w.-]+\.(png|jpe?g|webp|gif)$/i.test(clean)) return 'https://wonb.de/uploads/' + clean;
-  throw new Error('Fotoğraf yükleme cevabı okunamadı.');
-}
-
-async function sendImageMessage(file) {
-  const sendBtn = document.getElementById('sendBtn');
-  if (sendBtn) sendBtn.disabled = true;
+async function handleMediaFile(file) {
   try {
-    const imageUrl = await uploadImageToWonb(file);
-    const msg = { role: myRole, type: 'image', text: myRole === 'vi' ? 'Ảnh' : 'Fotoğraf', imageUrl, ts: Date.now(), translation: '' };
-    const result = await fbPush(MSGS_PATH, msg);
-    const key = result?.name;
-    if (key) {
-      renderMessage(key, msg);
-      scrollToBottom();
-    }
+    const isVideo = /^video\//i.test(file.type);
+    showMediaStatus(myRole === 'vi' ? (isVideo ? 'Dang gui video...' : 'Dang gui anh...') : (isVideo ? 'Video gonderiliyor...' : 'Fotograf gonderiliyor...'));
+    const media = await prepareMediaForUpload(file);
+    const uploaded = await uploadMediaFile(media.blob, media.name);
+    await sendMediaMessage(uploaded.url || uploaded.mediaUrl, file.name, uploaded.mime || file.type);
   } catch (e) {
-    console.error('Fotoğraf gönderilemedi:', e);
-    alert(myRole === 'vi' ? 'Không gửi được ảnh.' : 'Fotoğraf gönderilemedi.');
-  } finally {
-    if (sendBtn) sendBtn.disabled = false;
-  }
+    alert((myRole === 'vi' ? 'Khong gui duoc media: ' : 'Medya gonderilemedi: ') + (e.message || e));
+  } finally { hideMediaStatus(); }
+}
+
+async function prepareMediaForUpload(file) {
+  if (/^video\//i.test(file.type)) return { blob: file, name: safeMediaName(file.name || 'video') };
+  const keepOriginal = /image\/(gif|webp|png)/i.test(file.type) && file.size <= 1800000;
+  if (keepOriginal) return { blob: file, name: safeMediaName(file.name || 'image') };
+  const bmp = await createImageBitmap(file);
+  const maxSide = 1280;
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+  return { blob: blob || file, name: safeMediaName((file.name || 'image').replace(/\.[^.]+$/, '.jpg')) };
+}
+function safeMediaName(name) {
+  const ext = (name.match(/\.[a-z0-9]+$/i)?.[0] || '.jpg').toLowerCase();
+  return 'askviet-' + Date.now() + '-' + Math.random().toString(16).slice(2) + ext;
+}
+async function uploadMediaFile(blob, fileName) {
+  const fd = new FormData();
+  fd.append('token', MEDIA_UPLOAD_TOKEN);
+  fd.append('file', blob, fileName);
+  const res = await fetch(MEDIA_UPLOAD_URL, { method:'POST', body: fd });
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch {}
+  if (!res.ok) throw new Error(data.error || text || res.statusText || 'Upload failed');
+  if (data.ok || data.success) return data;
+  const found = text.match(/https?:\/\/wonb\.de\/uploads\/[^\s"'<>]+/i) || text.match(/uploads\/[^\s"'<>]+/i);
+  if (found) return { ok:true, url: found[0].startsWith('http') ? found[0] : 'https://wonb.de/' + found[0].replace(/^\/+/, '') };
+  throw new Error(data.error || 'Upload failed');
+}
+async function sendMediaMessage(url, name='', mime='') {
+  if (!url) throw new Error('Upload URL yok');
+  const type = /^video\//i.test(mime) || /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'video' : 'image';
+  const label = name || (type === 'video' ? 'Video' : 'Fotograf');
+  const msg = { role: myRole, type, text: label, mediaUrl: url, imageUrl: url, mime: mime || null, ts: Date.now(), translation: null };
+  const result = await fbPush(MSGS_PATH, msg);
+  const key = result?.name;
+  if (key) { renderMessage(key, msg); scrollToBottom(); }
+  setMyTyping(false);
 }
 
 async function sendMessage() {
@@ -1378,6 +1598,15 @@ if(msgInputEl){
   msgInputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
+  msgInputEl.addEventListener('paste', e => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const mediaItem = items.find(item => /^image\//i.test(item.type) || /^video\//i.test(item.type));
+    if (!mediaItem) return;
+    const file = mediaItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    handleMediaFile(file);
+  });
 }
 
 // ── PWA Manifest ─────────────────────────────────────────────────────────
@@ -1526,6 +1755,7 @@ async function startPttVoice(from) {
   if (!btn) return;
   if (rec) { stopRec(); return; }
   recChunks=[]; recHadSpeech=false; recSilentSince=0;
+  if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
   btn.classList.add('recording');
   const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': ' + uiText('Dinliyorum...', 'Dang nghe...');
   setPttLog(listenText);
@@ -2075,6 +2305,7 @@ function showRecCountdown(btn, start, now, kind) {
   if (!left) return;
   if (kind === 'ptt') {
     setPttLog(uiText('Kapanıyor: ', 'Sap dung: ') + left);
+    if (btn) btn.innerHTML = '<span style="font-size:42px;font-weight:950">' + left + '</span><small>' + uiText('Kapanıyor', 'Sap dung') + '</small>';
   } else if (btn) {
     btn.textContent = left;
   }
@@ -2082,6 +2313,7 @@ function showRecCountdown(btn, start, now, kind) {
 function clearRecCountdown(btn, kind, listenText) {
   if (kind === 'ptt') {
     if (listenText) setPttLog(listenText);
+    if (btn && btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
   } else if (btn) {
     btn.innerHTML = MIC_ICON;
   }
