@@ -508,7 +508,7 @@ const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') ||
 const PW = 'ask2026';
 
 let myRole = null;
-let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),audioUrl=null,audioPlayer=null;
+let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let theirRole = null;
@@ -622,11 +622,17 @@ function saveTtsSettings() {
   const voiceTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
   const voiceVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
   const speed = document.getElementById('ttsSpeedSelect')?.value || TTS_DEFAULTS.speed;
+  const old = getTtsSettings();
+  const changed = old.model !== model || old.voiceTr !== voiceTr || old.voiceVi !== voiceVi || String(old.speed) !== String(parseFloat(speed) || 1);
   localStorage.setItem('askviet_tts_model', model);
   localStorage.setItem('askviet_tts_voice_tr', voiceTr);
   localStorage.setItem('askviet_tts_voice_vi', voiceVi);
   localStorage.setItem('askviet_tts_speed', speed);
-  ttsCache.clear();
+  if (changed) {
+    ttsCache.clear();
+    ttsBufferCache.clear();
+    console.debug('TTS cache cleared: settings changed');
+  }
 }
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
@@ -958,7 +964,7 @@ function renderMessage(key, msg) {
   spBtn.className = 'speakBtn';
   spBtn.innerHTML = '&#9654;';
   spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
-  spBtn.onclick = () => requestSpeakForMessage(key, spBtn);
+  bindSpeakAction(spBtn, () => requestSpeakForMessage(key, spBtn));
 
   const misBtn = document.createElement('button');
   misBtn.innerHTML = '&#9888;';
@@ -1096,27 +1102,36 @@ function addReactionButton(parent, key) {
   btn.className = 'msg-react-btn';
   btn.textContent = '♡';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
+  const DOUBLE_TAP_MS = 680;
   let longPress = false, longTimer = null, tapTimer = null;
   let lastTapAt = 0;
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
+    try { btn.setPointerCapture(e.pointerId); } catch {}
     parent.classList.add('react-pressing');
     longPress = false;
-    longTimer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
+    longTimer = setTimeout(() => {
+      longPress = true;
+      lastTapAt = 0;
+      clearTimeout(tapTimer);
+      tapTimer = null;
+      showReactionPicker(key, btn);
+    }, 430);
   });
-  btn.addEventListener('pointerup', e => {
+  btn.addEventListener('pointerup', async e => {
     e.preventDefault();
     e.stopPropagation();
     clearTimeout(longTimer);
     parent.classList.remove('react-pressing');
+    try { btn.releasePointerCapture(e.pointerId); } catch {}
     if (longPress) { lastTapAt = 0; clearTimeout(tapTimer); tapTimer = null; return; }
     const now = Date.now();
-    if (now - lastTapAt <= 700) {
+    if (now - lastTapAt <= DOUBLE_TAP_MS) {
       lastTapAt = 0;
       clearTimeout(tapTimer);
       tapTimer = null;
-      copyMessageTranslation(key, btn);
+      await copyMessageTranslation(key, btn, true);
       return;
     }
     lastTapAt = now;
@@ -1124,28 +1139,51 @@ function addReactionButton(parent, key) {
     tapTimer = setTimeout(() => {
       lastTapAt = 0;
       toggleHeartReaction(key);
-    }, 420);
+    }, DOUBLE_TAP_MS + 40);
   });
-  btn.addEventListener('pointercancel', () => { clearTimeout(longTimer); clearTimeout(tapTimer); tapTimer = null; parent.classList.remove('react-pressing'); });
+  const clearReactionTimers = e => { clearTimeout(longTimer); if (e?.type !== 'pointerleave') { clearTimeout(tapTimer); tapTimer = null; } parent.classList.remove('react-pressing'); };
+  btn.addEventListener('pointercancel', clearReactionTimers);
+  btn.addEventListener('pointerleave', e => { clearTimeout(longTimer); parent.classList.remove('react-pressing'); });
   btn.addEventListener('contextmenu', e => e.preventDefault());
   btn.addEventListener('selectstart', e => e.preventDefault());
   btn.onclick = e => { e.preventDefault(); e.stopPropagation(); };
   parent.appendChild(btn);
 }
 
-async function copyMessageTranslation(key, btn) {
+async function copyTextFallback(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+async function copyMessageTranslation(key, btn, clearOwnReaction=false) {
   const box = document.getElementById('msg-' + key);
-  if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return;
+  if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return false;
   const text = cleanVisibleText(box.dataset.translation || '');
-  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatası|Loi dich|Lỗi dịch/i.test(text)) return;
-  await navigator.clipboard.writeText(text).catch(()=>{});
-  const oldText = btn.textContent || '♡';
+  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatası|Loi dich|Lỗi dịch/i.test(text)) return false;
+  const ok = await copyTextFallback(text);
+  if (!ok) return false;
+  if (clearOwnReaction) await setMessageReaction(key, null);
   btn.textContent = '✓';
   btn.classList.add('pressed');
   setTimeout(() => {
-    btn.textContent = oldText;
+    btn.textContent = '♡';
     btn.classList.remove('pressed');
   }, 700);
+  return true;
 }
 
 function showReactionPicker(key, anchor) {
@@ -1932,7 +1970,7 @@ async function pttTranslate(text, from) {
   setPttLog(roleText(from, 'Çeviriliyor...', 'Đang dịch...'));
   const out = await translateText(text, from);
   renderPttTurn(text, out, from, target);
-  if (out) await autoSpeakNowOrQueue(out, target);
+  if (out) autoSpeakNowOrQueue(out, target);
 }
 
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
@@ -1964,8 +2002,9 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
     copy.classList.add('confirm');
   });
 
-  const speakBtn = makeToolButton('▶', () => speak(translatedText, targetRole, speakBtn));
+  const speakBtn = makeToolButton('▶', () => {});
   speakBtn.classList.add('speakBtn');
+  bindSpeakAction(speakBtn, () => speak(translatedText, targetRole, speakBtn));
 
   const block = makeToolButton('Engelle', () => {
     if (block.dataset.confirm === '1') {
@@ -2016,6 +2055,36 @@ function makeToolButton(text, fn) {
   btn.textContent = text;
   btn.onclick = fn;
   return btn;
+}
+function bindSpeakAction(btn, action) {
+  if (!btn) return;
+  const run = e => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    primeAudioForGesture();
+    unlockAudio(true);
+    keepAudioAwake(90000);
+    if (pendingBlockedAudio) {
+      playPendingBlockedAudioFromGesture();
+      return;
+    }
+    if (btn.dataset.playing === '1' || btn.dataset.busy === '1') {
+      stopAudio();
+      btn.dataset.busy = '0';
+      setSpeakBtn(btn, false);
+      return;
+    }
+    btn.dataset.pointerHandled = String(Date.now());
+    action();
+  };
+  btn.addEventListener('pointerdown', run, { passive:false });
+  btn.onclick = e => {
+    if (Date.now() - Number(btn.dataset.pointerHandled || 0) < 700) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    run(e);
+  };
 }
 
 function addBlockedText(text) {
@@ -2511,12 +2580,23 @@ function getAudioPlayer(){
   audioPlayer.playbackRate = 1;
   return audioPlayer;
 }
+function getUnlockAudioPlayer(){
+  if(!unlockAudioPlayer){
+    unlockAudioPlayer=new Audio();
+    unlockAudioPlayer.preload='auto';
+    unlockAudioPlayer.playsInline = true;
+    unlockAudioPlayer.src = SILENT_AUDIO;
+  }
+  unlockAudioPlayer.muted = false;
+  unlockAudioPlayer.volume = 1;
+  unlockAudioPlayer.defaultPlaybackRate = 1;
+  unlockAudioPlayer.playbackRate = 1;
+  return unlockAudioPlayer;
+}
 function primeAudioForGesture() {
   if (isSpeaking) return;
   try {
-    const a = getAudioPlayer();
-    const oldSrc = a.src;
-    const hadRealAudio = oldSrc && oldSrc !== SILENT_AUDIO;
+    const a = getUnlockAudioPlayer();
     a.src = SILENT_AUDIO;
     a.muted = false;
     a.volume = 1;
@@ -2527,7 +2607,6 @@ function primeAudioForGesture() {
     if (p && p.then) {
       p.then(() => {
         try { a.pause(); a.currentTime = 0; } catch {}
-        if (hadRealAudio) a.src = oldSrc;
         audioUnlockedAt = Date.now();
       }).catch(()=>{});
     }
@@ -2568,14 +2647,13 @@ async function unlockAudio(force=false){
   const now = Date.now();
   if (!force && audioUnlocking) return audioUnlocking;
   if (!force && now - audioUnlockedAt < 12000) return;
-  const a=getAudioPlayer();
+  const a=getUnlockAudioPlayer();
   audioUnlocking = (async () => {
     try {
       const ctx = await ensureAudioCtx();
       if (ctx && ctx.state === 'suspended') await ctx.resume();
     } catch {}
     try{
-      const oldSrc = a.src;
       a.src = SILENT_AUDIO;
       a.muted = false;
       a.volume = 1;
@@ -2583,7 +2661,6 @@ async function unlockAudio(force=false){
       await a.play();
       a.pause();
       a.currentTime = 0;
-      if (oldSrc && oldSrc !== SILENT_AUDIO) a.src = oldSrc;
       audioUnlockedAt = Date.now();
     }catch{}
     finally {
@@ -2597,7 +2674,17 @@ async function unlockAudio(force=false){
   return audioUnlocking;
 }
 function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
-function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0;audioPlayer.muted=false;audioPlayer.volume=1}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
+function stopAudio(){
+  ttsToken++;
+  pendingBlockedAudio=null;
+  if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}
+  if(ttsSource){try{ttsSource.onended=null;ttsSource.stop(0)}catch{}try{ttsSource.disconnect()}catch{}ttsSource=null}
+  if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
+  if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0;audioPlayer.muted=false;audioPlayer.volume=1}catch{}}
+  if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}
+  isSpeaking=false;
+  document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false));
+}
 function normalizeTtsInput(text) {
   return cleanVisibleText(text || '').replace(/\s+/g, ' ').trim();
 }
@@ -2609,8 +2696,9 @@ async function getCachedOpenAiTtsBlob({ text, target, model, voice, instructions
   const fallbackVoice = target === 'vi' ? 'nova' : 'nova';
   const fallbackKey = cacheKey(cleanText, target, fallbackModel, fallbackVoice, 1);
   let blob = ttsCache.get(primaryKey) || ttsCache.get(fallbackKey);
-  if (blob) return blob;
-  if (ttsPending.has(primaryKey)) return ttsPending.get(primaryKey);
+  if (blob) { console.debug('TTS cache hit', primaryKey); return blob; }
+  if (ttsPending.has(primaryKey)) { console.debug('TTS pending reused', primaryKey); return ttsPending.get(primaryKey); }
+  console.debug('TTS fetch start', primaryKey);
   const pending = (async () => {
     let r = await openAiSpeechRequest({ model, input:cleanText, voice, instructions, speed, signal, key });
     let usedKey = primaryKey;
@@ -2622,42 +2710,87 @@ async function getCachedOpenAiTtsBlob({ text, target, model, voice, instructions
     const made = await r.blob();
     ttsCache.set(usedKey, made);
     ttsCache.set(primaryKey, made);
-    if (ttsCache.size > 40) ttsCache.delete(ttsCache.keys().next().value);
+    console.debug('TTS fetch done', usedKey);
+    if (ttsCache.size > 40) {
+      const oldKey = ttsCache.keys().next().value;
+      ttsCache.delete(oldKey);
+      ttsBufferCache.delete(oldKey);
+    }
     return made;
   })();
   ttsPending.set(primaryKey, pending);
   try { return await pending; }
   finally { ttsPending.delete(primaryKey); }
 }
-async function playBlob(blob,token,btn,text=''){
-  const a=getAudioPlayer();
-  try { const ctx = await ensureAudioCtx(); if (ctx && ctx.state === 'suspended') await ctx.resume(); } catch {}
-  if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}
-  audioUrl=URL.createObjectURL(blob);
-  a.pause();
-  a.src=audioUrl;
-  a.muted=false;
-  a.volume=1;
-  a.defaultPlaybackRate=1.0;
-  a.playbackRate=1.0;
-  a.load();
-  isSpeaking=true;
-  setSpeakBtn(btn,true);
-  try{
+function markBlockedAudio(blob, token, btn, text='', target='', cacheKey='') {
+  pendingBlockedAudio = { blob, token, btn, text, target, cacheKey, id: target ? autoSpeakQueueId(text, target) : '' };
+  console.debug('TTS pending blocked audio stored', cacheKey || '');
+  isSpeaking=false;
+  setSpeakBtn(btn,false);
+}
+async function playPendingBlockedAudioFromGesture() {
+  if (!pendingBlockedAudio) return false;
+  const item = pendingBlockedAudio;
+  pendingBlockedAudio = null;
+  const ok = await playBlob(item.blob, ++ttsToken, item.btn, item.text, { fromGesture:true, target:item.target, cacheKey:item.cacheKey });
+  if (ok && item.id) {
+    autoSpeakQueue = autoSpeakQueue.filter(q => q.id !== item.id);
+    autoSpeakDeferred.delete(item.id);
+    console.debug('TTS pending blocked audio played from gesture', item.cacheKey || '');
+  }
+  return ok;
+}
+async function playBlob(blob,token,btn,text='',opts={}){
+  try {
+    const ctx = await ensureAudioCtx();
+    if (!ctx) throw new Error('AudioContext yok');
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (ctx.state !== 'running') throw new Error('AudioContext engellendi');
+    if(ttsSource){try{ttsSource.onended=null;ttsSource.stop(0)}catch{}try{ttsSource.disconnect()}catch{}ttsSource=null}
+    if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
+    const bkey = opts.cacheKey || '';
+    let buffer = bkey ? ttsBufferCache.get(bkey) : null;
+    if (buffer) console.debug('TTS buffer cache hit', bkey);
+    if (!buffer) {
+      buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
+      if (bkey) {
+        ttsBufferCache.set(bkey, buffer);
+        if (ttsBufferCache.size > 40) ttsBufferCache.delete(ttsBufferCache.keys().next().value);
+      }
+    }
+    if(token!==ttsToken) return false;
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    source.buffer = buffer;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    ttsSource = source;
+    ttsGain = gain;
+    isSpeaking=true;
+    setSpeakBtn(btn,true);
+    console.debug('TTS play start', opts.cacheKey || '');
     await new Promise((resolve,reject)=>{
       const limit=Math.max(45000,(text||'').length*180);
       const timer=setTimeout(()=>resolve(),limit);
-      a.onended=()=>{clearTimeout(timer);resolve()};
-      a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};
-      const playPromise = a.play();
-      if (playPromise && playPromise.catch) playPromise.catch(err=>{clearTimeout(timer);reject(err)});
+      source.onended=()=>{clearTimeout(timer);resolve()};
+      try { source.start(0); } catch(err) { clearTimeout(timer); reject(err); }
     });
+    console.debug('TTS play ended', opts.cacheKey || '');
     return true;
-  }finally{
-    if(token===ttsToken){
+  } catch(e) {
+    const msg = String(e && (e.name || e.message || e));
+    if (/notallowed|not allowed|autoplay|suspended|interrupted|AudioContext engellendi/i.test(msg)) {
+      console.debug('TTS play blocked', msg);
+      markBlockedAudio(blob, token, btn, text, opts.target || '', opts.cacheKey || '');
+      return false;
+    }
+    throw e;
+  } finally {
+    if(token===ttsToken && !pendingBlockedAudio){
       isSpeaking=false;
-      a.muted=false;
-      a.volume=1;
+      if(ttsSource){try{ttsSource.disconnect()}catch{}ttsSource=null}
+      if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
       setSpeakBtn(btn,false);
     }
   }
@@ -2668,7 +2801,7 @@ async function speak(text, target, btn, silent=false) {
 
 // ── Model Sync ────────────────────────────────────────────────────────────
 async function speakOpenAI(text, target, btn, silent=false) {
-  try { await unlockAudio(); keepAudioAwake(90000); } catch {}
+  try { keepAudioAwake(90000); } catch {}
   text = normalizeTtsInput(text);
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
@@ -2678,6 +2811,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
   const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
   const speed = settings.speed;
   const model = settings.model;
+  const primaryKey = cacheKey(text, target, model, voice, speed);
   const instructions = target === 'vi'
     ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
     : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
@@ -2687,8 +2821,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
     ttsAbort = new AbortController();
     const blob = await getCachedOpenAiTtsBlob({ text, target, model, voice, instructions, speed, key, signal:ttsAbort.signal });
     if (token !== ttsToken) return false;
-    await playBlob(blob, token, btn, text);
-    return true;
+    return await playBlob(blob, token, btn, text, { target, cacheKey:primaryKey });
   } catch(e) {
     const em = String(e);
     if (/abort|iptal/i.test(em)) return false;
@@ -3092,7 +3225,7 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);if(autoSpeakQueue.length)setTimeout(processAutoSpeakQueue,80)}catch{}const b=e.target.closest('button');if(b)b.classList.add('pressed')},{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b)b.classList.add('pressed')},{capture:true,passive:true});
 document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
