@@ -553,6 +553,8 @@ let autoSpeakRetryTimer = null;
 let audioUnlocking = null, audioUnlockedAt = 0;
 let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
 let ttsPending = new Map();
+const SESSION_ID = sessionStorage.getItem('askviet_session_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+sessionStorage.setItem('askviet_session_id', SESSION_ID);
 const SILENT_AUDIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
 const TTS_DEFAULTS = {
@@ -3298,8 +3300,9 @@ function updatePresenceStatus(data) {
   const fresh = !!lastActive && Date.now() - lastActive <= PRESENCE_STALE_MS;
   const online = !!(data && data.online && fresh);
   if (counter) {
-    counter.textContent = String((myRole ? 1 : 0) + (online ? 1 : 0));
-    counter.title = online ? '2 kişi çevrim içi' : '1 kişi çevrim içi';
+    const count = Math.max(1, Number(data && data.__onlineCount || 0) || ((myRole ? 1 : 0) + (online ? 1 : 0)));
+    counter.textContent = String(count);
+    counter.title = count + ' cihaz/sekme çevrim içi';
   }
   el.classList.toggle('online', online);
   if (online) el.textContent = viMode() ? 'Đang hoạt động' : 'Şu anda aktif';
@@ -3310,6 +3313,7 @@ function updatePresenceStatus(data) {
 function updateMyPresence(online=true, keepalive=false) {
   if (!myRole) return;
   const payload = { online: !!online, lastActive: Date.now() };
+  const sessionPayload = { online: !!online, lastActive: payload.lastActive, role: myRole };
   if (keepalive) {
     fetch(DB_URL + PRESENCE_PATH + '/' + myRole + '.json', {
       method:'PUT',
@@ -3317,9 +3321,16 @@ function updateMyPresence(online=true, keepalive=false) {
       body:JSON.stringify(payload),
       keepalive:true
     }).catch(()=>{});
+    fetch(DB_URL + PRESENCE_PATH + '/sessions/' + SESSION_ID + '.json', {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(sessionPayload),
+      keepalive:true
+    }).catch(()=>{});
     return;
   }
   fbSet(PRESENCE_PATH + '/' + myRole, payload);
+  fbSet(PRESENCE_PATH + '/sessions/' + SESSION_ID, sessionPayload);
 }
 function startPresence() {
   updateMyPresence(true);
@@ -3335,7 +3346,16 @@ function stopPresenceHeartbeat(keepalive=false) {
 function listenPresence() {
   if (unsubPresence) unsubPresence();
   if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
-  const poll = () => fbGet(PRESENCE_PATH + '/' + theirRole).then(updatePresenceStatus).catch(()=>{});
+  const poll = () => Promise.all([
+    fbGet(PRESENCE_PATH + '/' + theirRole).catch(()=>null),
+    fbGet(PRESENCE_PATH + '/sessions').catch(()=>null)
+  ]).then(([theirData, sessions]) => {
+    const now = Date.now();
+    const sessionCount = sessions && typeof sessions === 'object'
+      ? Object.values(sessions).filter(s => s && s.online && Number(s.lastActive || 0) && now - Number(s.lastActive || 0) <= PRESENCE_STALE_MS).length
+      : 0;
+    updatePresenceStatus(Object.assign({}, theirData || {}, { __onlineCount: sessionCount || 0 }));
+  }).catch(()=>{});
   poll();
   presencePollTimer = setInterval(poll, 6000);
   unsubPresence = () => {
