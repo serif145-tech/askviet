@@ -508,6 +508,7 @@ const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
 const PRESENCE_PATH = CONFIG_PATH + '/presence';
+const PRESENCE_SESSIONS_PATH = CONFIG_PATH + '/presenceSessions';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
@@ -3327,10 +3328,17 @@ function updateMyPresence(online=true, keepalive=false) {
       body:JSON.stringify(sessionPayload),
       keepalive:true
     }).catch(()=>{});
+    fetch(DB_URL + PRESENCE_SESSIONS_PATH + '/' + SESSION_ID + '.json', {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(sessionPayload),
+      keepalive:true
+    }).catch(()=>{});
     return;
   }
   fbSet(PRESENCE_PATH + '/' + myRole, payload);
   fbSet(PRESENCE_PATH + '/sessions/' + SESSION_ID, sessionPayload);
+  fbSet(PRESENCE_SESSIONS_PATH + '/' + SESSION_ID, sessionPayload);
 }
 function startPresence() {
   updateMyPresence(true);
@@ -3348,13 +3356,21 @@ function listenPresence() {
   if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
   const poll = () => Promise.all([
     fbGet(PRESENCE_PATH + '/' + theirRole).catch(()=>null),
-    fbGet(PRESENCE_PATH + '/sessions').catch(()=>null)
-  ]).then(([theirData, sessions]) => {
+    fbGet(PRESENCE_PATH + '/' + myRole).catch(()=>null),
+    fbGet(PRESENCE_PATH + '/sessions').catch(()=>null),
+    fbGet(PRESENCE_SESSIONS_PATH).catch(()=>null)
+  ]).then(([theirData, myData, sessions, altSessions]) => {
     const now = Date.now();
-    const sessionCount = sessions && typeof sessions === 'object'
-      ? Object.values(sessions).filter(s => s && s.online && Number(s.lastActive || 0) && now - Number(s.lastActive || 0) <= PRESENCE_STALE_MS).length
-      : 0;
-    updatePresenceStatus(Object.assign({}, theirData || {}, { __onlineCount: sessionCount || 0 }));
+    const allSessions = Object.assign({}, sessions && typeof sessions === 'object' ? sessions : {}, altSessions && typeof altSessions === 'object' ? altSessions : {});
+    const freshSessions = Object.values(allSessions).filter(s => s && s.online && Number(s.lastActive || 0) && now - Number(s.lastActive || 0) <= PRESENCE_STALE_MS);
+    const sessionCount = freshSessions.length;
+    const rolesSeen = new Set(freshSessions.map(s => s.role).filter(Boolean));
+    let roleFallback = 0;
+    const myFresh = !!(myData && myData.online && Number(myData.lastActive || 0) && now - Number(myData.lastActive || 0) <= PRESENCE_STALE_MS);
+    const theirFresh = !!(theirData && theirData.online && Number(theirData.lastActive || 0) && now - Number(theirData.lastActive || 0) <= PRESENCE_STALE_MS);
+    if (myFresh && !rolesSeen.has(myRole)) roleFallback++;
+    if (theirFresh && !rolesSeen.has(theirRole)) roleFallback++;
+    updatePresenceStatus(Object.assign({}, theirData || {}, { __onlineCount: sessionCount + roleFallback }));
   }).catch(()=>{});
   poll();
   presencePollTimer = setInterval(poll, 6000);
