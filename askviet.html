@@ -647,6 +647,21 @@ function saveTtsSettings() {
     console.debug('TTS cache cleared: settings changed');
   }
 }
+function normalizeChatModel(model) {
+  const oldGemini = {
+    'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.5-flash',
+    'gemini:gemini-2.5-flash': 'gemini:gemini-3.5-flash',
+    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.1-pro-preview'
+  };
+  const oldOpenAi = {
+    'openai:gpt-4o': 'openai:gpt-5.5',
+    'openai:gpt-4o-mini': 'openai:gpt-5.4-mini',
+    'codex:gpt-5.5': 'openai:gpt-5.5',
+    'codex:gpt-5.4': 'openai:gpt-5.4',
+    'codex:gpt-5.4-mini': 'openai:gpt-5.4-mini'
+  };
+  return oldGemini[model] || oldOpenAi[model] || model || 'openai:gpt-5.5';
+}
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
   if (!panel) return;
@@ -657,9 +672,8 @@ function toggleTtsSettings(force) {
 
 function loadSaved() {
   const savedKey = localStorage.getItem('askviet_key');
-  let savedModel = localStorage.getItem('askviet_model');
-  if (savedModel === 'gemini:gemini-2.5-flash-preview-05-20' || savedModel === 'gemini:gemini-2.5-flash' || savedModel === 'openai:gpt-4o' || savedModel === 'openai:gpt-4o-mini' || savedModel === 'codex:gpt-5.5' || savedModel === 'codex:gpt-5.4' || savedModel === 'codex:gpt-5.4-mini') {
-    savedModel = 'openai:gpt-5.5';
+  let savedModel = normalizeChatModel(localStorage.getItem('askviet_model'));
+  if (savedModel) {
     localStorage.setItem('askviet_model', savedModel);
   }
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
@@ -1892,7 +1906,7 @@ async function sendMessage() {
     if (!key) throw new Error('Firebase mesaj anahtarı dönmedi');
     renderMessage(key, msg);
     scrollToBottom();
-    translateAndUpdate(key, text, myRole);
+    translateAndUpdate(key, text, myRole, selectedModel);
   } catch (e) {
     console.error('Mesaj gönderilemedi:', e);
     input.value = text;
@@ -1901,12 +1915,13 @@ async function sendMessage() {
   }
 }
 
-async function translateAndUpdate(key, text, fromRole) {
+async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel) {
   const maxAttempts = 4;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
+  const provider = String(modelForTranslation || '').split(':')[0] || 'openai';
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const translation = await translateText(text, fromRole);
+      const translation = await translateText(text, fromRole, modelForTranslation);
       await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
       return;
     } catch (e) {
@@ -1914,7 +1929,7 @@ async function translateAndUpdate(key, text, fromRole) {
       const retry = !isFatalTranslationError(e) && attempt < maxAttempts;
       if (retry) {
         const waitMs = attempt * 2500;
-        await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attempt, maxAttempts - 1));
+        await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attempt, maxAttempts - 1, provider));
         await sleep(waitMs);
         continue;
       }
@@ -1932,7 +1947,7 @@ function isFatalTranslationError(e) {
 
 function isPendingTranslationText(text) {
   const s = String(text || '').toLowerCase();
-  return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
+  return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('openai yogun') || s.includes('openai yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
 }
 
 function maybeRetryMissingTranslation(key, msg) {
@@ -1940,7 +1955,7 @@ function maybeRetryMissingTranslation(key, msg) {
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
-  setTimeout(() => translateAndUpdate(key, msg.text, msg.role), 400);
+  setTimeout(() => translateAndUpdate(key, msg.text, msg.role, selectedModel), 400);
 }
 
 function normalizeApiError(msg, role) {
@@ -1964,10 +1979,11 @@ function cleanVisibleText(text) {
   return raw;
 }
 
-function retryText(role, attempt, total) {
+function retryText(role, attempt, total, provider='gemini') {
+  const name = provider === 'openai' ? 'OpenAI' : 'Gemini';
   return role === 'vi'
-    ? 'Gemini đang bận, đang thử lại... (' + attempt + '/' + total + ')'
-    : 'Gemini yoğun, tekrar deneniyor... (' + attempt + '/' + total + ')';
+    ? (name + ' đang bận, đang thử lại... (' + attempt + '/' + total + ')')
+    : (name + ' yoğun, tekrar deneniyor... (' + attempt + '/' + total + ')');
 }
 
 function errorText(role, msg) {
@@ -1979,12 +1995,12 @@ function isRetryableGeminiError(e) {
   return s.includes('busy') || s.includes('overload') || s.includes('unavailable') || s.includes('resource exhausted') || s.includes('rate') || s.includes('429') || s.includes('503');
 }
 
-async function translateText(text, from) {
+async function translateText(text, from, modelOverride) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
   const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
 
-  let [provider, model] = (selectedModel || 'openai:gpt-5.5').split(':');
+  let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
     const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
     if (!key) throw new Error('Gemini API key gerekli');
@@ -3086,8 +3102,7 @@ function modelName(model) {
 
 function setSelectedModel(model, fromRemote=false) {
   if (!model) return;
-  if (model === 'gemini:gemini-2.5-flash-preview-05-20' || model === 'gemini:gemini-2.5-flash') model = 'gemini:gemini-3.5-flash';
-  if (model === 'openai:gpt-4o' || model === 'openai:gpt-4o-mini' || model === 'codex:gpt-5.5' || model === 'codex:gpt-5.4' || model === 'codex:gpt-5.4-mini') model = 'openai:gpt-5.5';
+  model = normalizeChatModel(model);
   selectedModel = model;
   localStorage.setItem('askviet_model', model);
   const setupSelect = document.getElementById('modelSelect');
@@ -3230,7 +3245,12 @@ function syncMyModel(model) {
 }
 function listenModelConfig() {
   if (unsubModel) unsubModel();
-  fbGet(MODEL_PATH).then(m => { if (m) setSelectedModel(m, true); else if (myRole === 'tr') syncMyModel(selectedModel); });
+  if (myRole === 'tr') {
+    syncMyModel(selectedModel);
+    unsubModel = () => {};
+    return;
+  }
+  fbGet(MODEL_PATH).then(m => { if (m) setSelectedModel(m, true); });
   unsubModel = fbListen(MODEL_PATH, event => { if (!event || !event.data) return; setSelectedModel(event.data, true); });
 }
 function applyAutoReadData(data, path='/') {
