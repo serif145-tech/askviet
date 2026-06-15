@@ -539,6 +539,9 @@ let autoReadDone = new Set();
 let handledAudioRequests = new Set();
 let audioListenStartedAt = 0;
 let chatListenStartedAt = 0;
+let activeSpeakBtn = null;
+let activeAudioRequestId = null;
+let remoteAudioButtons = new Map();
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
@@ -1503,7 +1506,8 @@ function getRecipientText(key) {
 async function requestSpeakForMessage(key, btn) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
-  if (btn && btn.dataset.busy === '1') { stopAudio(); btn.dataset.busy = '0'; setSpeakBtn(btn, false); return; }
+  if (btn?.dataset.remoteAudioId && btn.dataset.playing === '1') { cancelRemoteAudio(btn.dataset.remoteAudioId, btn); return; }
+  if (btn && btn.dataset.busy === '1' && !btn.dataset.remoteAudioId) { stopAudio(); btn.dataset.busy = '0'; setSpeakBtn(btn, false); return; }
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
   if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
@@ -1514,15 +1518,34 @@ async function requestSpeakForMessage(key, btn) {
   }
   btn.dataset.busy = '1';
   setSpeakBtn(btn, true);
-  await fbPush(AUDIO_PATH, {
+  const result = await fbPush(AUDIO_PATH, {
     key,
     from: myRole,
     target: targetRole,
     text,
     lang: targetRole,
+    status: 'requested',
     ts: Date.now()
   });
-  setTimeout(() => { btn.dataset.busy = '0'; setSpeakBtn(btn, false); }, 700);
+  const id = result?.name;
+  if (id) {
+    btn.dataset.remoteAudioId = id;
+    remoteAudioButtons.set(id, { btn, key });
+  } else {
+    btn.dataset.busy = '0';
+    setSpeakBtn(btn, false);
+  }
+}
+
+async function cancelRemoteAudio(id, btn) {
+  if (!id) return;
+  try { await fbSet(AUDIO_PATH + '/' + id + '/status', 'cancelled'); } catch {}
+  if (btn) {
+    btn.dataset.busy = '0';
+    delete btn.dataset.remoteAudioId;
+    setSpeakBtn(btn, false);
+  }
+  remoteAudioButtons.delete(id);
 }
 
 function listenAudioRequests() {
@@ -1532,22 +1555,61 @@ function listenAudioRequests() {
     if (!event || !event.data) return;
     const path = event.path || '/';
     if (path === '/' && typeof event.data === 'object') {
-      Object.entries(event.data).forEach(([id, req]) => handleAudioRequest(id, req));
+      Object.entries(event.data).forEach(([id, req]) => {
+        if (req && req.from === myRole) updateRemoteAudioStatus(id, req.status);
+        handleAudioRequest(id, req);
+      });
       return;
     }
-    const id = path.replace(/^\//, '').split('/')[0];
-    if (id && typeof event.data === 'object') handleAudioRequest(id, event.data);
+    const parts = path.replace(/^\//, '').split('/');
+    const id = parts[0];
+    if (!id) return;
+    if (parts.length > 1) {
+      if (parts[1] === 'status') updateRemoteAudioStatus(id, event.data);
+      if (parts[1] === 'cancel') updateRemoteAudioStatus(id, event.data ? 'cancelled' : '');
+      return;
+    }
+    if (typeof event.data === 'object') {
+      if (event.data?.from === myRole) updateRemoteAudioStatus(id, event.data.status);
+      handleAudioRequest(id, event.data);
+    }
   });
 }
 
-function handleAudioRequest(id, req) {
-  if (!req || handledAudioRequests.has(id)) return;
+function updateRemoteAudioStatus(id, status) {
+  const rec = remoteAudioButtons.get(id);
+  if (!rec || !rec.btn) return;
+  if (status === 'playing' || status === 'requested') {
+    rec.btn.dataset.busy = '1';
+    rec.btn.dataset.remoteAudioId = id;
+    setSpeakBtn(rec.btn, true);
+  } else if (status === 'done' || status === 'cancelled' || status === 'error') {
+    rec.btn.dataset.busy = '0';
+    delete rec.btn.dataset.remoteAudioId;
+    setSpeakBtn(rec.btn, false);
+    remoteAudioButtons.delete(id);
+  }
+}
+
+async function handleAudioRequest(id, req) {
+  if (!req) return;
+  if (req.status === 'cancelled') {
+    if (activeAudioRequestId === id) stopAudio();
+    handledAudioRequests.add(id);
+    setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(()=>{}), 500);
+    return;
+  }
+  if (handledAudioRequests.has(id)) return;
   if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
-  if (Date.now() - req.ts > 15000) return;
+  if (Date.now() - req.ts > 60000) return;
   if (req.target !== myRole) return;
   handledAudioRequests.add(id);
-  speak(req.text, req.lang || myRole, null, true);
-  fbRemove(AUDIO_PATH + '/' + id);
+  activeAudioRequestId = id;
+  await fbSet(AUDIO_PATH + '/' + id + '/status', 'playing');
+  const ok = await speak(req.text, req.lang || myRole, null, true);
+  await fbSet(AUDIO_PATH + '/' + id + '/status', ok ? 'done' : 'error');
+  activeAudioRequestId = null;
+  setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(()=>{}), 1500);
 }
 
 function getMisunderstoodText() {
@@ -2084,11 +2146,15 @@ function bindSpeakAction(btn, action) {
     primeAudioForGesture();
     unlockAudio(true);
     keepAudioAwake(90000);
+    if (btn.dataset.remoteAudioId && btn.dataset.playing === '1') {
+      cancelRemoteAudio(btn.dataset.remoteAudioId, btn);
+      return;
+    }
     if (pendingBlockedAudio) {
       playPendingBlockedAudioFromGesture();
       return;
     }
-    if (btn.dataset.playing === '1' || btn.dataset.busy === '1') {
+    if (btn.dataset.playing === '1' || (btn.dataset.busy === '1' && !btn.dataset.remoteAudioId)) {
       stopAudio();
       btn.dataset.busy = '0';
       setSpeakBtn(btn, false);
@@ -2695,6 +2761,11 @@ async function unlockAudio(force=false){
   return audioUnlocking;
 }
 function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
+function setActiveSpeakButton(btn) {
+  if (activeSpeakBtn && activeSpeakBtn !== btn) setSpeakBtn(activeSpeakBtn, false);
+  activeSpeakBtn = btn || null;
+  if (btn) setSpeakBtn(btn, true);
+}
 function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
@@ -2704,6 +2775,8 @@ function stopAudio(){
   if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0;audioPlayer.muted=false;audioPlayer.volume=1}catch{}}
   if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}
   isSpeaking=false;
+  activeAudioRequestId=null;
+  activeSpeakBtn=null;
   document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false));
 }
 function normalizeTtsInput(text) {
@@ -2789,7 +2862,7 @@ async function playBlob(blob,token,btn,text='',opts={}){
     ttsSource = source;
     ttsGain = gain;
     isSpeaking=true;
-    setSpeakBtn(btn,true);
+    setActiveSpeakButton(btn);
     console.debug('TTS play start', opts.cacheKey || '');
     await new Promise((resolve,reject)=>{
       const limit=Math.max(45000,(text||'').length*180);
@@ -2812,6 +2885,7 @@ async function playBlob(blob,token,btn,text='',opts={}){
       isSpeaking=false;
       if(ttsSource){try{ttsSource.disconnect()}catch{}ttsSource=null}
       if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
+      if (activeSpeakBtn === btn) activeSpeakBtn = null;
       setSpeakBtn(btn,false);
     }
   }
@@ -2830,7 +2904,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
   const key = localStorage.getItem('askviet_key') || '';
   if (!key) { console.warn('OpenAI key yok'); return false; }
   const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
-  const speed = settings.speed;
+  const speed = target === 'vi' ? 0.95 : settings.speed;
   const model = settings.model;
   const primaryKey = cacheKey(text, target, model, voice, speed);
   const instructions = target === 'vi'
