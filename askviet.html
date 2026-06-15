@@ -447,8 +447,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="live-settings" id="liveSettingsPanel">
       <label>Live model</label>
       <select id="liveModelSelect" onchange="saveLiveSettings()">
-        <option value="gemini-3.5-live-translate-preview">Gemini 3.5 Live Translate</option>
         <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live</option>
+        <option value="gemini-3.5-live-translate-preview">Gemini 3.5 Live Translate</option>
         <option value="gemini-live-2.5-flash-preview">Gemini Live 2.5 Flash</option>
         <option value="gemini-2.0-flash-live-001">Gemini 2.0 Flash Live</option>
         <option value="gemini-2.5-flash-preview-native-audio-dialog">Gemini 2.5 Native Audio</option>
@@ -539,7 +539,10 @@ let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
 let autoSpeakRunning = false;
+let autoSpeakDeferred = new Set();
 let audioUnlocking = null, audioUnlockedAt = 0;
+let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
+let ttsPending = new Map();
 const SILENT_AUDIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
 const TTS_DEFAULTS = {
@@ -1093,31 +1096,37 @@ function addReactionButton(parent, key) {
   btn.className = 'msg-react-btn';
   btn.textContent = '♡';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
-  let longPress = false, timer = null;
+  let longPress = false, longTimer = null, tapTimer = null;
   let lastTapAt = 0;
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
     parent.classList.add('react-pressing');
     longPress = false;
-    timer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
+    longTimer = setTimeout(() => { longPress = true; showReactionPicker(key, btn); }, 420);
   });
   btn.addEventListener('pointerup', e => {
     e.preventDefault();
     e.stopPropagation();
-    clearTimeout(timer);
+    clearTimeout(longTimer);
     parent.classList.remove('react-pressing');
-    if (longPress) { lastTapAt = 0; return; }
+    if (longPress) { lastTapAt = 0; clearTimeout(tapTimer); tapTimer = null; return; }
     const now = Date.now();
-    if (now - lastTapAt <= 2000) {
+    if (now - lastTapAt <= 700) {
       lastTapAt = 0;
+      clearTimeout(tapTimer);
+      tapTimer = null;
       copyMessageTranslation(key, btn);
       return;
     }
     lastTapAt = now;
-    toggleHeartReaction(key);
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => {
+      lastTapAt = 0;
+      toggleHeartReaction(key);
+    }, 420);
   });
-  btn.addEventListener('pointercancel', () => { clearTimeout(timer); parent.classList.remove('react-pressing'); });
+  btn.addEventListener('pointercancel', () => { clearTimeout(longTimer); clearTimeout(tapTimer); tapTimer = null; parent.classList.remove('react-pressing'); });
   btn.addEventListener('contextmenu', e => e.preventDefault());
   btn.addEventListener('selectstart', e => e.preventDefault());
   btn.onclick = e => { e.preventDefault(); e.stopPropagation(); };
@@ -1347,7 +1356,10 @@ function maybeNotifyIncoming(key, msg) {
   if (!msg || msg.role === myRole) return;
   const ts = Number(msg.ts || 0);
   if (!ts || ts < chatListenStartedAt - 1500) return;
-  if (document.visibilityState === 'visible') return;
+  if (document.visibilityState === 'visible') {
+    playNotifySound();
+    return;
+  }
   unreadCount += 1;
   setBadgeCount(unreadCount);
   document.title = `(${unreadCount}) AskViet`;
@@ -1355,21 +1367,25 @@ function maybeNotifyIncoming(key, msg) {
   showIncomingNotification(msg);
 }
 
-function playNotifySound() {
-  if (!notifySoundOn) return;
+async function playNotifySound(force=false) {
+  if (!force && !notifySoundOn) return;
+  try { keepAudioAwake(5000); } catch {}
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    if (navigator.vibrate) navigator.vibrate(60);
+  } catch {}
+  try {
+    const ctx = await ensureAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') await ctx.resume();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 880;
-    gain.gain.value = 0.045;
+    gain.gain.value = 0.12;
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    setTimeout(() => { try { osc.stop(); ctx.close(); } catch {} }, 160);
+    setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {} }, 220);
   } catch {}
 }
 
@@ -1378,7 +1394,7 @@ function showIncomingNotification(msg) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const title = msg.role === 'tr' ? '🇹🇷 AskViet' : '🇻🇳 AskViet';
     const body = msg.translation || msg.text || (myRole === 'vi' ? 'Tin nhan moi' : 'Yeni mesaj');
-    new Notification(title, { body, tag: 'askviet-new-message', silent: true });
+    new Notification(title, { body, tag: 'askviet-new-message', silent: !notifySoundOn });
   } catch {}
 }
 
@@ -1527,8 +1543,30 @@ function scanAutoReadMessages() {
 
 function enqueueAutoSpeak(text, target) {
   if (!text || !target || !getAutoReadState(myRole)) return;
-  autoSpeakQueue.push({ text, target });
+  const id = autoSpeakQueueId(text, target);
+  if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
+  autoSpeakDeferred.add(id);
+  autoSpeakQueue.push({ text, target, id });
   processAutoSpeakQueue();
+}
+
+function autoSpeakQueueId(text, target) {
+  return target + '|' + String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+function queueAutoSpeakRetry(text, target) {
+  if (!text || !target || !getLocalAutoSpeakEnabled()) return;
+  const id = autoSpeakQueueId(text, target);
+  if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
+  autoSpeakDeferred.add(id);
+  autoSpeakQueue.unshift({ text, target, id });
+}
+
+async function autoSpeakNowOrQueue(text, target) {
+  if (!text || !target || !getLocalAutoSpeakEnabled()) return false;
+  const ok = await speak(text, target, null, true);
+  if (!ok) queueAutoSpeakRetry(text, target);
+  return ok;
 }
 
 async function processAutoSpeakQueue() {
@@ -1536,10 +1574,15 @@ async function processAutoSpeakQueue() {
   autoSpeakRunning = true;
   try {
     while (autoSpeakQueue.length) {
-      if (!getAutoReadState(myRole)) { autoSpeakQueue = []; break; }
+      if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); break; }
       while (isSpeaking) await sleep(180);
       const item = autoSpeakQueue.shift();
-      await speak(item.text, item.target, null, true);
+      const ok = await speak(item.text, item.target, null, true);
+      if (!ok && getAutoReadState(myRole)) {
+        autoSpeakQueue.unshift(item);
+        break;
+      }
+      if (item.id) autoSpeakDeferred.delete(item.id);
       await sleep(120);
     }
   } finally {
@@ -1585,7 +1628,7 @@ async function handleMediaInput(event) {
 async function handleMediaFile(file) {
   try {
     const isVideo = /^video\//i.test(file.type);
-    showMediaStatus(myRole === 'vi' ? (isVideo ? 'Dang gui video...' : 'Dang gui anh...') : (isVideo ? 'Video gonderiliyor...' : 'Fotograf gonderiliyor...'));
+    showMediaStatus(myRole === 'vi' ? (isVideo ? 'Đang gửi video...' : 'Đang gửi ảnh...') : (isVideo ? 'Video gönderiliyor...' : 'Fotoğraf gönderiliyor...'));
     const media = await prepareMediaForUpload(file);
     const uploaded = await uploadMediaFile(media.blob, media.name);
     await sendMediaMessage(uploaded.url || uploaded.mediaUrl, file.name, uploaded.mime || file.type);
@@ -1642,16 +1685,16 @@ async function uploadMediaFile(blob, fileName) {
   const text = await res.text();
   let data = {};
   try { data = JSON.parse(text); } catch {}
-  if (!res.ok) throw new Error(data.error || text || res.statusText || 'Upload failed');
+  if (!res.ok) throw new Error(data.error || text || res.statusText || uiText('Yükleme başarısız.', 'Tải lên thất bại.'));
   if (data.ok || data.success) return data;
   const found = text.match(/https?:\/\/wonb\.de\/uploads\/[^\s"'<>]+/i) || text.match(/uploads\/[^\s"'<>]+/i);
   if (found) return { ok:true, url: found[0].startsWith('http') ? found[0] : 'https://wonb.de/' + found[0].replace(/^\/+/, '') };
-  throw new Error(data.error || 'Upload failed');
+  throw new Error(data.error || uiText('Yükleme başarısız.', 'Tải lên thất bại.'));
 }
 async function sendMediaMessage(url, name='', mime='') {
-  if (!url) throw new Error('Upload URL yok');
+  if (!url) throw new Error(uiText('Yükleme adresi yok.', 'Không có địa chỉ tải lên.'));
   const type = /^video\//i.test(mime) || /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'video' : 'image';
-  const label = name || (type === 'video' ? 'Video' : 'Fotograf');
+  const label = name || (type === 'video' ? 'Video' : 'Fotoğraf');
   const msg = { role: myRole, type, text: label, mediaUrl: url, imageUrl: url, mime: mime || null, ts: Date.now(), translation: null };
   const result = await fbPush(MSGS_PATH, msg);
   const key = result?.name;
@@ -1889,7 +1932,7 @@ async function pttTranslate(text, from) {
   setPttLog(roleText(from, 'Çeviriliyor...', 'Đang dịch...'));
   const out = await translateText(text, from);
   renderPttTurn(text, out, from, target);
-  if (out && getLocalAutoSpeakEnabled()) enqueueAutoSpeak(out, target);
+  if (out) await autoSpeakNowOrQueue(out, target);
 }
 
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
@@ -2062,6 +2105,7 @@ async function startPttVoice(from) {
   setPttLog(listenText);
   try {
     await tryRequestWakeLock();
+    await keepAudioAwake(90000);
     const ctx = await ensureAudioCtx();
     recStream = await requestMicrophoneStream('ptt');
     recNode = ctx.createMediaStreamSource(recStream);
@@ -2116,14 +2160,14 @@ async function startPttVoice(from) {
 
 function getLiveSettings() {
   return {
-    model: localStorage.getItem('askviet_live_model') || 'gemini-3.5-live-translate-preview',
+    model: localStorage.getItem('askviet_live_model') || 'gemini-3.1-flash-live-preview',
     response: localStorage.getItem('askviet_live_response') || 'TEXT',
     saver: localStorage.getItem('askviet_live_saver') !== '0'
   };
 }
 const LIVE_MODEL_FALLBACKS = [
-  'gemini-3.5-live-translate-preview',
   'gemini-3.1-flash-live-preview',
+  'gemini-3.5-live-translate-preview',
   'gemini-live-2.5-flash-preview',
   'gemini-2.0-flash-live-001',
   'gemini-2.5-flash-preview-native-audio-dialog'
@@ -2138,13 +2182,24 @@ function liveSetupPayload(settings, source, target, modality) {
     setup: {
       model: 'models/' + settings.model,
       responseModalities: [modality],
-      systemInstruction: { parts: [{ text: prompt }] }
+      systemInstruction: { parts: [{ text: prompt }] },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      realtimeInputConfig: {
+        automaticActivityDetection: {
+          disabled: false,
+          silenceDurationMs: 1200
+        }
+      }
     }
   };
 }
 function liveAudioPayload(channel, sampleRate) {
   const pcm = downsampleTo16k(channel, sampleRate || 48000);
   return { realtimeInput: { audio: { data: pcm16Base64(pcm), mimeType: 'audio/pcm;rate=16000' } } };
+}
+function liveAudioEndPayload() {
+  return { realtimeInput: { audioStreamEnd: true } };
 }
 function liveSetupIsReady(data) {
   return !!(data?.setupComplete || data?.setup_complete);
@@ -2168,7 +2223,7 @@ function syncLiveSettingsUI() {
   if (saver) saver.checked = settings.saver;
 }
 function saveLiveSettings() {
-  const model = document.getElementById('liveModelSelect')?.value || 'gemini-3.5-live-translate-preview';
+  const model = document.getElementById('liveModelSelect')?.value || 'gemini-3.1-flash-live-preview';
   const response = document.getElementById('liveResponseSelect')?.value || 'TEXT';
   const saver = document.getElementById('liveSaverToggle')?.checked !== false;
   localStorage.setItem('askviet_live_model', model);
@@ -2286,7 +2341,7 @@ async function startGeminiLive(from, modelQueue) {
   const source = from === 'tr' ? 'Turkish' : 'Vietnamese';
   const targetRole = from === 'tr' ? 'vi' : 'tr';
   const shouldAutoSpeak = getLocalAutoSpeakEnabled();
-  const modality = !settings.saver && settings.response === 'AUDIO' && shouldAutoSpeak ? 'AUDIO' : 'TEXT';
+  const modality = settings.response === 'AUDIO' ? 'AUDIO' : 'TEXT';
   const btn = document.getElementById('liveMainBtn');
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
@@ -2297,6 +2352,12 @@ async function startGeminiLive(from, modelQueue) {
   const ws = new WebSocket(wsUrl);
   let setupReady = false;
   let receivedAnyContent = false;
+  const setupTimer = setTimeout(() => {
+    if (!setupReady && geminiLiveWs === ws) {
+      setRealLiveStatus(uiText('Live modeli cevap vermedi, diğer model deneniyor...', 'Model Live không phản hồi, đang thử model khác...'));
+      try { ws.close(); } catch {}
+    }
+  }, 8000);
   geminiLiveWs = ws;
   ws.onopen = async () => {
     try {
@@ -2328,6 +2389,7 @@ async function startGeminiLive(from, modelQueue) {
         if (!liveSpeechActive) return;
         ws.send(JSON.stringify(liveAudioPayload(channel, sampleRate)));
         if (liveSilentMs > (settings.saver ? 1800 : 2800)) {
+          try { ws.send(JSON.stringify(liveAudioEndPayload())); } catch {}
           liveSpeechActive = false;
           liveVoiceMs = 0;
           liveSilentMs = 0;
@@ -2347,8 +2409,16 @@ async function startGeminiLive(from, modelQueue) {
       const raw = JSON.stringify(data);
       if (liveSetupIsReady(data)) {
         setupReady = true;
+        clearTimeout(setupTimer);
         liveStarting = false;
         appendRealLiveLog(uiText('Bağlantı hazır.', 'Kết nối sẵn sàng.'));
+      }
+      if (data.error) {
+        receivedAnyContent = true;
+        const msg = data.error.message || JSON.stringify(data.error).slice(0, 220);
+        appendRealLiveLog(uiText('Live hata: ', 'Lỗi Live: ') + msg);
+        try { ws.close(); } catch {}
+        return;
       }
       const parts = liveResponseParts(data);
       const transcribedOutput = liveOutputText(data);
@@ -2361,7 +2431,7 @@ async function startGeminiLive(from, modelQueue) {
           if (settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(part.text, targetRole);
         }
         const audio = part.inlineData || part.inline_data;
-        if (audio?.data && shouldAutoSpeak) {
+        if (audio?.data && shouldAutoSpeak && settings.response === 'AUDIO') {
           receivedAnyContent = true;
           playLiveAudio(audio.data, audio.mimeType || audio.mime_type).catch(()=>appendRealLiveLog(uiText('Live sesi çalınamadı.', 'Không phát được âm thanh Live.')));
         }
@@ -2389,6 +2459,7 @@ async function startGeminiLive(from, modelQueue) {
     setRealLiveStatus(uiText('Gemini Live bağlantı hatası.', 'Lỗi kết nối Gemini Live.'));
   };
   ws.onclose = () => {
+    clearTimeout(setupTimer);
     cleanupGeminiLiveAudio();
     releaseWakeLock();
     if (geminiLiveWs === ws) geminiLiveWs = null;
@@ -2440,6 +2511,58 @@ function getAudioPlayer(){
   audioPlayer.playbackRate = 1;
   return audioPlayer;
 }
+function primeAudioForGesture() {
+  if (isSpeaking) return;
+  try {
+    const a = getAudioPlayer();
+    const oldSrc = a.src;
+    const hadRealAudio = oldSrc && oldSrc !== SILENT_AUDIO;
+    a.src = SILENT_AUDIO;
+    a.muted = false;
+    a.volume = 1;
+    a.defaultPlaybackRate = 1;
+    a.playbackRate = 1;
+    a.load();
+    const p = a.play();
+    if (p && p.then) {
+      p.then(() => {
+        try { a.pause(); a.currentTime = 0; } catch {}
+        if (hadRealAudio) a.src = oldSrc;
+        audioUnlockedAt = Date.now();
+      }).catch(()=>{});
+    }
+  } catch {}
+  try {
+    if (recAudioCtx && recAudioCtx.state === 'suspended') recAudioCtx.resume();
+  } catch {}
+}
+async function keepAudioAwake(ms=90000) {
+  try {
+    const ctx = await ensureAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (!autoAudioGuardOsc) {
+      autoAudioGuardGain = ctx.createGain();
+      autoAudioGuardGain.gain.value = 0.0001;
+      autoAudioGuardOsc = ctx.createOscillator();
+      autoAudioGuardOsc.frequency.value = 20;
+      autoAudioGuardOsc.connect(autoAudioGuardGain);
+      autoAudioGuardGain.connect(ctx.destination);
+      autoAudioGuardOsc.start();
+    }
+    clearTimeout(autoAudioGuardTimer);
+    autoAudioGuardTimer = setTimeout(stopAudioGuard, ms);
+  } catch {}
+}
+function stopAudioGuard() {
+  clearTimeout(autoAudioGuardTimer);
+  autoAudioGuardTimer = null;
+  try { if (autoAudioGuardOsc) autoAudioGuardOsc.stop(); } catch {}
+  try { if (autoAudioGuardOsc) autoAudioGuardOsc.disconnect(); } catch {}
+  try { if (autoAudioGuardGain) autoAudioGuardGain.disconnect(); } catch {}
+  autoAudioGuardOsc = null;
+  autoAudioGuardGain = null;
+}
 async function unlockAudio(force=false){
   if (isSpeaking) return;
   const now = Date.now();
@@ -2475,7 +2598,37 @@ async function unlockAudio(force=false){
 }
 function setSpeakBtn(btn,on){if(!btn)return;btn.textContent=on?'⏸':'▶';if(on)btn.dataset.playing='1';else delete btn.dataset.playing}
 function stopAudio(){ttsToken++;if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}if(audioPlayer){try{audioPlayer.pause();audioPlayer.currentTime=0;audioPlayer.muted=false;audioPlayer.volume=1}catch{}}if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}isSpeaking=false;document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false))}
-function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,text].join('|')}
+function normalizeTtsInput(text) {
+  return cleanVisibleText(text || '').replace(/\s+/g, ' ').trim();
+}
+function cacheKey(text,target,model,voice,speed){return[model,voice,speed,target,normalizeTtsInput(text)].join('|')}
+async function getCachedOpenAiTtsBlob({ text, target, model, voice, instructions, speed, key, signal }) {
+  const cleanText = normalizeTtsInput(text);
+  const primaryKey = cacheKey(cleanText, target, model, voice, speed);
+  const fallbackModel = 'gpt-4o-mini-tts';
+  const fallbackVoice = target === 'vi' ? 'nova' : 'nova';
+  const fallbackKey = cacheKey(cleanText, target, fallbackModel, fallbackVoice, 1);
+  let blob = ttsCache.get(primaryKey) || ttsCache.get(fallbackKey);
+  if (blob) return blob;
+  if (ttsPending.has(primaryKey)) return ttsPending.get(primaryKey);
+  const pending = (async () => {
+    let r = await openAiSpeechRequest({ model, input:cleanText, voice, instructions, speed, signal, key });
+    let usedKey = primaryKey;
+    if (!r.ok) {
+      r = await openAiSpeechRequest({ model:fallbackModel, input:cleanText, voice:fallbackVoice, instructions, speed:1, signal, key });
+      usedKey = fallbackKey;
+    }
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(normalizeApiError(d.error?.message || r.statusText)); }
+    const made = await r.blob();
+    ttsCache.set(usedKey, made);
+    ttsCache.set(primaryKey, made);
+    if (ttsCache.size > 40) ttsCache.delete(ttsCache.keys().next().value);
+    return made;
+  })();
+  ttsPending.set(primaryKey, pending);
+  try { return await pending; }
+  finally { ttsPending.delete(primaryKey); }
+}
 async function playBlob(blob,token,btn,text=''){
   const a=getAudioPlayer();
   try { const ctx = await ensureAudioCtx(); if (ctx && ctx.state === 'suspended') await ctx.resume(); } catch {}
@@ -2509,11 +2662,14 @@ async function playBlob(blob,token,btn,text=''){
     }
   }
 }
-async function speak(text,target,btn,silent=false){try{await unlockAudio()}catch{}if(!text||!target)return false;if(isSpeaking){stopAudio();return false}const key=localStorage.getItem('askviet_key')||'';if(!key){console.warn('TTS key yok');return false}const [provider]=selectedModel.split(':');const voice=target==='vi'?'cedar':'nova',speed=target==='vi'?0.93:1,instructions=target==='vi'?'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.':'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';const token=++ttsToken,ck=cacheKey(text,target,'gpt-4o-mini-tts',voice,speed);setSpeakBtn(btn,true);try{let blob=ttsCache.get(ck);if(!blob){if(provider==='gemini'){const base64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(new Blob([text]))});const r=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:{text},voice:{languageCode:target==='vi'?'vi-VN':'tr-TR'},audioConfig:{audioEncoding:'MP3'}})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||r.statusText);blob=await fetch('data:audio/mp3;base64,'+d.audioContent).then(r=>r.blob())}else{ttsAbort=new AbortController();const r=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',signal:ttsAbort.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini-tts',input:text,voice,instructions,response_format:'mp3',speed})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||r.statusText)}blob=await r.blob()}if(token!==ttsToken)return false;ttsCache.set(ck,blob);if(ttsCache.size>30)ttsCache.delete(ttsCache.keys().next().value)}await playBlob(blob,token,btn,text);return true}catch(e){const em=String(e);if(/abort|iptal/i.test(em))return false;if(silent&&/NotAllowedError|not allowed|autoplay/i.test(em))return false;console.error('TTS hatası:',e);return false}finally{if(token===ttsToken){isSpeaking=false;setSpeakBtn(btn,false)}}}
+async function speak(text, target, btn, silent=false) {
+  return speakOpenAI(text, target, btn, silent);
+}
 
 // ── Model Sync ────────────────────────────────────────────────────────────
 async function speakOpenAI(text, target, btn, silent=false) {
-  try { await unlockAudio(); } catch {}
+  try { await unlockAudio(); keepAudioAwake(90000); } catch {}
+  text = normalizeTtsInput(text);
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
   const settings = getTtsSettings();
@@ -2526,20 +2682,11 @@ async function speakOpenAI(text, target, btn, silent=false) {
     ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
     : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
   const token = ++ttsToken;
-  const ck = cacheKey(text, target, model, voice, speed);
   setSpeakBtn(btn, true);
   try {
-    let blob = ttsCache.get(ck);
-    if (!blob) {
-      ttsAbort = new AbortController();
-      let r = await openAiSpeechRequest({ model, input:text, voice, instructions, speed, signal:ttsAbort.signal, key });
-      if (!r.ok) r = await openAiSpeechRequest({ model:'gpt-4o-mini-tts', input:text, voice:target === 'vi' ? 'nova' : 'nova', instructions, speed:1, signal:ttsAbort.signal, key });
-      if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(normalizeApiError(d.error?.message || r.statusText)); }
-      blob = await r.blob();
-      if (token !== ttsToken) return false;
-      ttsCache.set(ck, blob);
-      if (ttsCache.size > 30) ttsCache.delete(ttsCache.keys().next().value);
-    }
+    ttsAbort = new AbortController();
+    const blob = await getCachedOpenAiTtsBlob({ text, target, model, voice, instructions, speed, key, signal:ttsAbort.signal });
+    if (token !== ttsToken) return false;
     await playBlob(blob, token, btn, text);
     return true;
   } catch(e) {
@@ -2551,11 +2698,11 @@ async function speakOpenAI(text, target, btn, silent=false) {
   } finally {
     if (token === ttsToken) {
       isSpeaking = false;
+      ttsAbort = null;
       setSpeakBtn(btn, false);
     }
   }
 }
-speak = speakOpenAI;
 
 function openAiSpeechRequest({model,input,voice,instructions,speed,signal,key}) {
   return fetch('https://api.openai.com/v1/audio/speech', {
@@ -2695,19 +2842,22 @@ function applyLocaleUI() {
 }
 async function toggleNotifySound() {
   const next = !notifySoundOn;
+  let perm = 'default';
   if (next) {
-    const perm = await requestNotifyPermission();
+    primeAudioForGesture();
+    keepAudioAwake(90000);
+    perm = await requestNotifyPermission();
     if (perm === 'denied') {
-      alert(uiText('Bildirim izni kapalı. Ayarlar > Bildirimler kısmından AskViet iznini açmalısın.', 'Quyền thông báo đang tắt. Hãy mở quyền thông báo cho AskViet trong Cài đặt.'));
-      notifySoundOn = false;
-      localStorage.setItem('askviet_notify_sound', '0');
-      updateNotifySoundUI();
-      return;
+      alert(uiText('Sistem bildirimi kapalı. Ses açık kalacak ama bildirim için Ayarlar > Bildirimler kısmından AskViet iznini açmalısın.', 'Thông báo hệ thống đang tắt. Âm báo vẫn bật, nhưng để nhận thông báo hãy mở quyền thông báo cho AskViet trong Cài đặt.'));
     }
   }
   notifySoundOn = next;
   localStorage.setItem('askviet_notify_sound', notifySoundOn ? '1' : '0');
   updateNotifySoundUI();
+  if (notifySoundOn) {
+    keepAudioAwake(90000);
+    playNotifySound(true);
+  }
 }
 function updateNotifySoundUI() {
   const btn = document.getElementById('notifySoundBtn');
@@ -2733,7 +2883,7 @@ function applyAutoReadData(data, path='/') {
   else if (path === '/vi') autoReadStates.vi = !!data;
   if (myRole) { const own = getAutoReadState(myRole); autoRead = own; localStorage.setItem('askviet_autoread', own ? '1' : '0'); }
   updateAutoReadUI();
-  if (!getAutoReadState(myRole)) autoSpeakQueue = [];
+  if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
   scanAutoReadMessages();
 }
 function toggleAutoRead() {
@@ -2744,7 +2894,7 @@ function toggleAutoRead() {
   if (role === myRole) { autoRead = next; localStorage.setItem('askviet_autoread', next ? '1' : '0'); }
   updateAutoReadUI();
   fbSet(AUTO_READ_PATH + '/' + role, next);
-  if (role === myRole && !next) autoSpeakQueue = [];
+  if (role === myRole && !next) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
   if (role === myRole && next) scanAutoReadMessages();
 }
 function toggleOwnAutoRead() {
@@ -2756,7 +2906,7 @@ function toggleOwnAutoRead() {
   localStorage.setItem('askviet_autoread', next ? '1' : '0');
   updateAutoReadUI();
   fbSet(AUTO_READ_PATH + '/' + myRole, next);
-  if (!next) autoSpeakQueue = [];
+  if (!next) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
   if (next) scanAutoReadMessages();
 }
 function updateAutoReadUI() {
@@ -2942,7 +3092,7 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-document.addEventListener('pointerdown',e=>{try{unlockAudio(true)}catch{}const b=e.target.closest('button');if(b)b.classList.add('pressed')},{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);if(autoSpeakQueue.length)setTimeout(processAutoSpeakQueue,80)}catch{}const b=e.target.closest('button');if(b)b.classList.add('pressed')},{capture:true,passive:true});
 document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
@@ -2968,6 +3118,7 @@ async function startVoice() {
   btn.innerHTML=MIC_ICON;
   try{
     await tryRequestWakeLock();
+    await keepAudioAwake(90000);
     const ctx=await ensureAudioCtx();
     recStream=await requestMicrophoneStream('mic');
     recNode=ctx.createMediaStreamSource(recStream);
