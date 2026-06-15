@@ -549,6 +549,7 @@ let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
 let autoSpeakRunning = false;
 let autoSpeakDeferred = new Set();
+let autoSpeakRetryTimer = null;
 let audioUnlocking = null, audioUnlockedAt = 0;
 let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
 let ttsPending = new Map();
@@ -1542,29 +1543,11 @@ async function requestSpeakForMessage(key, btn) {
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
   if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
-  if (targetRole === myRole) {
-    btn.dataset.busy = '1';
-    speak(text, myRole, btn).finally(() => { btn.dataset.busy = '0'; });
-    return;
-  }
   btn.dataset.busy = '1';
-  setSpeakBtn(btn, true);
-  const result = await fbPush(AUDIO_PATH, {
-    key,
-    from: myRole,
-    target: targetRole,
-    text,
-    lang: targetRole,
-    status: 'requested',
-    ts: Date.now()
-  });
-  const id = result?.name;
-  if (id) {
-    btn.dataset.remoteAudioId = id;
-    remoteAudioButtons.set(id, { btn, key });
-  } else {
+  try {
+    await speak(text, targetRole, btn);
+  } finally {
     btn.dataset.busy = '0';
-    setSpeakBtn(btn, false);
   }
 }
 
@@ -1685,7 +1668,7 @@ function enqueueAutoSpeak(text, target) {
   const id = autoSpeakQueueId(text, target);
   if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
   autoSpeakDeferred.add(id);
-  autoSpeakQueue.push({ text, target, id });
+  autoSpeakQueue.push({ text, target, id, attempts: 0 });
   processAutoSpeakQueue();
 }
 
@@ -1698,7 +1681,15 @@ function queueAutoSpeakRetry(text, target) {
   const id = autoSpeakQueueId(text, target);
   if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
   autoSpeakDeferred.add(id);
-  autoSpeakQueue.unshift({ text, target, id });
+  autoSpeakQueue.unshift({ text, target, id, attempts: 0 });
+}
+
+function scheduleAutoSpeakQueue(ms=1200) {
+  clearTimeout(autoSpeakRetryTimer);
+  autoSpeakRetryTimer = setTimeout(() => {
+    autoSpeakRetryTimer = null;
+    processAutoSpeakQueue();
+  }, ms);
 }
 
 async function autoSpeakNowOrQueue(text, target) {
@@ -1713,12 +1704,14 @@ async function processAutoSpeakQueue() {
   autoSpeakRunning = true;
   try {
     while (autoSpeakQueue.length) {
-      if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); break; }
+      if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); clearTimeout(autoSpeakRetryTimer); autoSpeakRetryTimer = null; break; }
       while (isSpeaking) await sleep(180);
       const item = autoSpeakQueue.shift();
       const ok = await speak(item.text, item.target, null, true);
       if (!ok && getAutoReadState(myRole)) {
+        item.attempts = (item.attempts || 0) + 1;
         autoSpeakQueue.unshift(item);
+        if (item.attempts < 4) scheduleAutoSpeakQueue(900 + item.attempts * 600);
         break;
       }
       if (item.id) autoSpeakDeferred.delete(item.id);
@@ -2184,9 +2177,16 @@ function bindSpeakAction(btn, action) {
       cancelRemoteAudio(btn.dataset.remoteAudioId, btn);
       return;
     }
-    if (pendingBlockedAudio) {
+    if (pendingBlockedAudio && pendingBlockedAudio.btn === btn) {
       playPendingBlockedAudioFromGesture();
       return;
+    }
+    if (pendingBlockedAudio && pendingBlockedAudio.btn !== btn) {
+      if (pendingBlockedAudio.id) {
+        autoSpeakQueue = autoSpeakQueue.filter(q => q.id !== pendingBlockedAudio.id);
+        autoSpeakDeferred.delete(pendingBlockedAudio.id);
+      }
+      pendingBlockedAudio = null;
     }
     if (btn.dataset.playing === '1' || (btn.dataset.busy === '1' && !btn.dataset.remoteAudioId)) {
       stopAudio();
@@ -2719,6 +2719,7 @@ async function startGeminiLive(from, modelQueue) {
       return;
     }
     const closeInfo = lastLiveError || (e?.reason ? e.reason : (e?.code && e.code !== 1000 ? ('WebSocket code ' + e.code) : ''));
+    if (closeInfo && !setupReady) appendRealLiveLog(uiText('Live kapanış detayı: ', 'Chi tiết Live đóng: ') + closeInfo);
     const message = receivedAnyContent || setupReady
       ? uiText('Live kapandı.', 'Live đã đóng.')
       : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.') + (closeInfo ? ' (' + closeInfo + ')' : '');
@@ -2955,7 +2956,8 @@ async function playBlob(blob,token,btn,text='',opts={}){
     }
     throw e;
   } finally {
-    if(token===ttsToken && !pendingBlockedAudio){
+    const blockedForThisToken = pendingBlockedAudio && pendingBlockedAudio.token === token;
+    if(token===ttsToken && !blockedForThisToken){
       isSpeaking=false;
       const a=getAudioPlayer();
       a.onended=null;
