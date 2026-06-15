@@ -1543,11 +1543,33 @@ async function requestSpeakForMessage(key, btn) {
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
   if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
+  if (targetRole === myRole) {
+    btn.dataset.busy = '1';
+    try {
+      await speak(text, myRole, btn);
+    } finally {
+      btn.dataset.busy = '0';
+    }
+    return;
+  }
   btn.dataset.busy = '1';
-  try {
-    await speak(text, targetRole, btn);
-  } finally {
+  setSpeakBtn(btn, true);
+  const result = await fbPush(AUDIO_PATH, {
+    key,
+    from: myRole,
+    target: targetRole,
+    text,
+    lang: targetRole,
+    status: 'requested',
+    ts: Date.now()
+  });
+  const id = result?.name;
+  if (id) {
+    btn.dataset.remoteAudioId = id;
+    remoteAudioButtons.set(id, { btn, key });
+  } else {
     btn.dataset.busy = '0';
+    setSpeakBtn(btn, false);
   }
 }
 
@@ -2791,6 +2813,25 @@ function primeAudioForGesture() {
     }
   } catch {}
   try {
+    const real = getAudioPlayer();
+    real.pause();
+    real.src = SILENT_AUDIO;
+    real.muted = false;
+    real.volume = 0;
+    real.defaultPlaybackRate = 1;
+    real.playbackRate = 1;
+    real.load();
+    const p = real.play();
+    if (p && p.then) {
+      p.then(() => {
+        try { real.pause(); real.currentTime = 0; real.volume = 1; } catch {}
+        audioUnlockedAt = Date.now();
+      }).catch(()=>{ try { real.volume = 1; } catch {} });
+    } else {
+      try { real.pause(); real.currentTime = 0; real.volume = 1; } catch {}
+    }
+  } catch {}
+  try {
     if (recAudioCtx && recAudioCtx.state === 'suspended') recAudioCtx.resume();
   } catch {}
 }
@@ -2984,6 +3025,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
   const speed = target === 'vi' ? 0.95 : settings.speed;
   const model = settings.model;
   const primaryKey = cacheKey(text, target, model, voice, speed);
+  if (pendingBlockedAudio && pendingBlockedAudio.cacheKey === primaryKey) pendingBlockedAudio = null;
   const instructions = target === 'vi'
     ? 'Speak Vietnamese naturally with a native Southern Vietnam / Saigon accent. Warm, clear, conversational.'
     : 'Speak Turkish naturally with a native Istanbul Turkish accent. Warm, clear, conversational.';
