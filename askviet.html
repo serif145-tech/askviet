@@ -103,6 +103,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-original{max-width:100%;padding:10px 14px;border-radius:var(--radius);font-size:16px;font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;position:relative}
 .msg.mine .msg-original{background:rgba(124,58,237,0.92);color:#fff;border-bottom-right-radius:4px}
 .msg.theirs .msg-original{background:rgba(185,28,110,0.92);color:#fff;border-bottom-left-radius:4px}
+.msg-original a,.msg-translation a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:800}
+.msg-original a:active,.msg-translation a:active{opacity:.75}
 
 /* Çeviri — küçük ve soluk */
 .msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
@@ -519,7 +521,7 @@ let theirRole = null;
 let apiKey = '';
 let geminiApiKey = '';
 let liveRecognizer = null;
-let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveDirection = 'tr';
+let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr';
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
@@ -849,7 +851,7 @@ function initChat() {
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
-        if (el) { el.textContent = cleanVisibleText(event.data); el.style.color = ''; el.style.fontStyle = 'italic'; }
+        if (el) { appendLinkedText(el, cleanVisibleText(event.data)); el.style.color = ''; el.style.fontStyle = 'italic'; }
         refreshMessageText(key);
         maybeAutoReadMessage(key);
         scrollToBottom();
@@ -903,6 +905,35 @@ function setConnected(v) {
   if (dot) dot.classList.toggle('off', !v);
 }
 
+function appendLinkedText(el, text) {
+  if (!el) return;
+  el.textContent = '';
+  const raw = String(text || '');
+  const re = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  let last = 0;
+  let match;
+  while ((match = re.exec(raw))) {
+    if (match.index > last) el.appendChild(document.createTextNode(raw.slice(last, match.index)));
+    let label = match[0];
+    let tail = '';
+    const tailMatch = label.match(/[.,!?;:)\]}]+$/);
+    if (tailMatch) {
+      tail = tailMatch[0];
+      label = label.slice(0, -tail.length);
+    }
+    const a = document.createElement('a');
+    a.href = label.startsWith('www.') ? 'https://' + label : label;
+    a.textContent = label;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.addEventListener('click', e => e.stopPropagation());
+    el.appendChild(a);
+    if (tail) el.appendChild(document.createTextNode(tail));
+    last = match.index + match[0].length;
+  }
+  if (last < raw.length) el.appendChild(document.createTextNode(raw.slice(last)));
+}
+
 function renderMessage(key, msg) {
   if (renderedKeys.has(key)) { updateOrRender(key, msg); return; }
   renderedKeys.add(key);
@@ -954,9 +985,9 @@ function renderMessage(key, msg) {
     trans.textContent = '';
     trans.style.display = 'none';
   } else if (msg.translation) {
-    trans.textContent = cleanVisibleText(msg.translation);
+    appendLinkedText(trans, cleanVisibleText(msg.translation));
   } else {
-  trans.textContent = myRole === 'vi' ? 'Đang dịch...' : 'Çeviriliyor...';
+  appendLinkedText(trans, myRole === 'vi' ? 'Đang dịch...' : 'Çeviriliyor...');
     trans.style.color = 'var(--tr2)';
     trans.style.fontStyle = 'normal';
   }
@@ -1051,7 +1082,7 @@ function updateOrRender(key, msg) {
   }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
-    el.textContent = cleanVisibleText(msg.translation);
+    appendLinkedText(el, cleanVisibleText(msg.translation));
     el.style.color = '';
     el.style.fontStyle = 'italic';
   }
@@ -1098,7 +1129,7 @@ function setMessageContent(el, msg) {
     video.onclick = () => openMediaPreview(mediaUrl, 'video');
     el.appendChild(video);
   } else {
-    el.textContent = getMainText(msg);
+    appendLinkedText(el, getMainText(msg));
   }
   if (existingReact) el.appendChild(existingReact);
 }
@@ -1358,7 +1389,7 @@ function refreshMessageText(key) {
   const trans = document.getElementById('trans-' + key);
   if (orig) setMessageContent(orig, msg);
   if (trans) {
-    trans.textContent = getSubText(msg);
+    appendLinkedText(trans, getSubText(msg));
     trans.style.display = (msg.type === 'image' || msg.type === 'video') ? 'none' : '';
     const waiting = !msg.translation;
     trans.style.color = waiting ? 'var(--tr2)' : '';
@@ -2326,10 +2357,7 @@ function getLiveSettings() {
 }
 const LIVE_MODEL_FALLBACKS = [
   'gemini-3.1-flash-live-preview',
-  'gemini-3.5-live-translate-preview',
-  'gemini-live-2.5-flash-preview',
-  'gemini-2.0-flash-live-001',
-  'gemini-2.5-flash-preview-native-audio-dialog'
+  'gemini-2.0-flash-live-001'
 ];
 function liveModelCandidates(model) {
   const first = model || LIVE_MODEL_FALLBACKS[0];
@@ -2340,6 +2368,7 @@ function liveSetupPayload(settings, source, target, modality) {
   return {
     setup: {
       model: 'models/' + settings.model,
+      generationConfig: { responseModalities: [modality] },
       responseModalities: [modality],
       systemInstruction: { parts: [{ text: prompt }] },
       inputAudioTranscription: {},
@@ -2410,9 +2439,16 @@ function updateLiveMainButton(on=false) {
   btn.innerHTML = on ? ('&#9632; ' + uiText('Durdur', 'Dừng')) : ('&#9654; ' + uiText('Dinle', 'Nghe'));
   btn.classList.toggle('recording', !!on);
 }
-function toggleGeminiLiveMain() {
+async function toggleGeminiLiveMain() {
   if (geminiLiveWs || geminiLiveStream) stopGeminiLive();
-  else startGeminiLive('tr');
+  else {
+    try { primeAudioForGesture(); await unlockAudio(true); await keepAudioAwake(90000); } catch {}
+    const from = myRole === 'vi' ? 'vi' : 'tr';
+    startGeminiLive(from).catch(err => {
+      setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err?.message || String(err), from));
+      stopGeminiLive(true, false);
+    });
+  }
 }
 function speakLastLive() {
   if (lastLiveText) speak(lastLiveText, lastLiveTarget || 'vi', null, true).catch(()=>{});
@@ -2469,9 +2505,10 @@ async function playLiveAudio(base64, mimeType) {
 }
 function cleanupGeminiLiveAudio() {
   try { if (geminiLiveProcessor) geminiLiveProcessor.disconnect(); } catch {}
+  try { if (geminiLiveMuteGain) geminiLiveMuteGain.disconnect(); } catch {}
   try { if (geminiLiveSource) geminiLiveSource.disconnect(); } catch {}
   if (geminiLiveStream) { try { geminiLiveStream.getTracks().forEach(t=>{ t.onended = null; t.stop(); }); } catch {} }
-  geminiLiveProcessor=null; geminiLiveSource=null; geminiLiveStream=null;
+  geminiLiveProcessor=null; geminiLiveMuteGain=null; geminiLiveSource=null; geminiLiveStream=null; geminiLiveCtx=null;
 }
 function stopGeminiLive(silent=false, manual=true) {
   liveManualStop = manual;
@@ -2491,10 +2528,10 @@ async function startGeminiLive(from, modelQueue) {
   const settings = getLiveSettings();
   const candidates = Array.isArray(modelQueue) && modelQueue.length ? modelQueue : liveModelCandidates(settings.model);
   settings.model = candidates[0];
+  stopGeminiLive(true, false);
   liveManualStop = false;
   liveStarting = true;
   liveActiveModel = settings.model;
-  stopGeminiLive(true, false);
   geminiLiveDirection = from;
   const target = from === 'tr' ? 'Vietnamese' : 'Turkish';
   const source = from === 'tr' ? 'Turkish' : 'Vietnamese';
@@ -2505,12 +2542,65 @@ async function startGeminiLive(from, modelQueue) {
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
   updateLiveMainButton(true);
-  setRealLiveStatus(uiText('Gemini Live bağlanıyor... Model: ', 'Đang kết nối Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
+  setRealLiveStatus(uiText('Live mikrofon hazırlanıyor...', 'Đang chuẩn bị micro Live...'));
   appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
-  const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
-  const ws = new WebSocket(wsUrl);
   let setupReady = false;
   let receivedAnyContent = false;
+  try {
+    await tryRequestWakeLock();
+    await keepAudioAwake(90000);
+    geminiLiveCtx = await ensureAudioCtx();
+    if (!geminiLiveCtx || geminiLiveCtx.state !== 'running') throw new Error(uiText('Ses motoru kilitli, Dinle’ye tekrar bas.', 'Bộ âm thanh bị khóa, hãy bấm Nghe lại.'));
+    geminiLiveStream = await requestMicrophoneStream('live');
+    geminiLiveSource = geminiLiveCtx.createMediaStreamSource(geminiLiveStream);
+    geminiLiveProcessor = geminiLiveCtx.createScriptProcessor(4096,1,1);
+    geminiLiveMuteGain = geminiLiveCtx.createGain();
+    geminiLiveMuteGain.gain.value = 0;
+    let liveSpeechActive = false;
+    let liveVoiceMs = 0;
+    let liveSilentMs = 0;
+    geminiLiveProcessor.onaudioprocess = e => {
+      const ws = geminiLiveWs;
+      if (!setupReady || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const ctx = geminiLiveCtx;
+      if (!ctx || ctx.state !== 'running') return;
+      const channel = e.inputBuffer.getChannelData(0);
+      const sampleRate = ctx.sampleRate || 48000;
+      const frameMs = Math.round(channel.length / sampleRate * 1000);
+      const hasVoice = floatRms(channel) > VOICE_RMS_THRESHOLD;
+      if (hasVoice) {
+        liveVoiceMs += frameMs;
+        liveSilentMs = 0;
+        if (liveVoiceMs >= Math.min(MIN_VOICE_MS, 360)) liveSpeechActive = true;
+      } else {
+        liveVoiceMs = 0;
+        if (!liveSpeechActive) return;
+        liveSilentMs += frameMs;
+      }
+      if (!liveSpeechActive) return;
+      try { ws.send(JSON.stringify(liveAudioPayload(channel, sampleRate))); } catch {}
+      if (liveSilentMs > (settings.saver ? 1800 : 2800)) {
+        try { ws.send(JSON.stringify(liveAudioEndPayload())); } catch {}
+        liveSpeechActive = false;
+        liveVoiceMs = 0;
+        liveSilentMs = 0;
+      }
+    };
+    geminiLiveSource.connect(geminiLiveProcessor);
+    geminiLiveProcessor.connect(geminiLiveMuteGain);
+    geminiLiveMuteGain.connect(geminiLiveCtx.destination);
+  } catch (err) {
+    liveStarting = false;
+    updateLiveMainButton(false);
+    if(topBtn) topBtn.classList.remove('live-on');
+    cleanupGeminiLiveAudio();
+    releaseWakeLock();
+    setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err && err.message ? err.message : String(err), from));
+    return;
+  }
+  setRealLiveStatus(uiText('Gemini Live bağlanıyor... Model: ', 'Đang kết nối Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
+  const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
+  const ws = new WebSocket(wsUrl);
   const setupTimer = setTimeout(() => {
     if (!setupReady && geminiLiveWs === ws) {
       setRealLiveStatus(uiText('Live modeli cevap vermedi, diğer model deneniyor...', 'Model Live không phản hồi, đang thử model khác...'));
@@ -2518,44 +2608,10 @@ async function startGeminiLive(from, modelQueue) {
     }
   }, 8000);
   geminiLiveWs = ws;
-  ws.onopen = async () => {
+  ws.onopen = () => {
     try {
-      setRealLiveStatus(uiText('Live açıldı. Konuşabilirsin.', 'Live đã mở. Bạn có thể nói.'));
+      setRealLiveStatus(uiText('Live açıldı, model hazırlanıyor...', 'Live đã mở, model đang chuẩn bị...'));
       ws.send(JSON.stringify(liveSetupPayload(settings, source, target, modality)));
-      await tryRequestWakeLock();
-      geminiLiveStream = await requestMicrophoneStream('live');
-      geminiLiveCtx = await ensureAudioCtx();
-      geminiLiveSource = geminiLiveCtx.createMediaStreamSource(geminiLiveStream);
-      geminiLiveProcessor = geminiLiveCtx.createScriptProcessor(4096,1,1);
-      let liveSpeechActive = false;
-      let liveVoiceMs = 0;
-      let liveSilentMs = 0;
-      geminiLiveProcessor.onaudioprocess = e => {
-        if (!geminiLiveWs || geminiLiveWs.readyState !== WebSocket.OPEN) return;
-        const channel = e.inputBuffer.getChannelData(0);
-        const sampleRate = geminiLiveCtx.sampleRate || 48000;
-        const frameMs = Math.round(channel.length / sampleRate * 1000);
-        const hasVoice = floatRms(channel) > VOICE_RMS_THRESHOLD;
-        if (hasVoice) {
-          liveVoiceMs += frameMs;
-          liveSilentMs = 0;
-          if (liveVoiceMs >= Math.min(MIN_VOICE_MS, 360)) liveSpeechActive = true;
-        } else {
-          liveVoiceMs = 0;
-          if (!liveSpeechActive) return;
-          liveSilentMs += frameMs;
-        }
-        if (!liveSpeechActive) return;
-        ws.send(JSON.stringify(liveAudioPayload(channel, sampleRate)));
-        if (liveSilentMs > (settings.saver ? 1800 : 2800)) {
-          try { ws.send(JSON.stringify(liveAudioEndPayload())); } catch {}
-          liveSpeechActive = false;
-          liveVoiceMs = 0;
-          liveSilentMs = 0;
-        }
-      };
-      geminiLiveSource.connect(geminiLiveProcessor);
-      geminiLiveProcessor.connect(geminiLiveCtx.destination);
     } catch (err) {
       setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err && err.message ? err.message : String(err), from));
       try { ws.close(); } catch {}
@@ -2570,6 +2626,7 @@ async function startGeminiLive(from, modelQueue) {
         setupReady = true;
         clearTimeout(setupTimer);
         liveStarting = false;
+        setRealLiveStatus(uiText('Bağlantı hazır. Konuşabilirsin.', 'Kết nối sẵn sàng. Bạn có thể nói.'));
         appendRealLiveLog(uiText('Bağlantı hazır.', 'Kết nối sẵn sàng.'));
       }
       if (data.error) {
