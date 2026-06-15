@@ -2390,8 +2390,7 @@ function getLiveSettings() {
 }
 const LIVE_MODEL_FALLBACKS = [
   'gemini-3.5-live-translate-preview',
-  'gemini-3.1-flash-live-preview',
-  'gemini-2.5-flash-native-audio-preview-12-2025'
+  'gemini-3.1-flash-live-preview'
 ];
 function liveModelCandidates(model) {
   const first = normalizeLiveModel(model);
@@ -2420,7 +2419,7 @@ function liveSetupPayload(settings, source, target, modality) {
   return {
     setup: {
       model: 'models/' + settings.model,
-      generationConfig: { responseModalities: [modality] },
+      responseModalities: [modality],
       systemInstruction: { parts: [{ text: prompt }] },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
@@ -2594,23 +2593,31 @@ async function startGeminiLive(from, modelQueue) {
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
   updateLiveMainButton(true);
-  setRealLiveStatus(uiText('Live mikrofon hazırlanıyor...', 'Đang chuẩn bị micro Live...'));
+  setRealLiveStatus(uiText('Gemini Live setup deneniyor...', 'Đang thử setup Gemini Live...'));
   if (!modelQueue) appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
   let setupReady = false;
   let receivedAnyContent = false;
-  try {
-    await tryRequestWakeLock();
-    await keepAudioAwake(90000);
-    geminiLiveCtx = await ensureAudioCtx();
-    if (!geminiLiveCtx || geminiLiveCtx.state !== 'running') throw new Error(uiText('Ses motoru kilitli, Dinle’ye tekrar bas.', 'Bộ âm thanh bị khóa, hãy bấm Nghe lại.'));
-    geminiLiveStream = await requestMicrophoneStream('live');
-    geminiLiveSource = geminiLiveCtx.createMediaStreamSource(geminiLiveStream);
-    geminiLiveProcessor = geminiLiveCtx.createScriptProcessor(4096,1,1);
-    geminiLiveMuteGain = geminiLiveCtx.createGain();
-    geminiLiveMuteGain.gain.value = 0;
-    let liveSpeechActive = false;
-    let liveVoiceMs = 0;
-    let liveSilentMs = 0;
+  let liveMicReady = false;
+  let liveSpeechActive = false;
+  let liveVoiceMs = 0;
+  let liveSilentMs = 0;
+  let lastLiveError = '';
+  const startLiveMic = async () => {
+    if (liveMicReady || !geminiLiveWs || geminiLiveWs.readyState !== WebSocket.OPEN) return true;
+    try {
+      setRealLiveStatus(uiText('Live setup tamam, mikrofon hazırlanıyor...', 'Setup Live xong, đang chuẩn bị micro...'));
+      await tryRequestWakeLock();
+      await keepAudioAwake(90000);
+      geminiLiveCtx = await ensureAudioCtx();
+      if (!geminiLiveCtx || geminiLiveCtx.state !== 'running') throw new Error(uiText('Ses motoru kilitli, Dinle’ye tekrar bas.', 'Bộ âm thanh bị khóa, hãy bấm Nghe lại.'));
+      geminiLiveStream = await requestMicrophoneStream('live');
+      geminiLiveSource = geminiLiveCtx.createMediaStreamSource(geminiLiveStream);
+      geminiLiveProcessor = geminiLiveCtx.createScriptProcessor(4096,1,1);
+      geminiLiveMuteGain = geminiLiveCtx.createGain();
+      geminiLiveMuteGain.gain.value = 0;
+      liveSpeechActive = false;
+      liveVoiceMs = 0;
+      liveSilentMs = 0;
     geminiLiveProcessor.onaudioprocess = e => {
       const ws = geminiLiveWs;
       if (!setupReady || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -2641,29 +2648,30 @@ async function startGeminiLive(from, modelQueue) {
     geminiLiveSource.connect(geminiLiveProcessor);
     geminiLiveProcessor.connect(geminiLiveMuteGain);
     geminiLiveMuteGain.connect(geminiLiveCtx.destination);
-  } catch (err) {
-    liveStarting = false;
-    updateLiveMainButton(false);
-    if(topBtn) topBtn.classList.remove('live-on');
-    cleanupGeminiLiveAudio();
-    releaseWakeLock();
-    setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err && err.message ? err.message : String(err), from));
-    return;
-  }
+      liveMicReady = true;
+      setRealLiveStatus(uiText('Bağlantı hazır. Konuşabilirsin.', 'Kết nối sẵn sàng. Bạn có thể nói.'));
+      appendRealLiveLog(uiText('Mikrofon hazır.', 'Micro sẵn sàng.'));
+      return true;
+    } catch (err) {
+      lastLiveError = err && err.message ? err.message : String(err);
+      setRealLiveStatus(uiText('Live mikrofon açılamadı: ', 'Không mở được micro Live: ') + normalizeApiError(lastLiveError, from));
+      try { if (geminiLiveWs) geminiLiveWs.close(); } catch {}
+      return false;
+    }
+  };
   setRealLiveStatus(uiText('Gemini Live bağlanıyor... Model: ', 'Đang kết nối Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
   const ws = new WebSocket(wsUrl);
-  let lastLiveError = '';
   const setupTimer = setTimeout(() => {
     if (!setupReady && geminiLiveWs === ws) {
-      setRealLiveStatus(uiText('Live modeli cevap vermedi, diğer model deneniyor...', 'Model Live không phản hồi, đang thử model khác...'));
+      setRealLiveStatus(uiText('Live setupComplete gelmedi, diğer model deneniyor...', 'Live không nhận setupComplete, đang thử model khác...'));
       try { ws.close(); } catch {}
     }
-  }, 8000);
+  }, 12000);
   geminiLiveWs = ws;
   ws.onopen = () => {
     try {
-      setRealLiveStatus(uiText('Live açıldı, model hazırlanıyor...', 'Live đã mở, model đang chuẩn bị...'));
+      setRealLiveStatus(uiText('Live açıldı, setup gönderiliyor...', 'Live đã mở, đang gửi setup...'));
       ws.send(JSON.stringify(liveSetupPayload(settings, source, target, modality)));
     } catch (err) {
       setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err && err.message ? err.message : String(err), from));
@@ -2679,8 +2687,8 @@ async function startGeminiLive(from, modelQueue) {
         setupReady = true;
         clearTimeout(setupTimer);
         liveStarting = false;
-        setRealLiveStatus(uiText('Bağlantı hazır. Konuşabilirsin.', 'Kết nối sẵn sàng. Bạn có thể nói.'));
-        appendRealLiveLog(uiText('Bağlantı hazır.', 'Kết nối sẵn sàng.'));
+        appendRealLiveLog(uiText('Setup tamam.', 'Setup xong.'));
+        startLiveMic();
       }
       if (data.error) {
         receivedAnyContent = true;
@@ -2729,7 +2737,7 @@ async function startGeminiLive(from, modelQueue) {
   ws.onerror = () => {
     setRealLiveStatus(uiText('Gemini Live bağlantı hatası.', 'Lỗi kết nối Gemini Live.'));
   };
-  ws.onclose = () => {
+  ws.onclose = e => {
     clearTimeout(setupTimer);
     cleanupGeminiLiveAudio();
     releaseWakeLock();
@@ -2745,9 +2753,11 @@ async function startGeminiLive(from, modelQueue) {
     }
     const closeInfo = lastLiveError || (e?.reason ? e.reason : (e?.code && e.code !== 1000 ? ('WebSocket code ' + e.code) : ''));
     if (closeInfo && !setupReady) appendRealLiveLog(uiText('Live kapanış detayı: ', 'Chi tiết Live đóng: ') + closeInfo);
-    const message = receivedAnyContent || setupReady
-      ? uiText('Live kapandı.', 'Live đã đóng.')
-      : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.') + (closeInfo ? ' (' + closeInfo + ')' : '');
+    const message = closeInfo
+      ? (setupReady ? uiText('Live kapandı: ', 'Live đã đóng: ') : uiText('Live açılamadı: ', 'Không mở được Live: ')) + closeInfo
+      : (receivedAnyContent || setupReady
+        ? uiText('Live kapandı.', 'Live đã đóng.')
+        : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.'));
     setRealLiveStatus(message);
   };
 }
