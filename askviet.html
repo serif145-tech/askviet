@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<link rel="preconnect" href="https://api.openai.com" crossorigin>
+<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
 <title>AskViet</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -454,9 +456,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <select id="liveModelSelect" onchange="saveLiveSettings()">
         <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live</option>
         <option value="gemini-3.5-live-translate-preview">Gemini 3.5 Live Translate</option>
-        <option value="gemini-live-2.5-flash-preview">Gemini Live 2.5 Flash</option>
-        <option value="gemini-2.0-flash-live-001">Gemini 2.0 Flash Live</option>
-        <option value="gemini-2.5-flash-preview-native-audio-dialog">Gemini 2.5 Native Audio</option>
+        <option value="gemini-2.5-flash-native-audio-preview-12-2025">Gemini 2.5 Native Audio</option>
       </select>
       <label>Cevap tipi</label>
       <select id="liveResponseSelect" onchange="saveLiveSettings()">
@@ -2348,28 +2348,54 @@ async function startPttVoice(from) {
   }
 }
 
+function normalizeLiveModel(model) {
+  const map = {
+    'gemini-live-2.5-flash-preview': 'gemini-2.5-flash-native-audio-preview-12-2025',
+    'gemini-2.0-flash-live-001': 'gemini-2.5-flash-native-audio-preview-12-2025',
+    'gemini-2.5-flash-preview-native-audio-dialog': 'gemini-2.5-flash-native-audio-preview-12-2025'
+  };
+  return map[model] || model || 'gemini-3.1-flash-live-preview';
+}
 function getLiveSettings() {
   return {
-    model: localStorage.getItem('askviet_live_model') || 'gemini-3.1-flash-live-preview',
+    model: normalizeLiveModel(localStorage.getItem('askviet_live_model')),
     response: localStorage.getItem('askviet_live_response') || 'TEXT',
     saver: localStorage.getItem('askviet_live_saver') !== '0'
   };
 }
 const LIVE_MODEL_FALLBACKS = [
+  'gemini-3.5-live-translate-preview',
   'gemini-3.1-flash-live-preview',
-  'gemini-2.0-flash-live-001'
+  'gemini-2.5-flash-native-audio-preview-12-2025'
 ];
 function liveModelCandidates(model) {
-  const first = model || LIVE_MODEL_FALLBACKS[0];
+  const first = normalizeLiveModel(model);
   return [first, ...LIVE_MODEL_FALLBACKS.filter(m => m !== first)];
 }
 function liveSetupPayload(settings, source, target, modality) {
+  const isLiveTranslate = settings.model === 'gemini-3.5-live-translate-preview';
+  if (isLiveTranslate) {
+    const targetLanguageCode = target === 'Vietnamese' ? 'vi' : 'tr';
+    return {
+      setup: {
+        model: 'models/' + settings.model,
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          translationConfig: {
+            targetLanguageCode,
+            echoTargetLanguage: true
+          }
+        }
+      }
+    };
+  }
   const prompt = 'You are a real-time translator for casual daily conversation between Turkish and Vietnamese. Translate spoken ' + source + ' to natural ' + target + '. Return only the translation, with no explanations, no guessed context, no platform names, no YouTube-style narration, and no extra commentary. If the audio is unclear or empty, return nothing.';
   return {
     setup: {
       model: 'models/' + settings.model,
       generationConfig: { responseModalities: [modality] },
-      responseModalities: [modality],
       systemInstruction: { parts: [{ text: prompt }] },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
@@ -2411,7 +2437,7 @@ function syncLiveSettingsUI() {
   if (saver) saver.checked = settings.saver;
 }
 function saveLiveSettings() {
-  const model = document.getElementById('liveModelSelect')?.value || 'gemini-3.1-flash-live-preview';
+  const model = normalizeLiveModel(document.getElementById('liveModelSelect')?.value || 'gemini-3.1-flash-live-preview');
   const response = document.getElementById('liveResponseSelect')?.value || 'TEXT';
   const saver = document.getElementById('liveSaverToggle')?.checked !== false;
   localStorage.setItem('askviet_live_model', model);
@@ -2537,13 +2563,14 @@ async function startGeminiLive(from, modelQueue) {
   const source = from === 'tr' ? 'Turkish' : 'Vietnamese';
   const targetRole = from === 'tr' ? 'vi' : 'tr';
   const shouldAutoSpeak = getLocalAutoSpeakEnabled();
-  const modality = settings.response === 'AUDIO' ? 'AUDIO' : 'TEXT';
+  const isLiveTranslateModel = settings.model === 'gemini-3.5-live-translate-preview';
+  const modality = (settings.response === 'AUDIO' || isLiveTranslateModel) ? 'AUDIO' : 'TEXT';
   const btn = document.getElementById('liveMainBtn');
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
   updateLiveMainButton(true);
   setRealLiveStatus(uiText('Live mikrofon hazırlanıyor...', 'Đang chuẩn bị micro Live...'));
-  appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
+  if (!modelQueue) appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
   let setupReady = false;
   let receivedAnyContent = false;
   try {
@@ -2601,6 +2628,7 @@ async function startGeminiLive(from, modelQueue) {
   setRealLiveStatus(uiText('Gemini Live bağlanıyor... Model: ', 'Đang kết nối Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
   const ws = new WebSocket(wsUrl);
+  let lastLiveError = '';
   const setupTimer = setTimeout(() => {
     if (!setupReady && geminiLiveWs === ws) {
       setRealLiveStatus(uiText('Live modeli cevap vermedi, diğer model deneniyor...', 'Model Live không phản hồi, đang thử model khác...'));
@@ -2632,6 +2660,7 @@ async function startGeminiLive(from, modelQueue) {
       if (data.error) {
         receivedAnyContent = true;
         const msg = data.error.message || JSON.stringify(data.error).slice(0, 220);
+        lastLiveError = msg;
         appendRealLiveLog(uiText('Live hata: ', 'Lỗi Live: ') + msg);
         try { ws.close(); } catch {}
         return;
@@ -2644,10 +2673,10 @@ async function startGeminiLive(from, modelQueue) {
           appendRealLiveLog(part.text);
           lastLiveText = part.text;
           lastLiveTarget = targetRole;
-          if (settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(part.text, targetRole);
+          if (modality !== 'AUDIO' && settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(part.text, targetRole);
         }
         const audio = part.inlineData || part.inline_data;
-        if (audio?.data && shouldAutoSpeak && settings.response === 'AUDIO') {
+        if (audio?.data && shouldAutoSpeak && modality === 'AUDIO') {
           receivedAnyContent = true;
           playLiveAudio(audio.data, audio.mimeType || audio.mime_type).catch(()=>appendRealLiveLog(uiText('Live sesi çalınamadı.', 'Không phát được âm thanh Live.')));
         }
@@ -2657,10 +2686,11 @@ async function startGeminiLive(from, modelQueue) {
         appendRealLiveLog(transcribedOutput);
         lastLiveText = transcribedOutput;
         lastLiveTarget = targetRole;
-        if (settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(transcribedOutput, targetRole);
+        if (modality !== 'AUDIO' && settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(transcribedOutput, targetRole);
       }
       if (!parts.length && /error/i.test(raw)) {
         receivedAnyContent = true;
+        lastLiveError = raw.slice(0,220);
         appendRealLiveLog(uiText('Live hata: ', 'Lỗi Live: ') + raw.slice(0,220));
       }
     } catch(err) {
@@ -2688,9 +2718,10 @@ async function startGeminiLive(from, modelQueue) {
       setTimeout(() => startGeminiLive(from, rest), 450);
       return;
     }
+    const closeInfo = lastLiveError || (e?.reason ? e.reason : (e?.code && e.code !== 1000 ? ('WebSocket code ' + e.code) : ''));
     const message = receivedAnyContent || setupReady
       ? uiText('Live kapandı.', 'Live đã đóng.')
-      : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.');
+      : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.') + (closeInfo ? ' (' + closeInfo + ')' : '');
     setRealLiveStatus(message);
   };
 }
