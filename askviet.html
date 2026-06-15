@@ -1565,7 +1565,10 @@ function listenAudioRequests() {
     const id = parts[0];
     if (!id) return;
     if (parts.length > 1) {
-      if (parts[1] === 'status') updateRemoteAudioStatus(id, event.data);
+      if (parts[1] === 'status') {
+        updateRemoteAudioStatus(id, event.data);
+        if (event.data === 'cancelled' && activeAudioRequestId === id) stopAudio();
+      }
       if (parts[1] === 'cancel') updateRemoteAudioStatus(id, event.data ? 'cancelled' : '');
       return;
     }
@@ -2707,15 +2710,6 @@ async function keepAudioAwake(ms=90000) {
     const ctx = await ensureAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') await ctx.resume();
-    if (!autoAudioGuardOsc) {
-      autoAudioGuardGain = ctx.createGain();
-      autoAudioGuardGain.gain.value = 0.0001;
-      autoAudioGuardOsc = ctx.createOscillator();
-      autoAudioGuardOsc.frequency.value = 20;
-      autoAudioGuardOsc.connect(autoAudioGuardGain);
-      autoAudioGuardGain.connect(ctx.destination);
-      autoAudioGuardOsc.start();
-    }
     clearTimeout(autoAudioGuardTimer);
     autoAudioGuardTimer = setTimeout(stopAudioGuard, ms);
   } catch {}
@@ -2836,39 +2830,31 @@ async function playPendingBlockedAudioFromGesture() {
 }
 async function playBlob(blob,token,btn,text='',opts={}){
   try {
-    const ctx = await ensureAudioCtx();
-    if (!ctx) throw new Error('AudioContext yok');
-    if (ctx.state === 'suspended') await ctx.resume();
-    if (ctx.state !== 'running') throw new Error('AudioContext engellendi');
-    if(ttsSource){try{ttsSource.onended=null;ttsSource.stop(0)}catch{}try{ttsSource.disconnect()}catch{}ttsSource=null}
-    if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
-    const bkey = opts.cacheKey || '';
-    let buffer = bkey ? ttsBufferCache.get(bkey) : null;
-    if (buffer) console.debug('TTS buffer cache hit', bkey);
-    if (!buffer) {
-      buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
-      if (bkey) {
-        ttsBufferCache.set(bkey, buffer);
-        if (ttsBufferCache.size > 40) ttsBufferCache.delete(ttsBufferCache.keys().next().value);
-      }
-    }
+    const a=getAudioPlayer();
     if(token!==ttsToken) return false;
-    const source = ctx.createBufferSource();
-    const gain = ctx.createGain();
-    gain.gain.value = 1;
-    source.buffer = buffer;
-    source.connect(gain);
-    gain.connect(ctx.destination);
-    ttsSource = source;
-    ttsGain = gain;
+    if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}
+    audioUrl=URL.createObjectURL(blob);
+    a.pause();
+    a.src=audioUrl;
+    a.muted=false;
+    a.volume=1;
+    a.defaultPlaybackRate=1;
+    a.playbackRate=1;
+    a.load();
     isSpeaking=true;
     setActiveSpeakButton(btn);
     console.debug('TTS play start', opts.cacheKey || '');
     await new Promise((resolve,reject)=>{
+      const startTimer=setTimeout(()=>reject(new Error('Audio play pending')),2500);
+      const playPromise=a.play();
+      if(playPromise&&playPromise.then) playPromise.then(()=>{clearTimeout(startTimer);resolve()}).catch(err=>{clearTimeout(startTimer);reject(err)});
+      else { clearTimeout(startTimer); resolve(); }
+    });
+    await new Promise((resolve,reject)=>{
       const limit=Math.max(45000,(text||'').length*180);
       const timer=setTimeout(()=>resolve(),limit);
-      source.onended=()=>{clearTimeout(timer);resolve()};
-      try { source.start(0); } catch(err) { clearTimeout(timer); reject(err); }
+      a.onended=()=>{clearTimeout(timer);resolve()};
+      a.onerror=()=>{clearTimeout(timer);reject(new Error('Ses çalınamadı'))};
     });
     console.debug('TTS play ended', opts.cacheKey || '');
     return true;
@@ -2883,8 +2869,9 @@ async function playBlob(blob,token,btn,text='',opts={}){
   } finally {
     if(token===ttsToken && !pendingBlockedAudio){
       isSpeaking=false;
-      if(ttsSource){try{ttsSource.disconnect()}catch{}ttsSource=null}
-      if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
+      const a=getAudioPlayer();
+      a.onended=null;
+      a.onerror=null;
       if (activeSpeakBtn === btn) activeSpeakBtn = null;
       setSpeakBtn(btn,false);
     }
@@ -2925,9 +2912,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
     return false;
   } finally {
     if (token === ttsToken) {
-      isSpeaking = false;
       ttsAbort = null;
-      setSpeakBtn(btn, false);
     }
   }
 }
