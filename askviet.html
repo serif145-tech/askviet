@@ -538,6 +538,8 @@ let autoReadPollTimer = null;
 let presencePollTimer = null;
 let unsubAudio = null;
 let renderedKeys = new Set();
+let visibleMessageKeys = new Set();
+let oldestVisibleMessage = null;
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
 let audioListenStartedAt = 0;
@@ -545,6 +547,7 @@ let chatListenStartedAt = 0;
 let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
+const CHAT_RENDER_LIMIT = 80;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
@@ -798,6 +801,8 @@ function goBack() {
   if (myRole) updateMyPresence(false);
   if (unsubAudio) unsubAudio();
   renderedKeys.clear();
+  visibleMessageKeys.clear();
+  oldestVisibleMessage = null;
   autoReadDone.clear();
   handledAudioRequests.clear();
   stopAudio();
@@ -817,10 +822,7 @@ function initChat() {
   chatPollTimer = null;
 
   fbGet(MSGS_PATH).then(data => {
-    if (data && typeof data === 'object') {
-      Object.entries(data).forEach(([k, v]) => { if (v) renderMessage(k, v); });
-      scrollToBottom();
-    }
+    applyMessagesSnapshot(data, true);
   });
 
   unsubMessages = fbListen(MSGS_PATH, event => {
@@ -830,6 +832,8 @@ function initChat() {
       if (path === '/') {
         document.querySelectorAll('.msg').forEach(el => el.remove());
         renderedKeys.clear();
+        visibleMessageKeys.clear();
+        oldestVisibleMessage = null;
         autoReadDone.clear();
         stopAudio();
       } else {
@@ -856,15 +860,17 @@ function initChat() {
     if (!event.data) return;
     if (path === '/') {
       if (typeof event.data === 'object') {
-        Object.entries(event.data).forEach(([k, v]) => { if (v) updateOrRender(k, v); });
-        scrollToBottom();
+        applyMessagesSnapshot(event.data, renderedKeys.size === 0);
       }
     } else {
       const parts = path.replace(/^\//, '').split('/');
       const key = parts[0];
       if (parts.length === 1 && typeof event.data === 'object') {
-        updateOrRender(key, event.data);
-        scrollToBottom();
+        if (shouldRenderMessage(key, event.data)) {
+          updateOrRender(key, event.data);
+          pruneRenderedMessages();
+          scrollAfterMessageUpdate(event.data);
+        }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
@@ -912,10 +918,98 @@ function initChat() {
 
 async function pollMessagesSnapshot() {
   const data = await fbGet(MSGS_PATH).catch(() => null);
-  if (!data || typeof data !== 'object') return;
-  const before = renderedKeys.size;
-  Object.entries(data).forEach(([k, v]) => { if (v) updateOrRender(k, v); });
-  if (renderedKeys.size > before) scrollToBottom();
+  applyMessagesSnapshot(data, false);
+}
+
+function messageTime(key, msg) {
+  const ts = Number(msg?.ts || 0);
+  return Number.isFinite(ts) && ts > 0 ? ts : 0;
+}
+
+function compareMessageEntries(a, b) {
+  const ta = messageTime(a[0], a[1]);
+  const tb = messageTime(b[0], b[1]);
+  if (ta && tb && ta !== tb) return ta - tb;
+  if (ta !== tb) return ta - tb;
+  return String(a[0]).localeCompare(String(b[0]));
+}
+
+function latestMessageEntries(data, limit = CHAT_RENDER_LIMIT) {
+  if (!data || typeof data !== 'object') return [];
+  return Object.entries(data)
+    .filter(([k, v]) => k && v && typeof v === 'object')
+    .sort(compareMessageEntries)
+    .slice(-limit);
+}
+
+function applyMessagesSnapshot(data, forceBottom = false) {
+  const entries = latestMessageEntries(data);
+  if (!entries.length) return;
+  const keep = new Set(entries.map(([k]) => k));
+  const wasNearBottom = isNearBottom();
+  document.querySelectorAll('.msg').forEach(el => {
+    const key = el.dataset.key || el.id.replace(/^msg-/, '');
+    if (!keep.has(key)) {
+      el.remove();
+      renderedKeys.delete(key);
+      autoReadDone.delete(key);
+    }
+  });
+  entries.forEach(([k, v]) => updateOrRender(k, v));
+  refreshVisibleMessageWindow();
+  if (forceBottom || wasNearBottom) scrollToBottom(true);
+  else updateJumpBottomButton();
+}
+
+function refreshVisibleMessageWindow() {
+  const nodes = Array.from(document.querySelectorAll('.msg')).sort((a, b) => {
+    const ta = Number(a.dataset.ts || 0);
+    const tb = Number(b.dataset.ts || 0);
+    if (ta && tb && ta !== tb) return ta - tb;
+    return String(a.dataset.key || a.id).localeCompare(String(b.dataset.key || b.id));
+  });
+  visibleMessageKeys = new Set(nodes.map(el => el.dataset.key || el.id.replace(/^msg-/, '')));
+  const oldest = nodes[0];
+  oldestVisibleMessage = oldest ? {
+    key: oldest.dataset.key || oldest.id.replace(/^msg-/, ''),
+    ts: Number(oldest.dataset.ts || 0)
+  } : null;
+}
+
+function shouldRenderMessage(key, msg) {
+  if (renderedKeys.has(key)) return true;
+  if (!oldestVisibleMessage || renderedKeys.size < CHAT_RENDER_LIMIT) return true;
+  const ts = messageTime(key, msg);
+  if (ts && oldestVisibleMessage.ts) return ts >= oldestVisibleMessage.ts;
+  return String(key).localeCompare(String(oldestVisibleMessage.key || '')) >= 0;
+}
+
+function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
+  const nodes = Array.from(document.querySelectorAll('.msg')).sort((a, b) => {
+    const ta = Number(a.dataset.ts || 0);
+    const tb = Number(b.dataset.ts || 0);
+    if (ta && tb && ta !== tb) return ta - tb;
+    return String(a.dataset.key || a.id).localeCompare(String(b.dataset.key || b.id));
+  });
+  while (nodes.length > limit) {
+    const el = nodes.shift();
+    const key = el.dataset.key || el.id.replace(/^msg-/, '');
+    el.remove();
+    renderedKeys.delete(key);
+    autoReadDone.delete(key);
+  }
+  refreshVisibleMessageWindow();
+}
+
+function isNearBottom() {
+  const m = document.getElementById('messages');
+  if (!m) return true;
+  return m.scrollHeight - m.scrollTop - m.clientHeight <= Math.max(260, m.clientHeight * 0.35);
+}
+
+function scrollAfterMessageUpdate(msg) {
+  if (!msg || msg.role === myRole || isNearBottom()) scrollToBottom();
+  else updateJumpBottomButton();
 }
 
 function setConnected(v) {
@@ -1081,6 +1175,8 @@ function renderMessage(key, msg) {
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
   if (!isMedia) maybeRetryMissingTranslation(key, msg);
+  if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
+  else refreshVisibleMessageWindow();
 }
 
 function updateOrRender(key, msg) {
@@ -1506,6 +1602,7 @@ function removeMessageElement(key) {
   if (el) el.remove();
   renderedKeys.delete(key);
   autoReadDone.delete(key);
+  refreshVisibleMessageWindow();
   stopAudio();
 }
 
