@@ -513,6 +513,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
+const APP_VERSION = '2026-06-16-2245';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -548,9 +549,11 @@ let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
-const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
 let autoRefreshTimer = null;
 let autoRefreshStartedAt = 0;
+let chatWatchdogTimer = null;
+let chatReloading = false;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
@@ -677,6 +680,7 @@ function toggleTtsSettings(force) {
 }
 
 function loadSaved() {
+  ensureFreshAppVersion();
   const savedKey = localStorage.getItem('askviet_key');
   let savedModel = normalizeChatModel(localStorage.getItem('askviet_model'));
   if (savedModel) {
@@ -713,9 +717,29 @@ function resumeSavedSession() {
   }, 120);
 }
 
+function ensureFreshAppVersion() {
+  const prev = localStorage.getItem('askviet_app_version') || '';
+  if (prev === APP_VERSION) return;
+  localStorage.setItem('askviet_app_version', APP_VERSION);
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations?.().then(regs => regs.forEach(r => r.unregister())).catch(()=>{});
+    }
+    if (window.caches?.keys) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(()=>{});
+    }
+  } catch {}
+  if (prev && location.protocol.startsWith('http') && !location.search.includes('v=' + APP_VERSION)) {
+    const url = new URL(location.href);
+    url.searchParams.set('v', APP_VERSION);
+    setTimeout(() => location.replace(url.toString()), 80);
+  }
+}
+
 // ── Firebase REST ──────────────────────────────────────────────────────────
-async function fbGet(path) {
-  const r = await fetch(DB_URL + path + '.json');
+async function fbGet(path, fresh=false) {
+  const url = DB_URL + path + '.json' + (fresh ? ('?ts=' + Date.now()) : '');
+  const r = await fetch(url, fresh ? { cache:'no-store' } : undefined);
   return r.ok ? r.json() : null;
 }
 async function fbPush(path, data) {
@@ -803,6 +827,8 @@ function goBack() {
   if (unsubPresence) unsubPresence();
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  if (chatWatchdogTimer) { clearTimeout(chatWatchdogTimer); chatWatchdogTimer = null; }
+  chatReloading = false;
   if (autoReadPollTimer) { clearInterval(autoReadPollTimer); autoReadPollTimer = null; }
   if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
   if (myRole) updateMyPresence(false);
@@ -830,6 +856,7 @@ function initChat() {
 
   fbGet(MSGS_PATH).then(data => {
     applyMessagesSnapshot(data, true);
+    scheduleChatWatchdog();
   });
 
   unsubMessages = fbListen(MSGS_PATH, event => {
@@ -921,11 +948,38 @@ function initChat() {
   });
 
   listenAudioRequests();
+  scheduleChatWatchdog();
 }
 
-async function pollMessagesSnapshot() {
-  const data = await fbGet(MSGS_PATH).catch(() => null);
+async function pollMessagesSnapshot(fresh=false) {
+  const data = await fbGet(MSGS_PATH, fresh).catch(() => null);
   applyMessagesSnapshot(data, false);
+  scheduleChatWatchdog();
+}
+
+function scheduleChatWatchdog() {
+  if (chatWatchdogTimer) clearTimeout(chatWatchdogTimer);
+  if (!myRole) return;
+  chatWatchdogTimer = setTimeout(recoverEmptyChatIfNeeded, 6500);
+}
+
+async function recoverEmptyChatIfNeeded() {
+  chatWatchdogTimer = null;
+  if (!myRole || chatReloading) return;
+  const empty = document.getElementById('emptyState');
+  if (!empty || renderedKeys.size > 0) return;
+  chatReloading = true;
+  try {
+    const data = await fbGet(MSGS_PATH, true).catch(() => null);
+    const entries = latestMessageEntries(data);
+    if (entries.length) {
+      applyMessagesSnapshot(data, true);
+    } else {
+      scheduleChatWatchdog();
+    }
+  } finally {
+    chatReloading = false;
+  }
 }
 
 function messageTime(key, msg) {
@@ -2935,7 +2989,7 @@ function initPWA() {
   const manifest = {
     name: 'AskViet',
     short_name: 'AskViet',
-    start_url: './',
+    start_url: './?v=' + APP_VERSION,
     display: 'standalone',
     background_color: '#0a0a0f',
     theme_color: '#0a0a0f',
