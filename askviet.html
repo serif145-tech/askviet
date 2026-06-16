@@ -513,7 +513,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-16-2245';
+const APP_VERSION = '2026-06-16-2335';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -523,7 +523,7 @@ let theirRole = null;
 let apiKey = '';
 let geminiApiKey = '';
 let liveRecognizer = null;
-let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr';
+let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr', liveOutputMuteUntil = 0;
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
@@ -670,6 +670,39 @@ function normalizeChatModel(model) {
     'codex:gpt-5.4-mini': 'openai:gpt-5.4-mini'
   };
   return oldGemini[model] || oldOpenAi[model] || model || 'openai:gpt-5.5';
+}
+
+let geminiModelListCache = { key: '', ts: 0, ids: [] };
+async function getAvailableGeminiModelIds(key) {
+  const now = Date.now();
+  if (geminiModelListCache.key === key && now - geminiModelListCache.ts < 10 * 60 * 1000) return geminiModelListCache.ids;
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key), { cache:'no-store' });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
+  const ids = (data.models || [])
+    .map(m => String(m.name || '').replace(/^models\//, ''))
+    .filter(Boolean);
+  geminiModelListCache = { key, ts: now, ids };
+  return ids;
+}
+
+async function geminiChatModelCandidates(model, key) {
+  const raw = String(model || '').trim();
+  const aliases = raw.includes('3.1-pro') || raw.includes('3-pro')
+    ? ['gemini-3.1-pro-preview', 'gemini-3.1-pro', 'gemini-3.1-pro-preview-02-19', 'gemini-3-pro-preview']
+    : [raw];
+  let listed = [];
+  try {
+    const ids = await getAvailableGeminiModelIds(key);
+    if (raw.includes('3.1-pro') || raw.includes('3-pro')) {
+      listed = ids.filter(id => /gemini-3(\.1)?-pro/i.test(id) && !/image|live|audio/i.test(id));
+    } else {
+      listed = ids.filter(id => id === raw);
+    }
+  } catch (e) {
+    console.warn('Gemini model listesi okunamadi:', e);
+  }
+  return [...new Set([raw, ...listed, ...aliases].filter(Boolean))];
 }
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
@@ -2117,20 +2150,24 @@ async function sendMessage() {
 }
 
 async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel) {
-  const maxAttempts = 4;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
-  const provider = String(modelForTranslation || '').split(':')[0] || 'openai';
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.5');
+  const modelsToTry = isGeminiProChatModel(baseModel)
+    ? [baseModel, 'gemini:gemini-3.5-flash', 'openai:gpt-5.5']
+    : [baseModel, baseModel, baseModel, baseModel];
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const attemptModel = modelsToTry[i];
+    const provider = String(attemptModel || '').split(':')[0] || 'openai';
     try {
-      const translation = await translateText(text, fromRole, modelForTranslation);
+      const translation = await translateText(text, fromRole, attemptModel);
       await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
       return;
     } catch (e) {
       const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
-      const retry = !isFatalTranslationError(e) && attempt < maxAttempts;
+      const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
       if (retry) {
-        const waitMs = attempt * 2500;
-        await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attempt, maxAttempts - 1, provider));
+        const waitMs = (i + 1) * 1800;
+        await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, i + 1, modelsToTry.length - 1, provider));
         await sleep(waitMs);
         continue;
       }
@@ -2139,6 +2176,10 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       return;
     }
   }
+}
+
+function isGeminiProChatModel(model) {
+  return String(model || '').toLowerCase().includes('gemini') && String(model || '').toLowerCase().includes('pro');
 }
 
 function isFatalTranslationError(e) {
@@ -2205,25 +2246,46 @@ async function translateText(text, from, modelOverride) {
   if (provider === 'gemini') {
     const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
     if (!key) throw new Error('Gemini API key gerekli');
-    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
-    let r;
-    try {
-      r = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sysPrompt }] },
-          contents: [{ role: 'user', parts: [{ text }] }]
-        })
-      });
-    } catch (e) {
-      throw new Error('Gemini adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+    const candidates = await geminiChatModelCandidates(model, key);
+    let lastErr = null;
+    for (const candidate of candidates) {
+      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(candidate) + ':generateContent?key=' + encodeURIComponent(key);
+      let r;
+      try {
+        r = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: sysPrompt }] },
+            contents: [{ role: 'user', parts: [{ text }] }]
+          })
+        });
+      } catch (e) {
+        lastErr = new Error('Gemini adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+        continue;
+      }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        lastErr = new Error((data.error?.message || r.statusText || ('HTTP ' + r.status)) + ' [model: ' + candidate + ']');
+        const s = String(lastErr.message).toLowerCase();
+        if (/not found|not supported|permission|denied|403|404|400/.test(s)) continue;
+        throw lastErr;
+      }
+      const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
+      if (!out) {
+        lastErr = new Error('Gemini boş cevap döndü [model: ' + candidate + ']');
+        continue;
+      }
+      if (candidate !== model && (model || '').includes('pro')) {
+        const normalized = 'gemini:' + candidate;
+        selectedModel = normalized;
+        localStorage.setItem('askviet_model', normalized);
+        if (myRole === 'tr') syncMyModel(normalized);
+        setSelectedModel(normalized, true);
+      }
+      return out;
     }
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
-    const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
-    if (!out) throw new Error('Gemini boş cevap döndü');
-    return out;
+    throw lastErr || new Error('Gemini Pro modeli bu API key ile bulunamadı veya generateContent desteklemiyor.');
   }
 
   if (provider !== 'openai') {
@@ -2643,7 +2705,7 @@ function liveSetupPayload(settings, source, target, modality) {
   return {
     setup: {
       model: 'models/' + settings.model,
-      responseModalities: [modality],
+      generationConfig: { responseModalities: ['AUDIO'] },
       systemInstruction: { parts: [{ text: prompt }] },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
@@ -2774,8 +2836,14 @@ function wavFromPcm16(base64, rate=24000) {
 async function playLiveAudio(base64, mimeType) {
   let rate = 24000;
   const m = String(mimeType || '').match(/rate=(\d+)/); if (m) rate = Number(m[1]) || rate;
+  const bytes = base64ToBytes(base64);
+  liveOutputMuteUntil = Date.now() + Math.max(1200, Math.ceil(bytes.length / Math.max(1, rate * 2) * 1000) + 650);
   const blob = wavFromPcm16(base64, rate);
-  await playBlob(blob, ++ttsToken, null, 'live');
+  try {
+    await playBlob(blob, ++ttsToken, null, 'live');
+  } finally {
+    liveOutputMuteUntil = Math.min(liveOutputMuteUntil, Date.now() + 350);
+  }
 }
 function cleanupGeminiLiveAudio() {
   try { if (geminiLiveProcessor) geminiLiveProcessor.disconnect(); } catch {}
@@ -2812,7 +2880,7 @@ async function startGeminiLive(from, modelQueue) {
   const targetRole = from === 'tr' ? 'vi' : 'tr';
   const shouldAutoSpeak = getLocalAutoSpeakEnabled();
   const isLiveTranslateModel = settings.model === 'gemini-3.5-live-translate-preview';
-  const modality = (settings.response === 'AUDIO' || isLiveTranslateModel) ? 'AUDIO' : 'TEXT';
+  const modality = 'AUDIO';
   const btn = document.getElementById('liveMainBtn');
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
@@ -2847,6 +2915,7 @@ async function startGeminiLive(from, modelQueue) {
       if (!setupReady || !ws || ws.readyState !== WebSocket.OPEN) return;
       const ctx = geminiLiveCtx;
       if (!ctx || ctx.state !== 'running') return;
+      if (Date.now() < liveOutputMuteUntil) return;
       const channel = e.inputBuffer.getChannelData(0);
       const sampleRate = ctx.sampleRate || 48000;
       const frameMs = Math.round(channel.length / sampleRate * 1000);
