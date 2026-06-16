@@ -540,6 +540,7 @@ let presencePollTimer = null;
 let unsubAudio = null;
 let renderedKeys = new Set();
 let visibleMessageKeys = new Set();
+let deletedMessageKeys = new Set();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
@@ -772,7 +773,7 @@ function ensureFreshAppVersion() {
 // ── Firebase REST ──────────────────────────────────────────────────────────
 async function fbGet(path, fresh=false) {
   const url = DB_URL + path + '.json' + (fresh ? ('?ts=' + Date.now()) : '');
-  const r = await fetch(url, fresh ? { cache:'no-store' } : undefined);
+  const r = await fetch(url, { cache:'no-store' });
   return r.ok ? r.json() : null;
 }
 async function fbPush(path, data) {
@@ -868,6 +869,7 @@ function goBack() {
   if (unsubAudio) unsubAudio();
   renderedKeys.clear();
   visibleMessageKeys.clear();
+  deletedMessageKeys.clear();
   oldestVisibleMessage = null;
   autoReadDone.clear();
   handledAudioRequests.clear();
@@ -900,6 +902,7 @@ function initChat() {
         document.querySelectorAll('.msg').forEach(el => el.remove());
         renderedKeys.clear();
         visibleMessageKeys.clear();
+        deletedMessageKeys.clear();
         oldestVisibleMessage = null;
         autoReadDone.clear();
         stopAudio();
@@ -907,6 +910,7 @@ function initChat() {
         const parts = path.replace(/^\//, '').split('/');
         const key = parts[0];
         if (parts.length === 1) {
+          deletedMessageKeys.add(key);
           removeMessageElement(key);
         } else if (parts.length === 3 && parts[1] === 'reactions') {
           const el = document.getElementById('react-' + key);
@@ -934,18 +938,23 @@ function initChat() {
       const key = parts[0];
       if (parts.length === 1 && typeof event.data === 'object') {
         if (shouldRenderMessage(key, event.data)) {
+          const wasNearBottom = isNearBottom();
           updateOrRender(key, event.data);
           pruneRenderedMessages();
-          scrollAfterMessageUpdate(event.data);
+          if (wasNearBottom || event.data.role === myRole) scrollToBottom(true);
+          else updateJumpBottomButton();
         }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
+        const wasNearBottom = isNearBottom();
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
         if (el) { appendLinkedText(el, cleanVisibleText(event.data)); el.style.color = ''; el.style.fontStyle = 'italic'; }
         refreshMessageText(key);
         maybeAutoReadMessage(key);
-        scrollToBottom();
+        reorderRenderedMessages();
+        if (wasNearBottom) scrollToBottom(true);
+        else updateJumpBottomButton();
       } else if (parts.length === 3 && parts[1] === 'read') {
         const box = document.getElementById('msg-' + key);
         if (box) {
@@ -985,7 +994,7 @@ function initChat() {
 }
 
 async function pollMessagesSnapshot(fresh=false) {
-  const data = await fbGet(MSGS_PATH, fresh).catch(() => null);
+  const data = await fbGet(MSGS_PATH, true).catch(() => null);
   applyMessagesSnapshot(data, false);
   scheduleChatWatchdog();
 }
@@ -1031,7 +1040,7 @@ function compareMessageEntries(a, b) {
 function latestMessageEntries(data, limit = CHAT_RENDER_LIMIT) {
   if (!data || typeof data !== 'object') return [];
   return Object.entries(data)
-    .filter(([k, v]) => k && v && typeof v === 'object')
+    .filter(([k, v]) => k && v && typeof v === 'object' && !deletedMessageKeys.has(k))
     .sort(compareMessageEntries)
     .slice(-limit);
 }
@@ -1050,18 +1059,34 @@ function applyMessagesSnapshot(data, forceBottom = false) {
     }
   });
   entries.forEach(([k, v]) => updateOrRender(k, v));
+  reorderRenderedMessages();
   refreshVisibleMessageWindow();
   if (forceBottom || wasNearBottom) scrollToBottom(true);
   else updateJumpBottomButton();
 }
 
-function refreshVisibleMessageWindow() {
-  const nodes = Array.from(document.querySelectorAll('.msg')).sort((a, b) => {
+function sortMessageNodes(nodes) {
+  return nodes.sort((a, b) => {
     const ta = Number(a.dataset.ts || 0);
     const tb = Number(b.dataset.ts || 0);
     if (ta && tb && ta !== tb) return ta - tb;
+    if (ta !== tb) return ta - tb;
     return String(a.dataset.key || a.id).localeCompare(String(b.dataset.key || b.id));
   });
+}
+
+function reorderRenderedMessages() {
+  const box = document.getElementById('messages');
+  if (!box) return;
+  const typing = document.getElementById('typingIndicator');
+  const nodes = sortMessageNodes(Array.from(box.querySelectorAll('.msg')));
+  const frag = document.createDocumentFragment();
+  nodes.forEach(node => frag.appendChild(node));
+  box.insertBefore(frag, typing || null);
+}
+
+function refreshVisibleMessageWindow() {
+  const nodes = sortMessageNodes(Array.from(document.querySelectorAll('.msg')));
   visibleMessageKeys = new Set(nodes.map(el => el.dataset.key || el.id.replace(/^msg-/, '')));
   const oldest = nodes[0];
   oldestVisibleMessage = oldest ? {
@@ -1071,6 +1096,7 @@ function refreshVisibleMessageWindow() {
 }
 
 function shouldRenderMessage(key, msg) {
+  if (deletedMessageKeys.has(key)) return false;
   if (renderedKeys.has(key)) return true;
   if (!oldestVisibleMessage || renderedKeys.size < CHAT_RENDER_LIMIT) return true;
   const ts = messageTime(key, msg);
@@ -1079,12 +1105,7 @@ function shouldRenderMessage(key, msg) {
 }
 
 function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
-  const nodes = Array.from(document.querySelectorAll('.msg')).sort((a, b) => {
-    const ta = Number(a.dataset.ts || 0);
-    const tb = Number(b.dataset.ts || 0);
-    if (ta && tb && ta !== tb) return ta - tb;
-    return String(a.dataset.key || a.id).localeCompare(String(b.dataset.key || b.id));
-  });
+  const nodes = sortMessageNodes(Array.from(document.querySelectorAll('.msg')));
   while (nodes.length > limit) {
     const el = nodes.shift();
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
@@ -1092,6 +1113,7 @@ function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
     renderedKeys.delete(key);
     autoReadDone.delete(key);
   }
+  reorderRenderedMessages();
   refreshVisibleMessageWindow();
 }
 
@@ -1313,7 +1335,10 @@ function renderMessage(key, msg) {
   maybeNotifyIncoming(key, msg);
   if (!isMedia) maybeRetryMissingTranslation(key, msg);
   if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
-  else refreshVisibleMessageWindow();
+  else {
+    reorderRenderedMessages();
+    refreshVisibleMessageWindow();
+  }
 }
 
 function updateOrRender(key, msg) {
@@ -1757,11 +1782,13 @@ async function deleteMessage(key) {
     read: { tr: el.dataset.readTr || null, vi: el.dataset.readVi || null }
   } : null;
   stopAudio();
+  deletedMessageKeys.add(key);
   removeMessageElement(key);
   try {
     await fbRemove(MSGS_PATH + '/' + key);
   } catch (e) {
     console.error('Mesaj silinemedi:', e);
+    deletedMessageKeys.delete(key);
     if (msg) renderMessage(key, msg);
   }
 }
