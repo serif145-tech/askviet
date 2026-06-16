@@ -548,6 +548,9 @@ let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+let autoRefreshTimer = null;
+let autoRefreshStartedAt = 0;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
@@ -689,12 +692,12 @@ function loadSaved() {
     // apiLabel kaldırıldı — artık ayrı alanlar var
 
   }
-  resumeAfterMicReload();
+  resumeSavedSession();
 }
 
-function resumeAfterMicReload() {
-  const role = localStorage.getItem('askviet_resume_role');
-  const mode = localStorage.getItem('askviet_resume_mode') || 'chat';
+function resumeSavedSession() {
+  const role = localStorage.getItem('askviet_resume_role') || localStorage.getItem('askviet_last_role');
+  const mode = localStorage.getItem('askviet_resume_mode') || localStorage.getItem('askviet_last_mode') || 'chat';
   if (role !== 'tr' && role !== 'vi') return;
   localStorage.removeItem('askviet_resume_role');
   localStorage.removeItem('askviet_resume_mode');
@@ -706,7 +709,7 @@ function resumeAfterMicReload() {
         else if (role === 'tr' && mode === 'live') toggleRealLive(true);
         else { togglePttMode(false); toggleRealLive(false); }
       }, 250);
-    } catch(e) { console.error('Mikrofon yenileme sonrası role/mod dönülemedi:', e); }
+    } catch(e) { console.error('Otomatik role/mod dönülemedi:', e); }
   }, 120);
 }
 
@@ -760,6 +763,7 @@ function start(role) {
   saveTtsSettings();
   myRole = role;
   localStorage.setItem('askviet_last_role', role);
+  localStorage.setItem('askviet_last_mode', localStorage.getItem('askviet_last_mode') || 'chat');
   theirRole = role === 'tr' ? 'vi' : 'tr';
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
@@ -786,9 +790,12 @@ function start(role) {
   }).catch(()=>{});
   listenModelConfig();
   initChat();
+  persistSessionState();
+  startAutoRefreshTimer();
 }
 
 function goBack() {
+  stopAutoRefreshTimer();
   if (unsubMessages) unsubMessages();
   if (unsubTyping) unsubTyping();
   if (unsubModel) unsubModel();
@@ -819,7 +826,7 @@ function initChat() {
   chatListenStartedAt = Date.now();
   setupJumpBottomButton();
   if (chatPollTimer) clearInterval(chatPollTimer);
-  chatPollTimer = null;
+  chatPollTimer = setInterval(pollMessagesSnapshot, 15000);
 
   fbGet(MSGS_PATH).then(data => {
     applyMessagesSnapshot(data, true);
@@ -1010,6 +1017,49 @@ function isNearBottom() {
 function scrollAfterMessageUpdate(msg) {
   if (!msg || msg.role === myRole || isNearBottom()) scrollToBottom();
   else updateJumpBottomButton();
+}
+
+function startAutoRefreshTimer() {
+  stopAutoRefreshTimer();
+  autoRefreshStartedAt = Date.now();
+  autoRefreshTimer = setTimeout(runAutoRefreshCheck, AUTO_REFRESH_MS);
+}
+
+function stopAutoRefreshTimer() {
+  if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+  autoRefreshTimer = null;
+  autoRefreshStartedAt = 0;
+}
+
+function isSafeToAutoRefresh() {
+  if (myRole !== 'tr' && myRole !== 'vi') return false;
+  if (document.visibilityState && document.visibilityState !== 'visible') return false;
+  if (rec || recStream || geminiLiveWs || geminiLiveStream || liveStarting) return false;
+  const input = document.getElementById('msgInput');
+  if (input && input.value && input.value.trim()) return false;
+  const upload = document.getElementById('mediaUploadStatus');
+  if (upload && upload.style.display !== 'none' && upload.textContent.trim()) return false;
+  return true;
+}
+
+function prepareResumeState() {
+  const role = myRole || localStorage.getItem('askviet_last_role');
+  if (role !== 'tr' && role !== 'vi') return false;
+  localStorage.setItem('askviet_resume_role', role);
+  localStorage.setItem('askviet_resume_mode', getCurrentUiMode());
+  localStorage.setItem('askviet_last_role', role);
+  localStorage.setItem('askviet_last_mode', getCurrentUiMode());
+  return true;
+}
+
+function runAutoRefreshCheck() {
+  autoRefreshTimer = null;
+  if (!myRole) return;
+  if (isSafeToAutoRefresh() && prepareResumeState()) {
+    location.reload();
+    return;
+  }
+  autoRefreshTimer = setTimeout(runAutoRefreshCheck, 30 * 1000);
 }
 
 function setConnected(v) {
@@ -2188,7 +2238,14 @@ function setPanelOpen(panelId, btnId, force) {
   panel.classList.toggle('open', open);
   if (btn) btn.classList.toggle('on', open);
   updateModePanelState();
+  persistSessionState();
   return open;
+}
+
+function persistSessionState(modeOverride) {
+  if (myRole !== 'tr' && myRole !== 'vi') return;
+  localStorage.setItem('askviet_last_role', myRole);
+  localStorage.setItem('askviet_last_mode', modeOverride || getCurrentUiMode());
 }
 
 function togglePttMode(force) {
@@ -3753,10 +3810,12 @@ async function transcribeVoiceOpenAI(blob) {
 }
 
 window.addEventListener('beforeunload', () => {
+  try { prepareResumeState(); } catch {}
   try { releaseWakeLock(); } catch {}
   if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
 });
 window.addEventListener('pagehide', () => {
+  try { prepareResumeState(); } catch {}
   try { releaseWakeLock(); } catch {}
   if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
 });
@@ -3765,7 +3824,9 @@ document.addEventListener('visibilitychange', () => {
     clearUnreadCount();
     if (myRole) startPresence();
     if (rec || geminiLiveStream) tryRequestWakeLock();
+    if (myRole && !autoRefreshTimer) startAutoRefreshTimer();
   } else if (myRole) {
+    try { persistSessionState(); } catch {}
     stopPresenceHeartbeat(true);
   }
 });
