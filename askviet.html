@@ -358,7 +358,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="presence-status" id="presenceStatus"></div>
     <div class="mode-row" id="modeRow">
       <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu">Bas-Konuş</button>
-      <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate">Live</button>
+      <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate" style="display:none" hidden>Live</button>
     </div>
     <div id="settingsBtnArea" class="settings-controls">
       <div class="control-row">
@@ -444,7 +444,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
   </div>
 
-  <div class="real-live-panel" id="realLivePanel">
+  <div class="real-live-panel" id="realLivePanel" style="display:none" hidden>
     <div class="panel-top">
       <div class="panel-title">Gemini Live Translate</div>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
@@ -744,7 +744,6 @@ function resumeSavedSession() {
       start(role);
       setTimeout(() => {
         if (role === 'tr' && mode === 'ptt') togglePttMode(true);
-        else if (role === 'tr' && mode === 'live') toggleRealLive(true);
         else { togglePttMode(false); toggleRealLive(false); }
       }, 250);
     } catch(e) { console.error('Otomatik role/mod dönülemedi:', e); }
@@ -2782,12 +2781,12 @@ function saveLiveSettings() {
   localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
 }
 function toggleRealLive(force) {
-  syncLiveSettingsUI();
-  if (setPanelOpen('realLivePanel', 'realLiveBtn', force)) togglePttMode(false);
+  stopGeminiLive(true, true);
+  setPanelOpen('realLivePanel', 'realLiveBtn', false);
+  return false;
 }
 function getCurrentUiMode() {
   if (document.getElementById('pttPanel')?.classList.contains('open')) return 'ptt';
-  if (document.getElementById('realLivePanel')?.classList.contains('open')) return 'live';
   return 'chat';
 }
 function toggleLiveSettings(force) {
@@ -3448,7 +3447,7 @@ function setupChatControls() {
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
-  if (realLiveBtn) realLiveBtn.style.display = myRole === 'tr' ? '' : 'none';
+  if (realLiveBtn) realLiveBtn.style.display = 'none';
   if (myRole !== 'tr') { togglePttMode(false); toggleRealLive(false); }
   applyLocaleUI();
   setSelectedModel(selectedModel, true);
