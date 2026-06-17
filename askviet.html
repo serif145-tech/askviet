@@ -345,6 +345,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
       </div>
       <div class="header-tools">
+        <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu">Bas-Konuş</button>
         <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
         <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarları">&#9881;</button>
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön">&#8617;</button>
@@ -357,7 +358,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
     <div class="presence-status" id="presenceStatus"></div>
     <div class="mode-row" id="modeRow">
-      <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu">Bas-Konuş</button>
       <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate" style="display:none" hidden>Live</button>
     </div>
     <div id="settingsBtnArea" class="settings-controls">
@@ -3443,7 +3443,7 @@ function setupChatControls() {
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
   const modeRow = document.getElementById('modeRow');
-  if (modeRow) modeRow.style.display = myRole === 'tr' ? 'flex' : 'none';
+  if (modeRow) modeRow.style.display = 'none';
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
