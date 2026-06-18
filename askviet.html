@@ -2272,17 +2272,17 @@ function translationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || 'openai:gpt-5.5');
   let queue;
   if (base.startsWith('claude:claude-opus')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-haiku-4-5', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+    queue = [base, 'claude:claude-sonnet-4-6', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   } else if (base.startsWith('claude:claude-sonnet')) {
-    queue = [base, 'claude:claude-haiku-4-5', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+    queue = [base, 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   } else if (base.startsWith('claude:claude-haiku')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'gemini:gemini-3.1-flash-lite'];
   } else if (isGeminiProChatModel(base)) {
-    queue = [base, 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-4-6', 'openai:gpt-5.5'];
+    queue = [base, 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   } else if (base.startsWith('gemini:')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'openai:gpt-5.5'];
+    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   } else {
-    queue = [base, 'claude:claude-sonnet-4-6', 'gemini:gemini-3.5-flash'];
+    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   }
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => providerHasKey(String(model).split(':')[0]));
