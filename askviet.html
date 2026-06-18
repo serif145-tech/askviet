@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <link rel="preconnect" href="https://api.openai.com" crossorigin>
 <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://api.anthropic.com" crossorigin>
 <title>AskViet</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -305,6 +306,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
           <option value="gemini:gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
         </optgroup>
+        <optgroup label="Claude">
+          <option value="claude:claude-opus-4-8">Opus 4.8</option>
+          <option value="claude:claude-sonnet-4-6">Sonnet 4.6</option>
+          <option value="claude:claude-haiku-4-5">Haiku 4.5</option>
+        </optgroup>
       </select>
     </div>
 
@@ -318,6 +324,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
     <div class="paste-row">
       <input class="setup-input" type="password" id="geminiKeyInput" placeholder="AIza...">
       <button class="paste-btn" onclick="pasteGeminiKey()">Yapıştır</button>
+    </div>
+
+    <div class="setup-label">Claude API Key</div>
+    <div class="paste-row">
+      <input class="setup-input" type="password" id="claudeKeyInput" placeholder="sk-ant-...">
+      <button class="paste-btn" onclick="pasteClaudeKey()">Yapıştır</button>
     </div>
 
   </div>
@@ -375,6 +387,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="gemini:gemini-3.1-pro-preview">G 3.1 Pro</option>
             <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
             <option value="gemini:gemini-3.1-flash-lite">G 3.1 Lite</option>
+            <option value="claude:claude-opus-4-8">Opus 4.8</option>
+            <option value="claude:claude-sonnet-4-6">Sonnet 4.6</option>
+            <option value="claude:claude-haiku-4-5">Haiku 4.5</option>
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
@@ -522,6 +537,7 @@ let autoReadStates = { tr: null, vi: null };
 let theirRole = null;
 let apiKey = '';
 let geminiApiKey = '';
+let claudeApiKey = '';
 let liveRecognizer = null;
 let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr', liveOutputMuteUntil = 0;
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
@@ -541,6 +557,8 @@ let unsubAudio = null;
 let renderedKeys = new Set();
 let visibleMessageKeys = new Set();
 let deletedMessageKeys = new Set();
+let translationRunSeq = 0;
+let translationRunTokens = new Map();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
@@ -550,6 +568,7 @@ let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
+const TRANSLATION_TIMEOUT_MS = 18000;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 let autoRefreshTimer = null;
 let autoRefreshStartedAt = 0;
@@ -607,6 +626,10 @@ document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key 
 // ── Paste ─────────────────────────────────────────────────────────────────
 async function pasteGeminiKey() {
   try { const t=await navigator.clipboard.readText(); document.getElementById('geminiKeyInput').value=t.trim(); }
+  catch { alert('Yapıştırma izni gerekli.'); }
+}
+async function pasteClaudeKey() {
+  try { const t=await navigator.clipboard.readText(); document.getElementById('claudeKeyInput').value=t.trim(); }
   catch { alert('Yapıştırma izni gerekli.'); }
 }
 async function pasteKey() {
@@ -670,7 +693,15 @@ function normalizeChatModel(model) {
     'codex:gpt-5.4': 'openai:gpt-5.4',
     'codex:gpt-5.4-mini': 'openai:gpt-5.4-mini'
   };
-  return oldGemini[model] || oldOpenAi[model] || model || 'openai:gpt-5.5';
+  const oldClaude = {
+    'claude:claude-opus-4.8': 'claude:claude-opus-4-8',
+    'claude:claude-sonnet-4.6': 'claude:claude-sonnet-4-6',
+    'claude:claude-haiku-4.5': 'claude:claude-haiku-4-5',
+    'anthropic:claude-opus-4-8': 'claude:claude-opus-4-8',
+    'anthropic:claude-sonnet-4-6': 'claude:claude-sonnet-4-6',
+    'anthropic:claude-haiku-4-5': 'claude:claude-haiku-4-5'
+  };
+  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || model || 'openai:gpt-5.5';
 }
 
 let geminiModelListCache = { key: '', ts: 0, ids: [] };
@@ -723,6 +754,8 @@ function loadSaved() {
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
   const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
   if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=savedGeminiKey; }
+  const savedClaudeKey = localStorage.getItem('askviet_claude_key');
+  if (savedClaudeKey) { const c=document.getElementById('claudeKeyInput'); if(c) c.value=savedClaudeKey; }
   syncTtsSettingsUI();
   if (savedModel) {
     document.getElementById('modelSelect').value = savedModel;
@@ -810,12 +843,16 @@ function start(role) {
   const [provider] = selectedModel.split(':');
   const openaiKey = document.getElementById('apiKeyInput')?.value.trim() || localStorage.getItem('askviet_key') || '';
   const geminiKey = document.getElementById('geminiKeyInput')?.value.trim() || localStorage.getItem('askviet_gemini_key') || '';
+  const claudeKey = document.getElementById('claudeKeyInput')?.value.trim() || localStorage.getItem('askviet_claude_key') || '';
   if (provider === 'openai' && !openaiKey) { alert(role === 'vi' ? 'Cần OpenAI API key!' : 'OpenAI API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
   if (provider === 'gemini' && !geminiKey) { alert(role === 'vi' ? 'Cần Gemini API key!' : 'Gemini API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
+  if (provider === 'claude' && !claudeKey) { alert(role === 'vi' ? 'Cần Claude API key!' : 'Claude API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
   apiKey = openaiKey;
   geminiApiKey = geminiKey;
+  claudeApiKey = claudeKey;
   if (openaiKey) localStorage.setItem('askviet_key', openaiKey);
   if (geminiKey) localStorage.setItem('askviet_gemini_key', geminiKey);
+  if (claudeKey) localStorage.setItem('askviet_claude_key', claudeKey);
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
@@ -1606,7 +1643,7 @@ async function retryMessageTranslation(key, btn) {
   }
   try {
     await Promise.race([
-      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole),
+      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole, selectedModel, { force: true }),
       sleep(25000).then(() => { throw new Error('timeout'); })
     ]);
     const latest = await fbGet(MSGS_PATH + '/' + key).catch(() => null);
@@ -2175,37 +2212,80 @@ async function sendMessage() {
   }
 }
 
-async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel) {
+async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel, options={}) {
+  if (translationRunTokens.has(key) && !options.force) return;
+  const runId = ++translationRunSeq;
+  translationRunTokens.set(key, runId);
+  const stillCurrent = () => translationRunTokens.get(key) === runId;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
   const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.5');
-  const modelsToTry = isGeminiProChatModel(baseModel)
-    ? [baseModel, 'gemini:gemini-3.5-flash', 'openai:gpt-5.5']
-    : [baseModel, baseModel, baseModel, baseModel];
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const attemptModel = modelsToTry[i];
-    const provider = String(attemptModel || '').split(':')[0] || 'openai';
-    try {
-      const translation = await translateText(text, fromRole, attemptModel);
-      await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
-      return;
-    } catch (e) {
-      const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
-      const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
-      if (retry) {
-        const waitMs = (i + 1) * 1800;
-        await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, i + 1, modelsToTry.length - 1, provider));
-        await sleep(waitMs);
-        continue;
+  const modelsToTry = translationModelQueue(baseModel);
+  try {
+    for (let i = 0; i < modelsToTry.length; i++) {
+      if (!stillCurrent()) return;
+      const attemptModel = modelsToTry[i];
+      const provider = String(attemptModel || '').split(':')[0] || 'openai';
+      try {
+        const translation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
+        if (stillCurrent()) await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
+        return;
+      } catch (e) {
+        if (!stillCurrent()) return;
+        const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
+        const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
+        if (retry) {
+          const waitMs = 700 + (i * 600);
+          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, i + 1, modelsToTry.length - 1, attemptModel));
+          await sleep(waitMs);
+          continue;
+        }
+        await fbSet(MSGS_PATH + '/' + key + '/translation', errorText(targetRole, msg));
+        console.error(e);
+        return;
       }
-      await fbSet(MSGS_PATH + '/' + key + '/translation', errorText(targetRole, msg));
-      console.error(e);
-      return;
     }
+  } finally {
+    if (stillCurrent()) translationRunTokens.delete(key);
   }
 }
 
 function isGeminiProChatModel(model) {
   return String(model || '').toLowerCase().includes('gemini') && String(model || '').toLowerCase().includes('pro');
+}
+
+function providerHasKey(provider) {
+  if (provider === 'openai') return !!(apiKey || localStorage.getItem('askviet_key'));
+  if (provider === 'gemini') return !!(geminiApiKey || localStorage.getItem('askviet_gemini_key'));
+  if (provider === 'claude') return !!(claudeApiKey || localStorage.getItem('askviet_claude_key'));
+  return false;
+}
+
+function translationModelQueue(baseModel) {
+  const base = normalizeChatModel(baseModel || 'openai:gpt-5.5');
+  let queue;
+  if (base.startsWith('claude:claude-opus')) {
+    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-haiku-4-5', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+  } else if (base.startsWith('claude:claude-sonnet')) {
+    queue = [base, 'claude:claude-haiku-4-5', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+  } else if (base.startsWith('claude:claude-haiku')) {
+    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'gemini:gemini-3.5-flash'];
+  } else if (isGeminiProChatModel(base)) {
+    queue = [base, 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-4-6', 'openai:gpt-5.5'];
+  } else if (base.startsWith('gemini:')) {
+    queue = [base, 'claude:claude-sonnet-4-6', 'openai:gpt-5.5'];
+  } else {
+    queue = [base, 'claude:claude-sonnet-4-6', 'gemini:gemini-3.5-flash'];
+  }
+  const filtered = [...new Set(queue.map(normalizeChatModel))]
+    .filter(model => providerHasKey(String(model).split(':')[0]));
+  return filtered.length ? filtered : [base, base];
+}
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    sleep(ms).then(() => { throw new Error((label || 'İstek') + ' zaman aşımına uğradı'); })
+  ]);
 }
 
 function isFatalTranslationError(e) {
@@ -2215,7 +2295,7 @@ function isFatalTranslationError(e) {
 
 function isPendingTranslationText(text) {
   const s = String(text || '').toLowerCase();
-  return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('openai yogun') || s.includes('openai yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
+  return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('openai yogun') || s.includes('openai yoğun') || s.includes('claude yogun') || s.includes('claude yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
 }
 
 function maybeRetryMissingTranslation(key, msg) {
@@ -2247,8 +2327,10 @@ function cleanVisibleText(text) {
   return raw;
 }
 
-function retryText(role, attempt, total, provider='gemini') {
-  const name = provider === 'openai' ? 'OpenAI' : 'Gemini';
+function retryText(role, attempt, total, model='gemini:gemini-3.5-flash') {
+  const provider = String(model || '').split(':')[0] || 'gemini';
+  const fallbackName = provider === 'openai' ? 'OpenAI' : (provider === 'claude' ? 'Claude' : 'Gemini');
+  const name = modelName(model) || fallbackName;
   return role === 'vi'
     ? (name + ' đang bận, đang thử lại... (' + attempt + '/' + total + ')')
     : (name + ' yoğun, tekrar deneniyor... (' + attempt + '/' + total + ')');
@@ -2312,6 +2394,37 @@ async function translateText(text, from, modelOverride) {
       return out;
     }
     throw lastErr || new Error('Gemini Pro modeli bu API key ile bulunamadı veya generateContent desteklemiyor.');
+  }
+
+  if (provider === 'claude') {
+    const key = claudeApiKey || localStorage.getItem('askviet_claude_key') || '';
+    if (!key) throw new Error('Claude API key gerekli');
+    const endpoint = 'https://api.anthropic.com/v1/messages';
+    let r;
+    try {
+      r = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1200,
+          system: sysPrompt,
+          messages: [{ role: 'user', content: text }]
+        })
+      });
+    } catch (e) {
+      throw new Error('Claude adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
+    }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
+    const out = (data.content || []).map(p => p.type === 'text' ? p.text || '' : '').join('').trim();
+    if (!out) throw new Error('Claude boş cevap döndü');
+    return out;
   }
 
   if (provider !== 'openai') {
@@ -3396,7 +3509,10 @@ const MODEL_NAMES = {
   'openai:gpt-5.4-mini': 'GPT-5.4 mini',
   'gemini:gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
   'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
-  'gemini:gemini-3.1-flash-lite': 'Gemini 3.1 Lite'
+  'gemini:gemini-3.1-flash-lite': 'Gemini 3.1 Lite',
+  'claude:claude-opus-4-8': 'Opus 4.8',
+  'claude:claude-sonnet-4-6': 'Sonnet 4.6',
+  'claude:claude-haiku-4-5': 'Haiku 4.5'
 };
 
 function modelName(model) {
@@ -3892,30 +4008,37 @@ async function transcribeVoice(blob, sourceOverride) {
   if (!blob || blob.size < MIN_AUDIO_BLOB_SIZE) throw new Error('Ses algılanmadı');
   const voiceRole = sourceOverride || myRole || 'tr';
   const [provider] = (selectedModel || 'openai:gpt-5.5').split(':');
-  if (provider === 'gemini') {
-    const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
+  const geminiVoiceKey = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
+  if (provider === 'gemini' || (provider === 'claude' && geminiVoiceKey)) {
+    const key = geminiVoiceKey;
     if (!key) throw new Error('Gemini API key gerekli');
-    const model = selectedModel.split(':')[1] || 'gemini-3.5-flash';
+    const model = provider === 'gemini' ? (selectedModel.split(':')[1] || 'gemini-3.5-flash') : 'gemini-3.5-flash';
     const base64 = await new Promise(res => {
       const r = new FileReader();
       r.onload = () => res(String(r.result || '').split(',')[1] || '');
       r.readAsDataURL(blob);
     });
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        contents: [{parts: [
-          {inline_data: {mime_type: blob.type || 'audio/webm', data: base64}},
-          {text: voiceRole === 'tr' ? 'Bu ses, iki kişi arasındaki gündelik Türkçe-Vietnamca sohbetin Türkçe tarafıdır. Sadece duyduğun Türkçe konuşmayı yaz. Açıklama, tahmin, YouTube/video/anlatım bağlamı ekleme. Ses belirsiz veya boşsa boş cevap ver.' : 'Đây là phần tiếng Việt trong cuộc trò chuyện hằng ngày giữa hai người nói tiếng Việt và tiếng Thổ Nhĩ Kỳ. Chỉ chép lại lời tiếng Việt nghe được. Không giải thích, không đoán bối cảnh, không thêm nội dung kiểu YouTube/video. Nếu âm thanh không rõ hoặc trống, trả về rỗng.'}
-        ]}]
-      })
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
-    const out = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
-    if (!out) throw new Error('Ses metne çevrilemedi');
-    return out;
+    try {
+      const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          contents: [{parts: [
+            {inline_data: {mime_type: blob.type || 'audio/webm', data: base64}},
+            {text: voiceRole === 'tr' ? 'Bu ses, iki kişi arasındaki gündelik Türkçe-Vietnamca sohbetin Türkçe tarafıdır. Sadece duyduğun Türkçe konuşmayı yaz. Açıklama, tahmin, YouTube/video/anlatım bağlamı ekleme. Ses belirsiz veya boşsa boş cevap ver.' : 'Đây là phần tiếng Việt trong cuộc trò chuyện hằng ngày giữa hai người nói tiếng Việt và tiếng Thổ Nhĩ Kỳ. Chỉ chép lại lời tiếng Việt nghe được. Không giải thích, không đoán bối cảnh, không thêm nội dung kiểu YouTube/video. Nếu âm thanh không rõ hoặc trống, trả về rỗng.'}
+          ]}]
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
+      const out = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
+      if (!out) throw new Error('Ses metne çevrilemedi');
+      return out;
+    } catch (e) {
+      const openAiVoiceKey = apiKey || localStorage.getItem('askviet_key') || '';
+      if (!openAiVoiceKey) throw e;
+      console.warn('Gemini ses metne cevirme basarisiz, OpenAI Whisper deneniyor:', e);
+    }
   }
 
   const key = apiKey || localStorage.getItem('askviet_key') || '';
