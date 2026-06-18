@@ -625,20 +625,28 @@ document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key 
 
 // ── Paste ─────────────────────────────────────────────────────────────────
 async function pasteGeminiKey() {
-  try { const t=await navigator.clipboard.readText(); document.getElementById('geminiKeyInput').value=t.trim(); }
+  try { const t=await navigator.clipboard.readText(); document.getElementById('geminiKeyInput').value=extractApiKey(t, 'gemini'); }
   catch { alert('Yapıştırma izni gerekli.'); }
 }
 async function pasteClaudeKey() {
-  try { const t=await navigator.clipboard.readText(); document.getElementById('claudeKeyInput').value=t.trim(); }
+  try { const t=await navigator.clipboard.readText(); document.getElementById('claudeKeyInput').value=extractApiKey(t, 'claude'); }
   catch { alert('Yapıştırma izni gerekli.'); }
 }
 async function pasteKey() {
   try {
     const text = await navigator.clipboard.readText();
-    document.getElementById('apiKeyInput').value = text.trim();
+    document.getElementById('apiKeyInput').value = extractApiKey(text, 'openai');
   } catch {
     alert('Yapıştırma izni gerekli. Manuel yapıştır.');
   }
+}
+
+function extractApiKey(text, provider) {
+  const raw = String(text || '').trim();
+  if (provider === 'claude') return (raw.match(/sk-ant-[A-Za-z0-9_-]+/) || [raw])[0].trim();
+  if (provider === 'gemini') return (raw.match(/AIza[A-Za-z0-9_-]+/) || [raw])[0].trim();
+  if (provider === 'openai') return (raw.match(/\bsk-(?!ant-)[A-Za-z0-9_-]+/) || [raw])[0].trim();
+  return raw;
 }
 
 function getTtsSettings() {
@@ -751,11 +759,11 @@ function loadSaved() {
   if (savedModel) {
     localStorage.setItem('askviet_model', savedModel);
   }
-  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  if (savedKey) document.getElementById('apiKeyInput').value = extractApiKey(savedKey, 'openai');
   const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
-  if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=savedGeminiKey; }
+  if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=extractApiKey(savedGeminiKey, 'gemini'); }
   const savedClaudeKey = localStorage.getItem('askviet_claude_key');
-  if (savedClaudeKey) { const c=document.getElementById('claudeKeyInput'); if(c) c.value=savedClaudeKey; }
+  if (savedClaudeKey) { const c=document.getElementById('claudeKeyInput'); if(c) c.value=extractApiKey(savedClaudeKey, 'claude'); }
   syncTtsSettingsUI();
   if (savedModel) {
     document.getElementById('modelSelect').value = savedModel;
@@ -841,9 +849,9 @@ function start(role) {
   }
   selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5';
   const [provider] = selectedModel.split(':');
-  const openaiKey = document.getElementById('apiKeyInput')?.value.trim() || localStorage.getItem('askviet_key') || '';
-  const geminiKey = document.getElementById('geminiKeyInput')?.value.trim() || localStorage.getItem('askviet_gemini_key') || '';
-  const claudeKey = document.getElementById('claudeKeyInput')?.value.trim() || localStorage.getItem('askviet_claude_key') || '';
+  const openaiKey = extractApiKey(document.getElementById('apiKeyInput')?.value || localStorage.getItem('askviet_key') || '', 'openai');
+  const geminiKey = extractApiKey(document.getElementById('geminiKeyInput')?.value || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
+  const claudeKey = extractApiKey(document.getElementById('claudeKeyInput')?.value || localStorage.getItem('askviet_claude_key') || '', 'claude');
   if (provider === 'openai' && !openaiKey) { alert(role === 'vi' ? 'Cần OpenAI API key!' : 'OpenAI API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
   if (provider === 'gemini' && !geminiKey) { alert(role === 'vi' ? 'Cần Gemini API key!' : 'Gemini API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
   if (provider === 'claude' && !claudeKey) { alert(role === 'vi' ? 'Cần Claude API key!' : 'Claude API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
@@ -2290,7 +2298,7 @@ function withTimeout(promise, ms, label) {
 
 function isFatalTranslationError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
-  return s.includes('api key') || s.includes('401') || s.includes('403');
+  return /api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized|permission|denied|401|403/.test(s);
 }
 
 function isPendingTranslationText(text) {
@@ -2310,7 +2318,7 @@ function normalizeApiError(msg, role) {
   const raw = String(msg || '');
   const isVi = role === 'vi' || (!role && myRole === 'vi');
   if (!raw) return isVi ? 'Lỗi không xác định' : 'Bilinmeyen hata';
-  if (/api key/i.test(raw)) return isVi ? 'Cần API key' : raw;
+  if (/api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized/i.test(raw)) return isVi ? 'Cần API key' : raw;
   if (/boş cevap|bos cevap|empty response|no response/i.test(raw)) return isVi ? 'Dịch vụ trả lời trống. Thử lại.' : raw;
   if (/Ses metne cevrilemedi|Ses metne çevrilemedi|transcri/i.test(raw)) return isVi ? 'Không chuyển được giọng nói thành chữ.' : raw;
   if (/adresine ulasilamadi|network|failed to fetch|abort/i.test(raw)) return isVi ? 'Không kết nối được dịch vụ. Kiểm tra mạng và thử lại.' : raw;
@@ -2352,7 +2360,7 @@ async function translateText(text, from, modelOverride) {
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
-    const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || '';
+    const key = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
     if (!key) throw new Error('Gemini API key gerekli');
     const candidates = await geminiChatModelCandidates(model, key);
     let lastErr = null;
@@ -2397,7 +2405,7 @@ async function translateText(text, from, modelOverride) {
   }
 
   if (provider === 'claude') {
-    const key = claudeApiKey || localStorage.getItem('askviet_claude_key') || '';
+    const key = extractApiKey(claudeApiKey || localStorage.getItem('askviet_claude_key') || '', 'claude');
     if (!key) throw new Error('Claude API key gerekli');
     const endpoint = 'https://api.anthropic.com/v1/messages';
     let r;
@@ -2421,7 +2429,7 @@ async function translateText(text, from, modelOverride) {
       throw new Error('Claude adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
     }
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
+    if (!r.ok) throw new Error(modelName('claude:' + model) + ': ' + (data.error?.message || r.statusText || ('HTTP ' + r.status)));
     const out = (data.content || []).map(p => p.type === 'text' ? p.text || '' : '').join('').trim();
     if (!out) throw new Error('Claude boş cevap döndü');
     return out;
@@ -2434,7 +2442,7 @@ async function translateText(text, from, modelOverride) {
     localStorage.setItem('askviet_model', selectedModel);
     if (myRole === 'tr') syncMyModel(selectedModel);
   }
-  const key = apiKey || localStorage.getItem('askviet_key') || '';
+  const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
   const endpoint = 'https://api.openai.com/v1/chat/completions';
   let r;
@@ -4041,7 +4049,7 @@ async function transcribeVoice(blob, sourceOverride) {
     }
   }
 
-  const key = apiKey || localStorage.getItem('askviet_key') || '';
+  const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
   const fd = new FormData();
   fd.append('file', blob, 'audio.webm');
@@ -4057,7 +4065,7 @@ async function transcribeVoice(blob, sourceOverride) {
     body: fd
   });
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
+  if (!resp.ok) throw new Error('OpenAI Whisper: ' + (data.error?.message || resp.statusText || ('HTTP ' + resp.status)));
   return (data.text || '').trim();
 }
 async function transcribeVoiceOpenAI(blob) {
