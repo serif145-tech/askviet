@@ -2308,6 +2308,7 @@ function isPendingTranslationText(text) {
 
 function maybeRetryMissingTranslation(key, msg) {
   if (!msg || !msg.role || !msg.text) return;
+  if (msg.role !== myRole) return;
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
