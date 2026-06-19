@@ -214,6 +214,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
 .ptt-src{color:#f2f2f2;font-size:15px;font-weight:400;line-height:1.4;white-space:pre-wrap}
 .ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
+.ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
 .tool-btn{min-height:34px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850;font-size:12px;padding:0 10px}
 .tool-btn.primary{background:#2563eb;border-color:#60a5fa;color:#fff}
@@ -528,7 +529,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-19-0040';
+const APP_VERSION = '2026-06-19-0045';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2532,7 +2533,16 @@ function updateModePanelState() {
   if (chat) chat.classList.toggle('mode-panel-open', !!(pttOpen || liveOpen));
 }
 
-function setPttLog(text) { const el = document.getElementById('pttLog'); if (el) el.textContent = text || ''; }
+function setPttLog(text) {
+  const el = document.getElementById('pttLog');
+  if (!el) return;
+  el.textContent = '';
+  if (!text) return;
+  const status = document.createElement('div');
+  status.className = 'ptt-status';
+  status.textContent = text;
+  el.appendChild(status);
+}
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
 function appendPttLog(text) {
   const el = document.getElementById('pttLog');
@@ -2550,7 +2560,7 @@ async function pttTranslate(text, from) {
   for (let i = 0; i < modelsToTry.length; i++) {
     const attemptModel = modelsToTry[i];
     const name = modelName(attemptModel);
-    setPttLog(roleText(from, name + ' çevriliyor... (' + (i + 1) + '/' + modelsToTry.length + ')', name + ' đang dịch... (' + (i + 1) + '/' + modelsToTry.length + ')'));
+    setPttLog(roleText(from, name + ' çeviriyor...', name + ' đang dịch...'));
     try {
       const out = await withTimeout(translateText(text, from, attemptModel), TRANSLATION_TIMEOUT_MS, name);
       renderPttTurn(text, out, from, target);
@@ -2568,7 +2578,7 @@ async function pttTranslate(text, from) {
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   const log = document.getElementById('pttLog');
   if (!log) return;
-  if (log.querySelector('.empty') || /Çeviriliyor|Đang dịch|Ceviriliyor|Dang dich/i.test(log.textContent || '')) log.textContent = '';
+  if (log.querySelector('.empty') || log.querySelector('.ptt-status') || /Çeviriliyor|Çeviriyor|Đang dịch|Ceviriliyor|Ceviriyor|Dang dich/i.test(log.textContent || '')) log.textContent = '';
   const turn = document.createElement('div');
   turn.className = 'ptt-turn';
   const src = document.createElement('div');
