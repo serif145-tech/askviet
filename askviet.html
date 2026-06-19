@@ -529,7 +529,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-19-0045';
+const APP_VERSION = '2026-06-19-0055';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2253,7 +2253,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
         if (retry) {
           const waitMs = 700 + (i * 600);
-          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, i + 1, modelsToTry.length - 1, attemptModel));
+          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attemptModel, modelsToTry[i + 1]));
           await sleep(waitMs);
           continue;
         }
@@ -2342,17 +2342,19 @@ function cleanVisibleText(text) {
   const raw = String(text || '');
   if (!raw) return raw;
   if (/[\u0400-\u04FF]/.test(raw)) return uiText('Çeviri hatası: Servis geçici olarak kullanılamıyor. Biraz sonra tekrar dene.', 'Lỗi dịch: Dịch vụ tạm thời không khả dụng. Thử lại sau.');
-  if (raw.indexOf('\ufffd') >= 0) return raw.replaceAll('\ufffd', '').trim() || uiText('Çeviri hatası', 'Lỗi dịch');
-  return raw;
+  const cleaned = raw.replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/g, '').trim();
+  if (cleaned.indexOf('\ufffd') >= 0) return cleaned.replaceAll('\ufffd', '').trim() || uiText('Çeviri hatası', 'Lỗi dịch');
+  return cleaned;
 }
 
-function retryText(role, attempt, total, model='gemini:gemini-3.5-flash') {
-  const provider = String(model || '').split(':')[0] || 'gemini';
-  const fallbackName = provider === 'openai' ? 'OpenAI' : (provider === 'claude' ? 'Claude' : 'Gemini');
-  const name = modelName(model) || fallbackName;
+function retryText(role, failedModel='gemini:gemini-3.5-flash', nextModel='') {
+  const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
+  const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
+  const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
+  const nextName = modelName(nextModel) || (nextProvider === 'openai' ? 'OpenAI' : (nextProvider === 'claude' ? 'Claude' : 'Gemini'));
   return role === 'vi'
-    ? (name + ' đang bận, đang thử lại... (' + attempt + '/' + total + ')')
-    : (name + ' yoğun, tekrar deneniyor... (' + attempt + '/' + total + ')');
+    ? (failedName + ' đang bận, đang thử ' + nextName + '...')
+    : (failedName + ' yoğun, ' + nextName + ' deneniyor...');
 }
 
 function errorText(role, msg) {
