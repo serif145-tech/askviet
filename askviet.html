@@ -133,6 +133,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-read{display:none;font-size:10px;font-weight:800;color:#fff;background:#16a34a;border:1px solid #22c55e;border-radius:999px;padding:3px 8px;margin:0 0 0 2px;box-shadow:0 1px 5px rgba(22,163,74,.35);align-self:center;white-space:nowrap}
 .msg.mine .msg-read{background:#2563eb;border-color:#60a5fa;box-shadow:0 1px 5px rgba(37,99,235,.35)}
 .msg-read.show{display:inline-block}
+.msg-delivery-retry{display:none;width:28px;height:25px;border-radius:8px;border:1px solid #f87171;background:#fee2e2;color:#b91c1c;font-size:16px;font-weight:900;line-height:1;align-items:center;justify-content:center;cursor:pointer}
+.msg.delivery-failed .msg-delivery-retry{display:inline-flex}
 
 .typing-indicator{display:none;width:max-content;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px}
 .typing-indicator.show{display:flex;gap:4px;align-items:center}
@@ -529,7 +531,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-19-0055';
+const APP_VERSION = '2026-06-19-reliable-queue-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -575,6 +577,18 @@ let autoRefreshTimer = null;
 let autoRefreshStartedAt = 0;
 let chatWatchdogTimer = null;
 let chatReloading = false;
+let chatHealthTimer = null;
+let lastMessageStreamActivityAt = 0;
+let chatStreamRestarting = false;
+let readReceiptFlushRunning = false;
+let readReceiptRetryTimer = null;
+let resumeSyncTimer = null;
+let pendingReadReceipts = new Set();
+let pendingMessageQueue = new Map();
+let outgoingInFlight = new Set();
+let outgoingRetryTimer = null;
+let modelPollTimer = null;
+let lastPageHiddenAt = 0;
 let unreadCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
@@ -586,6 +600,13 @@ let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = n
 let ttsPending = new Map();
 const SESSION_ID = sessionStorage.getItem('askviet_session_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 sessionStorage.setItem('askviet_session_id', SESSION_ID);
+const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
+const OUTGOING_RETRY_TIMEOUT_MS = 8000;
+const OUTGOING_RETRY_DELAY_MS = 1200;
+const CHAT_STREAM_STALE_MS = 50000;
+const MAX_PERSISTED_PENDING_MESSAGES = 30;
+const MAX_PERSISTED_READ_RECEIPTS = 120;
+const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SILENT_AUDIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
 const TTS_DEFAULTS = {
@@ -821,32 +842,117 @@ function ensureFreshAppVersion() {
 }
 
 // ── Firebase REST ──────────────────────────────────────────────────────────
+async function fetchWithTimeout(url, options={}, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('Firebase bağlantısı zaman aşımına uğradı');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fbGet(path, fresh=false) {
   const url = DB_URL + path + '.json' + (fresh ? ('?ts=' + Date.now()) : '');
-  const r = await fetch(url, { cache:'no-store' });
-  return r.ok ? r.json() : null;
+  const r = await fetchWithTimeout(url, { cache:'no-store' });
+  if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
+  return r.json();
 }
 async function fbPush(path, data) {
-  const r = await fetch(DB_URL + path + '.json', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const r = await fetchWithTimeout(DB_URL + path + '.json', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
 }
-async function fbSet(path, data) {
-  const r = await fetch(DB_URL + path + '.json', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
+  const r = await fetchWithTimeout(DB_URL + path + '.json?print=silent', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
   if (!r.ok) console.warn('Firebase kaydetme hatasi:', r.status, path);
   return r.ok;
 }
 async function fbRemove(path) {
-  const r = await fetch(DB_URL + path + '.json', { method: 'DELETE' });
+  const r = await fetchWithTimeout(DB_URL + path + '.json', { method: 'DELETE' });
   if (!r.ok) throw new Error('Firebase silme hatasi: ' + r.status);
 }
-function fbListen(path, cb) {
+function fbListen(path, cb, hooks={}) {
   const es = new EventSource(DB_URL + path + '.json');
-  es.addEventListener('put', e => { try { cb(JSON.parse(e.data)); } catch {} });
-  es.addEventListener('patch', e => { try { cb(JSON.parse(e.data)); } catch {} });
-  es.onerror = () => setConnected(false);
-  es.onopen = () => setConnected(true);
+  const deliver = (type, e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      hooks.onactivity?.(type);
+      cb({ type, path: payload.path || '/', data: payload.data });
+    } catch {}
+  };
+  es.addEventListener('put', e => deliver('put', e));
+  es.addEventListener('patch', e => deliver('patch', e));
+  es.addEventListener('keep-alive', () => hooks.onactivity?.('keep-alive'));
+  es.onerror = () => {
+    setConnected(false);
+    hooks.onerror?.();
+  };
+  es.onopen = () => {
+    setConnected(true);
+    hooks.onactivity?.('open');
+    hooks.onopen?.();
+  };
   return () => es.close();
+}
+
+function pendingMessagesStorageKey(role=myRole) {
+  return 'askviet_pending_messages_' + ROOM + '_' + (role || 'none');
+}
+
+function pendingReadsStorageKey(role=myRole) {
+  return 'askviet_pending_reads_' + ROOM + '_' + (role || 'none');
+}
+
+function persistPendingMessages() {
+  if (!myRole) return;
+  try {
+    localStorage.setItem(pendingMessagesStorageKey(), JSON.stringify(Array.from(pendingMessageQueue.values()).slice(-MAX_PERSISTED_PENDING_MESSAGES)));
+  } catch {}
+}
+
+function persistPendingReads() {
+  if (!myRole) return;
+  try {
+    localStorage.setItem(pendingReadsStorageKey(), JSON.stringify(Array.from(pendingReadReceipts).slice(-MAX_PERSISTED_READ_RECEIPTS)));
+  } catch {}
+}
+
+function loadPersistentQueues() {
+  pendingMessageQueue = new Map();
+  pendingReadReceipts = new Set();
+  if (!myRole) return;
+  try {
+    const items = JSON.parse(localStorage.getItem(pendingMessagesStorageKey()) || '[]');
+    for (const item of Array.isArray(items) ? items : []) {
+      if (!item || !item.key || !item.msg || item.msg.role !== myRole) continue;
+      if (Date.now() - Number(item.createdAt || item.msg.ts || 0) > PENDING_ITEM_MAX_AGE_MS) continue;
+      pendingMessageQueue.set(item.key, Object.assign({ attempts:0, state:'pending', nextRetryAt:0 }, item));
+    }
+    persistPendingMessages();
+  } catch {}
+  try {
+    const keys = JSON.parse(localStorage.getItem(pendingReadsStorageKey()) || '[]');
+    for (const key of Array.isArray(keys) ? keys : []) if (key) pendingReadReceipts.add(String(key));
+  } catch {}
+}
+
+function recordConnectionEvent(type, detail='') {
+  try {
+    const key = 'askviet_connection_log';
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    list.push({
+      at: Date.now(),
+      role: myRole || '',
+      type,
+      detail: String(detail || '').slice(0, 160),
+      standalone: !!window.matchMedia?.('(display-mode: standalone)').matches
+    });
+    localStorage.setItem(key, JSON.stringify(list.slice(-30)));
+  } catch {}
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────
@@ -874,6 +980,7 @@ function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
+  loadPersistentQueues();
   localStorage.setItem('askviet_last_role', role);
   localStorage.setItem('askviet_last_mode', localStorage.getItem('askviet_last_mode') || 'chat');
   theirRole = role === 'tr' ? 'vi' : 'tr';
@@ -902,6 +1009,9 @@ function start(role) {
   }).catch(()=>{});
   listenModelConfig();
   initChat();
+  restorePendingMessages();
+  flushOutgoingQueue(true);
+  scheduleReadReceiptFlush(0);
   persistSessionState();
   startAutoRefreshTimer();
 }
@@ -916,6 +1026,11 @@ function goBack() {
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   if (chatWatchdogTimer) { clearTimeout(chatWatchdogTimer); chatWatchdogTimer = null; }
+  if (chatHealthTimer) { clearInterval(chatHealthTimer); chatHealthTimer = null; }
+  if (outgoingRetryTimer) { clearTimeout(outgoingRetryTimer); outgoingRetryTimer = null; }
+  if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
+  if (readReceiptRetryTimer) { clearTimeout(readReceiptRetryTimer); readReceiptRetryTimer = null; }
+  if (resumeSyncTimer) { clearTimeout(resumeSyncTimer); resumeSyncTimer = null; }
   chatReloading = false;
   if (autoReadPollTimer) { clearInterval(autoReadPollTimer); autoReadPollTimer = null; }
   if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
@@ -926,6 +1041,9 @@ function goBack() {
   deletedMessageKeys.clear();
   oldestVisibleMessage = null;
   autoReadDone.clear();
+  pendingReadReceipts.clear();
+  pendingMessageQueue.clear();
+  outgoingInFlight.clear();
   handledAudioRequests.clear();
   stopAudio();
   releaseWakeLock();
@@ -939,17 +1057,25 @@ function goBack() {
 // ── Chat ──────────────────────────────────────────────────────────────────
 function initChat() {
   chatListenStartedAt = Date.now();
+  lastMessageStreamActivityAt = Date.now();
   setupJumpBottomButton();
+  if (unsubMessages) { unsubMessages(); unsubMessages = null; }
+  if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (chatPollTimer) clearInterval(chatPollTimer);
   chatPollTimer = setInterval(pollMessagesSnapshot, 15000);
 
   fbGet(MSGS_PATH).then(data => {
     applyMessagesSnapshot(data, true);
     scheduleChatWatchdog();
+  }).catch(e => {
+    setConnected(false);
+    recordConnectionEvent('initial-message-load-error', e?.message || e);
+    scheduleChatWatchdog();
   });
 
   unsubMessages = fbListen(MSGS_PATH, event => {
     if (!event) return;
+    lastMessageStreamActivityAt = Date.now();
     const path = event.path || '/';
     if (event.data === null) {
       if (path === '/') {
@@ -985,7 +1111,8 @@ function initChat() {
     if (!event.data) return;
     if (path === '/') {
       if (typeof event.data === 'object') {
-        applyMessagesSnapshot(event.data, renderedKeys.size === 0);
+        if (event.type === 'patch') applyMessagesPatch(event.data);
+        else applyMessagesSnapshot(event.data, renderedKeys.size === 0);
       }
     } else {
       const parts = path.replace(/^\//, '').split('/');
@@ -1026,6 +1153,10 @@ function initChat() {
         }
       }
     }
+  }, {
+    onactivity: () => { lastMessageStreamActivityAt = Date.now(); },
+    onerror: () => recordConnectionEvent('message-stream-error'),
+    onopen: () => recordConnectionEvent('message-stream-open')
   });
 
   unsubTyping = fbListen(TYPING_PATH, event => {
@@ -1045,12 +1176,42 @@ function initChat() {
 
   listenAudioRequests();
   scheduleChatWatchdog();
+  startChatHealthWatchdog();
 }
 
 async function pollMessagesSnapshot(fresh=false) {
-  const data = await fbGet(MSGS_PATH, true).catch(() => null);
-  applyMessagesSnapshot(data, false);
-  scheduleChatWatchdog();
+  try {
+    const data = await fbGet(MSGS_PATH, true);
+    if (data) applyMessagesSnapshot(data, false);
+    setConnected(true);
+    return true;
+  } catch (e) {
+    setConnected(false);
+    recordConnectionEvent('message-poll-error', e?.message || e);
+    return false;
+  } finally {
+    scheduleChatWatchdog();
+  }
+}
+
+function startChatHealthWatchdog() {
+  if (chatHealthTimer) clearInterval(chatHealthTimer);
+  chatHealthTimer = setInterval(() => {
+    if (!myRole || document.visibilityState === 'hidden' || chatStreamRestarting) return;
+    if (Date.now() - lastMessageStreamActivityAt <= CHAT_STREAM_STALE_MS) return;
+    restartChatStreams();
+  }, 12000);
+}
+
+function restartChatStreams() {
+  if (!myRole || chatStreamRestarting) return;
+  chatStreamRestarting = true;
+  recordConnectionEvent('chat-stream-restart');
+  try {
+    initChat();
+  } finally {
+    setTimeout(() => { chatStreamRestarting = false; }, 1000);
+  }
 }
 
 function scheduleChatWatchdog() {
@@ -1094,7 +1255,7 @@ function compareMessageEntries(a, b) {
 function latestMessageEntries(data, limit = CHAT_RENDER_LIMIT) {
   if (!data || typeof data !== 'object') return [];
   return Object.entries(data)
-    .filter(([k, v]) => k && v && typeof v === 'object' && !deletedMessageKeys.has(k))
+    .filter(([k, v]) => k && v && typeof v === 'object' && (v.role === 'tr' || v.role === 'vi') && !deletedMessageKeys.has(k))
     .sort(compareMessageEntries)
     .slice(-limit);
 }
@@ -1106,7 +1267,7 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   const wasNearBottom = isNearBottom();
   document.querySelectorAll('.msg').forEach(el => {
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
-    if (!keep.has(key)) {
+    if (!keep.has(key) && !pendingMessageQueue.has(key)) {
       el.remove();
       renderedKeys.delete(key);
       autoReadDone.delete(key);
@@ -1116,6 +1277,23 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
   if (forceBottom || wasNearBottom) scrollToBottom(true);
+  else updateJumpBottomButton();
+}
+
+function applyMessagesPatch(data) {
+  if (!data || typeof data !== 'object') return;
+  const wasNearBottom = isNearBottom();
+  for (const [key, msg] of Object.entries(data)) {
+    if (!key) continue;
+    if (msg === null) {
+      deletedMessageKeys.add(key);
+      removeMessageElement(key);
+      continue;
+    }
+    if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) updateOrRender(key, msg);
+  }
+  pruneRenderedMessages();
+  if (wasNearBottom) scrollToBottom(true);
   else updateJumpBottomButton();
 }
 
@@ -1160,12 +1338,15 @@ function shouldRenderMessage(key, msg) {
 
 function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
   const nodes = sortMessageNodes(Array.from(document.querySelectorAll('.msg')));
-  while (nodes.length > limit) {
-    const el = nodes.shift();
+  let removable = nodes.filter(el => !pendingMessageQueue.has(el.dataset.key || el.id.replace(/^msg-/, '')));
+  while (nodes.length > limit && removable.length) {
+    const el = removable.shift();
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
     el.remove();
     renderedKeys.delete(key);
     autoReadDone.delete(key);
+    const idx = nodes.indexOf(el);
+    if (idx >= 0) nodes.splice(idx, 1);
   }
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
@@ -1279,6 +1460,8 @@ function renderMessage(key, msg) {
   div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
+  div.dataset.localPending = msg.localPending ? '1' : '';
+  div.dataset.delivery = msg.delivery || '';
   const isMedia = msg.type === 'image' || msg.type === 'video';
 
   const head = document.createElement('div');
@@ -1374,6 +1557,19 @@ function renderMessage(key, msg) {
   div.appendChild(time);
 
   if (btnRow) {
+    if (isMine) {
+      const deliveryRetry = document.createElement('button');
+      deliveryRetry.className = 'msg-delivery-retry';
+      deliveryRetry.id = 'delivery-' + key;
+      deliveryRetry.textContent = '↻';
+      deliveryRetry.title = myRole === 'vi' ? 'Gửi lại tin nhắn' : 'Mesajı tekrar gönder';
+      deliveryRetry.onclick = e => {
+        e.preventDefault();
+        e.stopPropagation();
+        retryOutgoingMessage(key);
+      };
+      btnRow.appendChild(deliveryRetry);
+    }
     const read = document.createElement('div');
     read.className = 'msg-read';
     read.id = 'read-' + key;
@@ -1384,10 +1580,11 @@ function renderMessage(key, msg) {
   document.getElementById('messages').insertBefore(div, typing);
   refreshMessageText(key);
   updateReactions(key, msg.reactions);
+  updateDeliveryStatus(key, msg.delivery || (msg.localPending ? 'pending' : 'sent'));
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeNotifyIncoming(key, msg);
-  if (!isMedia) maybeRetryMissingTranslation(key, msg);
+  if (!isMedia && !msg.localPending) maybeRetryMissingTranslation(key, msg);
   if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
   else {
     reorderRenderedMessages();
@@ -1397,6 +1594,7 @@ function renderMessage(key, msg) {
 
 function updateOrRender(key, msg) {
   if (!renderedKeys.has(key)) { renderMessage(key, msg); return; }
+  if (pendingMessageQueue.has(key) && msg && msg.role === myRole) confirmOutgoingMessage(key, msg);
   const box = document.getElementById('msg-' + key);
   if (box) {
     box.dataset.role = msg.role || box.dataset.role || '';
@@ -1409,6 +1607,7 @@ function updateOrRender(key, msg) {
     if (msg.ts) box.dataset.ts = msg.ts;
     if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
     if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
+    if (!pendingMessageQueue.has(key)) box.dataset.localPending = '';
   }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
@@ -1417,6 +1616,7 @@ function updateOrRender(key, msg) {
     el.style.fontStyle = 'italic';
   }
   refreshMessageText(key);
+  if (!pendingMessageQueue.has(key)) updateDeliveryStatus(key, 'sent');
   updateReactions(key, msg.reactions);
   updateReadStatus(key);
   markMessageRead(key, msg);
@@ -1435,6 +1635,18 @@ function getSubText(msg) {
   const isMine = msg.role === myRole;
   if (isMine) return cleanVisibleText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
   return msg.text || '';
+}
+
+function updateDeliveryStatus(key, status) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  box.dataset.delivery = status || '';
+  box.classList.toggle('delivery-failed', status === 'failed');
+  const retry = document.getElementById('delivery-' + key);
+  if (retry) {
+    retry.title = myRole === 'vi' ? 'Gửi lại tin nhắn' : 'Mesajı tekrar gönder';
+    retry.disabled = status === 'pending';
+  }
 }
 
 function setMessageContent(el, msg) {
@@ -1719,6 +1931,11 @@ function refreshMessageText(key) {
   const trans = document.getElementById('trans-' + key);
   if (orig) setMessageContent(orig, msg);
   if (trans) {
+    if (box.dataset.localPending === '1') {
+      trans.textContent = '';
+      trans.style.display = 'none';
+      return;
+    }
     appendLinkedText(trans, getSubText(msg));
     trans.style.display = (msg.type === 'image' || msg.type === 'video') ? 'none' : '';
     const waiting = !msg.translation;
@@ -1727,11 +1944,60 @@ function refreshMessageText(key) {
   }
 }
 
+function scheduleReadReceiptFlush(delay=0) {
+  if (readReceiptRetryTimer) clearTimeout(readReceiptRetryTimer);
+  readReceiptRetryTimer = setTimeout(() => {
+    readReceiptRetryTimer = null;
+    flushPendingReadReceipts();
+  }, delay);
+}
+
+async function flushPendingReadReceipts() {
+  if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
+  readReceiptFlushRunning = true;
+  try {
+    for (const key of Array.from(pendingReadReceipts)) {
+      try {
+        const box = document.getElementById('msg-' + key);
+        if (!box || box.dataset.role === myRole) {
+          pendingReadReceipts.delete(key);
+          persistPendingReads();
+          continue;
+        }
+        const stamp = Date.now();
+        const ok = await fbSet(MSGS_PATH + '/' + key + '/read/' + myRole, { '.sv':'timestamp' });
+        if (!ok) continue;
+        pendingReadReceipts.delete(key);
+        persistPendingReads();
+        if (box) {
+          if (myRole === 'tr') box.dataset.readTr = stamp;
+          if (myRole === 'vi') box.dataset.readVi = stamp;
+        }
+      } catch (e) {
+        setConnected(false);
+        recordConnectionEvent('read-receipt-error', e?.message || e);
+        break;
+      }
+    }
+  } finally {
+    readReceiptFlushRunning = false;
+    if (pendingReadReceipts.size && myRole) scheduleReadReceiptFlush(3000);
+  }
+}
+
 function markMessageRead(key, msg) {
   if (!myRole || !msg || msg.role === myRole) return;
-  const already = msg.read && msg.read[myRole];
-  if (already) return;
-  fbSet(MSGS_PATH + '/' + key + '/read/' + myRole, Date.now());
+  const box = document.getElementById('msg-' + key);
+  const locallyRecorded = myRole === 'tr' ? box?.dataset.readTr : box?.dataset.readVi;
+  const already = (msg.read && msg.read[myRole]) || locallyRecorded;
+  if (already) {
+    pendingReadReceipts.delete(key);
+    persistPendingReads();
+    return;
+  }
+  pendingReadReceipts.add(key);
+  persistPendingReads();
+  scheduleReadReceiptFlush(0);
 }
 
 function updateReadStatus(key) {
@@ -1818,6 +2084,8 @@ function removeMessageElement(key) {
   if (el) el.remove();
   renderedKeys.delete(key);
   autoReadDone.delete(key);
+  pendingReadReceipts.delete(key);
+  persistPendingReads();
   refreshVisibleMessageWindow();
   stopAudio();
 }
@@ -1836,6 +2104,13 @@ async function deleteMessage(key) {
     read: { tr: el.dataset.readTr || null, vi: el.dataset.readVi || null }
   } : null;
   stopAudio();
+  if (pendingMessageQueue.has(key)) {
+    pendingMessageQueue.delete(key);
+    outgoingInFlight.delete(key);
+    persistPendingMessages();
+    removeMessageElement(key);
+    return;
+  }
   deletedMessageKeys.add(key);
   removeMessageElement(key);
   try {
@@ -2195,39 +2470,165 @@ async function uploadMediaFile(blob, fileName) {
 }
 async function sendMediaMessage(url, name='', mime='') {
   if (!url) throw new Error(uiText('Yükleme adresi yok.', 'Không có địa chỉ tải lên.'));
+  if (!canQueueOutgoingMessage()) return;
   const type = /^video\//i.test(mime) || /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'video' : 'image';
   const label = name || (type === 'video' ? 'Video' : 'Fotoğraf');
   const msg = { role: myRole, type, text: label, mediaUrl: url, imageUrl: url, mime: mime || null, ts: Date.now(), translation: null };
-  const result = await fbPush(MSGS_PATH, msg);
-  const key = result?.name;
-  if (key) { renderMessage(key, msg); scrollToBottom(); }
+  queueOutgoingMessage(msg);
   setMyTyping(false);
 }
 
-async function sendMessage() {
+function createMessageKey() {
+  return 'm_' + Date.now().toString(36) + '_' + SESSION_ID + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function messagePayloadForServer(msg) {
+  return Object.assign({}, msg, {
+    ts: { '.sv':'timestamp' },
+    clientTs: Number(msg.ts || Date.now())
+  });
+}
+
+function queueOutgoingMessage(msg) {
+  if (!canQueueOutgoingMessage()) return null;
+  const key = createMessageKey();
+  const item = {
+    key,
+    msg: Object.assign({}, msg),
+    model: selectedModel,
+    createdAt: Date.now(),
+    attempts: 0,
+    state: 'pending',
+    nextRetryAt: 0
+  };
+  pendingMessageQueue.set(key, item);
+  persistPendingMessages();
+  renderMessage(key, Object.assign({}, item.msg, { localPending:true, delivery:'pending' }));
+  scrollToBottom();
+  flushOutgoingQueue();
+  return key;
+}
+
+function canQueueOutgoingMessage() {
+  if (pendingMessageQueue.size < MAX_PERSISTED_PENDING_MESSAGES) return true;
+  alert(uiText(
+    'Bekleyen çok mesaj var. Bağlantı gelince tekrar dene.',
+    'Có nhiều tin chưa gửi. Khi mạng ổn hãy thử lại.'
+  ));
+  return false;
+}
+
+function restorePendingMessages() {
+  for (const item of pendingMessageQueue.values()) {
+    renderMessage(item.key, Object.assign({}, item.msg, {
+      localPending: true,
+      delivery: item.state === 'failed' ? 'failed' : 'pending'
+    }));
+  }
+  if (pendingMessageQueue.size) scrollToBottom(true);
+}
+
+function scheduleOutgoingFlush(delay=OUTGOING_RETRY_DELAY_MS) {
+  if (outgoingRetryTimer) clearTimeout(outgoingRetryTimer);
+  outgoingRetryTimer = setTimeout(() => {
+    outgoingRetryTimer = null;
+    flushOutgoingQueue();
+  }, delay);
+}
+
+function flushOutgoingQueue(force=false) {
+  if (!myRole || !pendingMessageQueue.size) return;
+  let changed = false;
+  for (const item of pendingMessageQueue.values()) {
+    if (force && item.state === 'failed') {
+      item.state = 'pending';
+      item.attempts = 0;
+      item.nextRetryAt = 0;
+      changed = true;
+    }
+    if (item.state === 'failed' || outgoingInFlight.has(item.key)) continue;
+    if (!force && Number(item.nextRetryAt || 0) > Date.now()) continue;
+    sendQueuedItem(item);
+  }
+  if (changed) persistPendingMessages();
+}
+
+async function sendQueuedItem(item) {
+  if (!item || !pendingMessageQueue.has(item.key) || outgoingInFlight.has(item.key)) return;
+  outgoingInFlight.add(item.key);
+  item.state = 'pending';
+  updateDeliveryStatus(item.key, 'pending');
+  const timeoutMs = item.attempts > 0 ? OUTGOING_RETRY_TIMEOUT_MS : FIREBASE_REQUEST_TIMEOUT_MS;
+  try {
+    const ok = await fbSet(MSGS_PATH + '/' + item.key, messagePayloadForServer(item.msg), timeoutMs);
+    if (!ok) throw new Error('Firebase mesajı kaydetmedi');
+    setConnected(true);
+    confirmOutgoingMessage(item.key);
+  } catch (e) {
+    setConnected(false);
+    let remote = null;
+    try { remote = await fbGet(MSGS_PATH + '/' + item.key, true); } catch {}
+    if (remote && typeof remote === 'object') {
+      confirmOutgoingMessage(item.key, remote);
+    } else if (pendingMessageQueue.has(item.key)) {
+      item.attempts = Number(item.attempts || 0) + 1;
+      recordConnectionEvent('message-send-error', e?.message || e);
+      if (item.attempts < 2) {
+        item.nextRetryAt = Date.now() + OUTGOING_RETRY_DELAY_MS;
+        scheduleOutgoingFlush(OUTGOING_RETRY_DELAY_MS);
+      } else {
+        item.state = 'failed';
+        item.nextRetryAt = 0;
+        updateDeliveryStatus(item.key, 'failed');
+      }
+      persistPendingMessages();
+    }
+  } finally {
+    outgoingInFlight.delete(item.key);
+  }
+}
+
+function confirmOutgoingMessage(key, remoteMsg=null) {
+  const item = pendingMessageQueue.get(key);
+  if (!item) return;
+  pendingMessageQueue.delete(key);
+  outgoingInFlight.delete(key);
+  persistPendingMessages();
+  const box = document.getElementById('msg-' + key);
+  if (box) {
+    box.dataset.localPending = '';
+    if (remoteMsg?.ts) box.dataset.ts = remoteMsg.ts;
+  }
+  updateDeliveryStatus(key, 'sent');
+  refreshMessageText(key);
+  const isMedia = item.msg.type === 'image' || item.msg.type === 'video';
+  if (!isMedia && !remoteMsg?.translation) {
+    translateAndUpdate(key, item.msg.text || '', item.msg.role, item.model || selectedModel);
+  }
+}
+
+function retryOutgoingMessage(key) {
+  const item = pendingMessageQueue.get(key);
+  if (!item) return;
+  item.state = 'pending';
+  item.attempts = 0;
+  item.nextRetryAt = 0;
+  persistPendingMessages();
+  updateDeliveryStatus(key, 'pending');
+  flushOutgoingQueue();
+}
+
+function sendMessage() {
   const input = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
   const text = input.value.trim();
   if (!text) return;
+  if (!canQueueOutgoingMessage()) return;
   input.value = '';
   input.style.height = '';
-  if (sendBtn) sendBtn.disabled = true;
+  if (sendBtn) sendBtn.disabled = false;
   setMyTyping(false);
-
-  try {
-    const msg = { role: myRole, text, ts: Date.now(), translation: null };
-    const result = await fbPush(MSGS_PATH, msg);
-    const key = result?.name;
-    if (!key) throw new Error('Firebase mesaj anahtarı dönmedi');
-    renderMessage(key, msg);
-    scrollToBottom();
-    translateAndUpdate(key, text, myRole, selectedModel);
-  } catch (e) {
-    console.error('Mesaj gönderilemedi:', e);
-    input.value = text;
-  } finally {
-    if (sendBtn) sendBtn.disabled = false;
-  }
+  queueOutgoingMessage({ role: myRole, text, ts: Date.now(), translation: null });
 }
 
 async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel, options={}) {
@@ -3709,13 +4110,20 @@ function syncMyModel(model) {
 }
 function listenModelConfig() {
   if (unsubModel) unsubModel();
+  if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
   if (myRole === 'tr') {
     syncMyModel(selectedModel);
     unsubModel = () => {};
     return;
   }
-  fbGet(MODEL_PATH).then(m => { if (m) setSelectedModel(m, true); });
-  unsubModel = fbListen(MODEL_PATH, event => { if (!event || !event.data) return; setSelectedModel(event.data, true); });
+  const poll = () => fbGet(MODEL_PATH, true)
+    .then(m => { if (m) setSelectedModel(m, true); })
+    .catch(e => recordConnectionEvent('model-poll-error', e?.message || e));
+  poll();
+  modelPollTimer = setInterval(poll, 8000);
+  unsubModel = () => {
+    if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
+  };
 }
 function applyAutoReadData(data, path='/') {
   if (path === '/' && data && typeof data === 'object') {
@@ -4121,21 +4529,58 @@ window.addEventListener('beforeunload', () => {
   if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
 });
 window.addEventListener('pagehide', () => {
+  lastPageHiddenAt = Date.now();
   try { prepareResumeState(); } catch {}
   try { releaseWakeLock(); } catch {}
   if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
 });
+
+function resumeChatTransport() {
+  if (!myRole) return;
+  if (resumeSyncTimer) clearTimeout(resumeSyncTimer);
+  resumeSyncTimer = setTimeout(async () => {
+    resumeSyncTimer = null;
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) sendBtn.disabled = false;
+    startPresence();
+    initChat();
+    await pollMessagesSnapshot(true).catch(() => setConnected(false));
+    flushOutgoingQueue(true);
+    document.querySelectorAll('.msg').forEach(el => {
+      if (el.dataset.role && el.dataset.role !== myRole) {
+        markMessageRead(el.dataset.key || el.id.replace(/^msg-/, ''), {
+          role: el.dataset.role,
+          read: {
+            tr: el.dataset.readTr || null,
+            vi: el.dataset.readVi || null
+          }
+        });
+      }
+    });
+    scheduleReadReceiptFlush(0);
+  }, 180);
+}
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     clearUnreadCount();
-    if (myRole) startPresence();
+    if (myRole) resumeChatTransport();
     if (rec || geminiLiveStream) tryRequestWakeLock();
     if (myRole && !autoRefreshTimer) startAutoRefreshTimer();
   } else if (myRole) {
+    lastPageHiddenAt = Date.now();
     try { persistSessionState(); } catch {}
     stopPresenceHeartbeat(true);
   }
 });
+window.addEventListener('pageshow', e => {
+  if (myRole && (e.persisted || lastPageHiddenAt)) resumeChatTransport();
+});
+window.addEventListener('online', () => {
+  setConnected(true);
+  if (myRole) resumeChatTransport();
+});
+window.addEventListener('offline', () => setConnected(false));
 </script>
 </body>
 </html>
