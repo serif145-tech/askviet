@@ -2671,7 +2671,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
         if (retry) {
           const waitMs = 700 + (i * 600);
-          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attemptModel, modelsToTry[i + 1]));
+          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attemptModel, modelsToTry[i + 1], msg));
           await sleep(waitMs);
           continue;
         }
@@ -2712,8 +2712,12 @@ function translationModelQueue(baseModel) {
   } else {
     queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   }
+  const baseProvider = String(base || '').split(':')[0] || 'openai';
   const filtered = [...new Set(queue.map(normalizeChatModel))]
-    .filter(model => providerHasKey(String(model).split(':')[0]));
+    .filter(model => {
+      const provider = String(model || '').split(':')[0] || 'openai';
+      return provider === baseProvider || providerHasKey(provider);
+    });
   return filtered.length ? filtered : [base, base];
 }
 
@@ -2765,14 +2769,29 @@ function cleanVisibleText(text) {
   return cleaned;
 }
 
-function retryText(role, failedModel='gemini:gemini-3.5-flash', nextModel='') {
+function shortRetryReason(msg, role) {
+  const s = String(msg || '').toLowerCase();
+  const vi = role === 'vi';
+  if (!s) return '';
+  if (/zaman aşımı|zaman asimi|timeout|timed out/.test(s)) return vi ? 'hết 18 giây' : '18 sn doldu';
+  if (/api[\s_-]?key|x-api-key|authentication|unauthorized|401|403|permission|denied/.test(s)) return vi ? 'API key' : 'API key';
+  if (/not found|not_found|not supported|unsupported|invalid model|model.*not|404|400/.test(s)) return vi ? 'model bị từ chối' : 'model reddetti';
+  if (/rate|429|resource exhausted|quota|limit/.test(s)) return vi ? 'giới hạn' : 'limit';
+  if (/temporar|unavailable|busy|overload|503/.test(s)) return vi ? 'bận' : 'yoğun';
+  if (/network|failed to fetch|adresine ulasilamadi|abort|cors/.test(s)) return vi ? 'kết nối' : 'bağlantı';
+  return '';
+}
+
+function retryText(role, failedModel='gemini:gemini-3.5-flash', nextModel='', reason='') {
   const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
   const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
   const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
   const nextName = modelName(nextModel) || (nextProvider === 'openai' ? 'OpenAI' : (nextProvider === 'claude' ? 'Claude' : 'Gemini'));
+  const why = shortRetryReason(reason, role);
+  const suffix = why ? ' (' + why + ')' : '';
   return role === 'vi'
-    ? (failedName + ' đang bận, đang thử ' + nextName + '...')
-    : (failedName + ' yoğun, ' + nextName + ' deneniyor...');
+    ? (failedName + suffix + ', đang thử ' + nextName + '...')
+    : (failedName + suffix + ', ' + nextName + ' deneniyor...');
 }
 
 function errorText(role, msg) {
