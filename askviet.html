@@ -1773,12 +1773,17 @@ async function copyMessageTranslation(key, btn, clearOwnReaction=false) {
   if (!ok) return false;
   if (clearOwnReaction) await setMessageReaction(key, null);
   if (!btn) return true;
+  btn.dataset.copyFlash = '1';
   btn.textContent = '✓';
   btn.classList.add('pressed');
   setTimeout(() => {
-    btn.textContent = '♡';
+    delete btn.dataset.copyFlash;
+    const el = document.getElementById('react-' + key);
+    let current = {};
+    try { current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch {}
+    btn.textContent = current[myRole] || '♡';
     btn.classList.remove('pressed');
-  }, 700);
+  }, 900);
   return true;
 }
 
@@ -1833,7 +1838,7 @@ function updateReactions(key, reactions = {}) {
   if (!el) return;
   el.dataset.reactions = JSON.stringify(reactions || {});
   const own = reactions && reactions[myRole];
-  if (btn) btn.textContent = own || '♡';
+  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own || '♡';
   const values = Object.values(reactions || {}).filter(Boolean);
   if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
   const counts = {};
@@ -2660,6 +2665,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       const attemptModel = modelsToTry[i];
       const provider = String(attemptModel || '').split(':')[0] || 'openai';
       try {
+        await setTranslationStatus(key, tryingText(attemptModel));
         const translation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
         if (stillCurrent()) await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
         return;
@@ -2669,7 +2675,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
         if (retry) {
           const waitMs = 700 + (i * 600);
-          await fbSet(MSGS_PATH + '/' + key + '/translation', retryText(targetRole, attemptModel, modelsToTry[i + 1], msg));
+          await setTranslationStatus(key, retryText(targetRole, attemptModel, modelsToTry[i + 1], msg));
           await sleep(waitMs);
           continue;
         }
@@ -2751,6 +2757,13 @@ function retryStatusText(role, failedModel='gemini:gemini-3.5-flash', nextModel=
     : (failedName + suffix + ', ' + nextName + ' deneniyor...');
 }
 
+function tryingStatusText(role, model='') {
+  const name = modelName(model);
+  return role === 'vi'
+    ? (name + ' đang dịch...')
+    : (name + ' çeviriyor...');
+}
+
 function localizeLegacyStatusText(text, role=myRole) {
   const raw = String(text || '').trim();
   if (!raw) return '';
@@ -2787,6 +2800,7 @@ function localizeLegacyStatusText(text, role=myRole) {
 function displayTranslationText(text, role=myRole) {
   const status = parseTranslationStatus(text);
   if (status) {
+    if (status.kind === 'trying') return tryingStatusText(role, status.model);
     if (status.kind === 'retry') return retryStatusText(role, status.failedModel, status.nextModel, status.reason);
     if (status.kind === 'error') return (role === 'vi' ? 'Lỗi dịch: ' : 'Çeviri hatası: ') + normalizeApiError(status.message || '', role);
   }
@@ -2801,6 +2815,23 @@ function finalTranslationText(text) {
   return isPendingTranslationText(clean) ? '' : clean;
 }
 
+async function setTranslationStatus(key, value) {
+  const box = document.getElementById('msg-' + key);
+  if (box) box.dataset.translation = value || '';
+  const trans = document.getElementById('trans-' + key);
+  if (trans) {
+    appendLinkedText(trans, displayTranslationText(value));
+    trans.style.color = '';
+    trans.style.fontStyle = 'italic';
+  }
+  refreshMessageText(key);
+  await fbSet(MSGS_PATH + '/' + key + '/translation', value, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(console.error);
+}
+
+function tryingText(model='') {
+  return encodeTranslationStatus({ kind: 'trying', model });
+}
+
 function isFatalTranslationError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
   return /api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized|permission|denied|401|403/.test(s);
@@ -2808,7 +2839,7 @@ function isFatalTranslationError(e) {
 
 function isPendingTranslationText(text) {
   const status = parseTranslationStatus(text);
-  if (status) return status.kind === 'retry';
+  if (status) return status.kind === 'retry' || status.kind === 'trying';
   const s = String(text || '').toLowerCase();
   return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('openai yogun') || s.includes('openai yoğun') || s.includes('claude yogun') || s.includes('claude yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
 }
