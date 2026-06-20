@@ -1683,7 +1683,7 @@ function addReactionButton(parent, key) {
   btn.className = 'msg-react-btn';
   btn.textContent = '♡';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
-  const DOUBLE_TAP_MS = 680;
+  const DOUBLE_TAP_MS = 650;
   let longPress = false, longTimer = null, tapTimer = null;
   let lastTapAt = 0;
   btn.addEventListener('pointerdown', e => {
@@ -1708,19 +1708,19 @@ function addReactionButton(parent, key) {
     try { btn.releasePointerCapture(e.pointerId); } catch {}
     if (longPress) { lastTapAt = 0; clearTimeout(tapTimer); tapTimer = null; return; }
     const now = Date.now();
-    if (now - lastTapAt <= DOUBLE_TAP_MS) {
-      lastTapAt = 0;
-      clearTimeout(tapTimer);
-      tapTimer = null;
-      await copyMessageTranslation(key, btn, true);
+    const doubleTap = lastTapAt && now - lastTapAt <= DOUBLE_TAP_MS;
+    lastTapAt = doubleTap ? 0 : now;
+    clearTimeout(tapTimer);
+    tapTimer = null;
+    toggleHeartReaction(key);
+    if (doubleTap) {
+      await copyMessageTranslation(key, btn, false);
       return;
     }
-    lastTapAt = now;
-    clearTimeout(tapTimer);
     tapTimer = setTimeout(() => {
       lastTapAt = 0;
-      toggleHeartReaction(key);
-    }, DOUBLE_TAP_MS + 40);
+      tapTimer = null;
+    }, DOUBLE_TAP_MS);
   });
   const clearReactionTimers = e => { clearTimeout(longTimer); if (e?.type !== 'pointerleave') { clearTimeout(tapTimer); tapTimer = null; } parent.classList.remove('react-pressing'); };
   btn.addEventListener('pointercancel', clearReactionTimers);
@@ -1750,14 +1750,31 @@ async function copyTextFallback(text) {
   } catch { return false; }
 }
 
+function copyableMessageTranslation(key, box) {
+  const trans = document.getElementById('trans-' + key);
+  const candidates = [
+    box?.dataset.translation || '',
+    trans?.innerText || trans?.textContent || ''
+  ];
+  for (const value of candidates) {
+    const text = cleanVisibleText(value);
+    if (!text) continue;
+    if (isPendingTranslationText(text)) continue;
+    if (/Ceviri hatasi|Çeviri hatası|Loi dich|Lỗi dịch/i.test(text)) continue;
+    return text;
+  }
+  return '';
+}
+
 async function copyMessageTranslation(key, btn, clearOwnReaction=false) {
   const box = document.getElementById('msg-' + key);
   if (!box || box.dataset.type === 'image' || box.dataset.type === 'video') return false;
-  const text = cleanVisibleText(box.dataset.translation || '');
-  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatası|Loi dich|Lỗi dịch/i.test(text)) return false;
+  const text = copyableMessageTranslation(key, box);
+  if (!text) return false;
   const ok = await copyTextFallback(text);
   if (!ok) return false;
   if (clearOwnReaction) await setMessageReaction(key, null);
+  if (!btn) return true;
   btn.textContent = '✓';
   btn.classList.add('pressed');
   setTimeout(() => {
