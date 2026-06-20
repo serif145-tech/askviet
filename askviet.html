@@ -106,24 +106,31 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-original{max-width:100%;padding:10px 14px;border-radius:var(--radius);font-size:16px;font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;position:relative}
 .msg.mine .msg-original{background:rgba(124,58,237,0.92);color:#fff;border-bottom-right-radius:4px}
 .msg.theirs .msg-original{background:rgba(185,28,110,0.92);color:#fff;border-bottom-left-radius:4px}
+.msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
+.msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
+.msg.media-msg.theirs .msg-original{border:1px solid rgba(185,28,110,.36);border-bottom-left-radius:5px}
 .msg-original a,.msg-translation a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:800}
 .msg-original a:active,.msg-translation a:active{opacity:.75}
 
 /* Çeviri — küçük ve soluk */
 .msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
-.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:14px;object-fit:cover;background:#111;cursor:pointer;margin-top:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 .msg-media-video{min-width:min(240px,68vw)}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
 .msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 .msg.mine .msg-react-btn{left:-34px;right:auto}
-.msg-react-btn:active,.msg-react-btn.pressed{transform:translateY(-50%);filter:brightness(1.18) saturate(1.2);box-shadow:0 0 0 2px #ef476f33,0 3px 12px rgba(0,0,0,.2)}
+.msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .msg-reactions.show{display:none}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
 .reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
+.reaction-picker button:active,.reaction-picker button.pressed,.reaction-picker button.flash{transform:none!important;animation:none!important;filter:none!important;box-shadow:none!important}
+.reaction-burst{position:fixed;left:50%;top:48%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
+.reaction-burst span{position:absolute;left:0;top:0;font-size:24px;line-height:1;filter:drop-shadow(0 5px 10px rgba(0,0,0,.28));animation:reactionPop .9s cubic-bezier(.18,.8,.25,1) forwards}
+@keyframes reactionPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.45)}18%{opacity:1;transform:translate(calc(-50% + var(--x)*.22),calc(-50% + var(--y)*.22)) scale(1.1)}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.92)}}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
 .media-lightbox.show{display:flex}
 .media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
@@ -1463,6 +1470,7 @@ function renderMessage(key, msg) {
   div.dataset.localPending = msg.localPending ? '1' : '';
   div.dataset.delivery = msg.delivery || '';
   const isMedia = msg.type === 'image' || msg.type === 'video';
+  div.classList.toggle('media-msg', isMedia);
 
   const head = document.createElement('div');
   head.className = 'msg-head';
@@ -1600,6 +1608,7 @@ function updateOrRender(key, msg) {
     box.dataset.role = msg.role || box.dataset.role || '';
     box.dataset.text = msg.text || box.dataset.text || '';
     box.dataset.type = msg.type || box.dataset.type || '';
+    box.classList.toggle('media-msg', box.dataset.type === 'image' || box.dataset.type === 'video');
     box.dataset.imageUrl = msg.imageUrl || box.dataset.imageUrl || '';
     box.dataset.mediaUrl = msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '';
     box.dataset.mime = msg.mime || box.dataset.mime || '';
@@ -1832,13 +1841,48 @@ async function setMessageReaction(key, emoji) {
   await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null).catch(console.error);
 }
 
+function reactionBurstEmoji(before={}, after={}) {
+  const roles = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  for (const role of roles) {
+    const oldEmoji = before?.[role] || '';
+    const newEmoji = after?.[role] || '';
+    if (newEmoji && newEmoji !== oldEmoji) return newEmoji;
+  }
+  return '';
+}
+
+function showReactionBurst(emoji) {
+  if (!emoji) return;
+  const burst = document.createElement('div');
+  burst.className = 'reaction-burst';
+  const points = [
+    [-10, -66], [44, -48], [68, 8], [26, 58],
+    [-38, 52], [-70, -4], [-48, -44], [6, -8]
+  ];
+  points.forEach((point, i) => {
+    const s = document.createElement('span');
+    s.textContent = i % 3 === 0 ? emoji : (emoji === '❤️' ? ['💗','💖','💕'][i % 3] : emoji);
+    s.style.setProperty('--x', point[0] + 'px');
+    s.style.setProperty('--y', point[1] + 'px');
+    s.style.animationDelay = (i * 24) + 'ms';
+    burst.appendChild(s);
+  });
+  document.body.appendChild(burst);
+  setTimeout(() => burst.remove(), 1150);
+}
+
 function updateReactions(key, reactions = {}) {
   const el = document.getElementById('react-' + key);
   const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
   if (!el) return;
+  const hadSnapshot = !!el.dataset.reactions;
+  let previous = {};
+  try { previous = hadSnapshot ? JSON.parse(el.dataset.reactions) : {}; } catch {}
+  const burstEmoji = hadSnapshot ? reactionBurstEmoji(previous, reactions || {}) : '';
   el.dataset.reactions = JSON.stringify(reactions || {});
   const own = reactions && reactions[myRole];
   if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own || '♡';
+  if (burstEmoji) showReactionBurst(burstEmoji);
   const values = Object.values(reactions || {}).filter(Boolean);
   if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
   const counts = {};
@@ -4507,13 +4551,14 @@ function clearRecCountdown(btn, kind, listenText) {
 
 function flashButton(btn){
   if(!btn) return;
+  if(btn.closest('.msg-react-btn,.reaction-picker')) return;
   btn.classList.remove('flash');
   void btn.offsetWidth;
   btn.classList.add('pressed','flash');
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b)b.classList.add('pressed')},{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b&&!b.closest('.msg-react-btn,.reaction-picker'))b.classList.add('pressed')},{capture:true,passive:true});
 document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
