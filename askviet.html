@@ -579,7 +579,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-no-speech-reload-1';
+const APP_VERSION = '2026-06-21-typing-expiry-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -594,6 +594,9 @@ let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLi
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
+let remoteTypingHideTimer = null;
+let lastTypingSignalAt = 0;
+const REMOTE_TYPING_TTL_MS = 5000;
 let isTyping = false;
 let unsubMessages = null;
 let unsubTyping = null;
@@ -1032,6 +1035,13 @@ function start(role) {
   saveTtsSettings();
   myRole = role;
   loadPersistentQueues();
+  isTyping = false;
+  lastTypingSignalAt = 0;
+  fbSet(TYPING_PATH + '/' + role, {
+    active: false,
+    ts: { '.sv':'timestamp' },
+    session: SESSION_ID
+  }).catch(()=>{});
   localStorage.setItem('askviet_last_role', role);
   localStorage.setItem('askviet_last_mode', localStorage.getItem('askviet_last_mode') || 'chat');
   theirRole = role === 'tr' ? 'vi' : 'tr';
@@ -1071,6 +1081,7 @@ function start(role) {
 function goBack() {
   cancelReply();
   stopAutoRefreshTimer();
+  if (remoteTypingHideTimer) { clearTimeout(remoteTypingHideTimer); remoteTypingHideTimer = null; }
   if (unsubMessages) unsubMessages();
   if (unsubTyping) unsubTyping();
   if (unsubModel) unsubModel();
@@ -1228,21 +1239,35 @@ function initChat() {
   unsubTyping = fbListen(TYPING_PATH, event => {
     if (!event) return;
     const path = event.path || '/';
-    const ind = document.getElementById('typingIndicator');
-    if (!ind) return;
-    let val = false;
+    let raw = false;
     if (path === '/') {
-      val = !!(event.data && event.data[theirRole]);
+      raw = event.data && event.data[theirRole];
     } else if (path === '/' + theirRole) {
-      val = !!event.data;
+      raw = event.data;
     } else return;
-    ind.classList.toggle('show', val);
-    if (val) scrollToBottom();
+    const active = raw && typeof raw === 'object' ? !!raw.active : !!raw;
+    const stamp = raw && typeof raw === 'object' ? Number(raw.ts || 0) : 0;
+    const fresh = !stamp || Date.now() - stamp <= REMOTE_TYPING_TTL_MS;
+    showRemoteTyping(active && fresh);
   });
 
   listenAudioRequests();
   scheduleChatWatchdog();
   startChatHealthWatchdog();
+}
+
+function showRemoteTyping(show) {
+  const ind = document.getElementById('typingIndicator');
+  if (!ind) return;
+  if (remoteTypingHideTimer) clearTimeout(remoteTypingHideTimer);
+  remoteTypingHideTimer = null;
+  ind.classList.toggle('show', !!show);
+  if (!show) return;
+  scrollToBottom();
+  remoteTypingHideTimer = setTimeout(() => {
+    remoteTypingHideTimer = null;
+    document.getElementById('typingIndicator')?.classList.remove('show');
+  }, REMOTE_TYPING_TTL_MS);
 }
 
 async function pollMessagesSnapshot(fresh=false) {
@@ -3640,9 +3665,37 @@ async function translateText(text, from, modelOverride) {
 }
 // ── Typing ────────────────────────────────────────────────────────────────
 function setMyTyping(val) {
-  if (isTyping === val) return;
+  const now = Date.now();
+  if (val && isTyping && now - lastTypingSignalAt < 1200) return;
+  if (!val && !isTyping) return;
   isTyping = val;
-  fbSet(TYPING_PATH + '/' + myRole, val);
+  if (!myRole) return;
+  lastTypingSignalAt = now;
+  fbSet(TYPING_PATH + '/' + myRole, val ? {
+    active: true,
+    ts: { '.sv':'timestamp' },
+    session: SESSION_ID
+  } : {
+    active: false,
+    ts: { '.sv':'timestamp' },
+    session: SESSION_ID
+  });
+}
+
+function clearMyTypingOnExit() {
+  if (!myRole) return;
+  isTyping = false;
+  const payload = {
+    active: false,
+    ts: Date.now(),
+    session: SESSION_ID
+  };
+  fetch(DB_URL + TYPING_PATH + '/' + myRole + '.json', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload),
+    keepalive: true
+  }).catch(()=>{});
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────
@@ -4975,6 +5028,7 @@ function updatePresenceStatus(data) {
     counter.title = count + ' cihaz/sekme çevrim içi';
   }
   el.classList.toggle('online', online);
+  if (!online) showRemoteTyping(false);
   if (online) el.textContent = viMode() ? 'Đang hoạt động' : 'Şu anda aktif';
   else el.textContent = viMode()
     ? ('Lần cuối | ' + relativePresence(lastActive))
@@ -5314,13 +5368,13 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
 window.addEventListener('beforeunload', () => {
   try { prepareResumeState(); } catch {}
   try { releaseWakeLock(); } catch {}
-  if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
+  if (myRole) { clearMyTypingOnExit(); stopPresenceHeartbeat(true); }
 });
 window.addEventListener('pagehide', () => {
   lastPageHiddenAt = Date.now();
   try { prepareResumeState(); } catch {}
   try { releaseWakeLock(); } catch {}
-  if (myRole) { fbSet(TYPING_PATH + '/' + myRole, false); stopPresenceHeartbeat(true); }
+  if (myRole) { clearMyTypingOnExit(); stopPresenceHeartbeat(true); }
 });
 
 function resumeChatTransport() {
