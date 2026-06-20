@@ -125,7 +125,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.media-msg .msg-reply-quote{margin:2px 2px 4px;width:calc(100% - 4px);background:rgba(17,24,39,.88);color:#fff;border-left-color:#f9a8d4}
 
 /* Çeviri — küçük ve soluk */
-.msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4}
+.msg-translation{font-size:12px;color:#666;padding:3px 14px 0;font-style:italic;line-height:1.4;touch-action:manipulation}
+.translation-copy-tick{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #22c55e;box-shadow:0 2px 7px rgba(22,163,74,.35);font:900 10px/1 Arial,sans-serif;vertical-align:middle;pointer-events:none;animation:translationTick .95s ease forwards}
+@keyframes translationTick{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1.18)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82)}}
 .msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 .msg-media-video{min-width:min(240px,68vw)}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
@@ -144,7 +146,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .reaction-picker button:active,.reaction-picker button.pressed,.reaction-picker button.flash{transform:none!important;animation:none!important;filter:none!important;box-shadow:none!important}
 .reaction-burst{position:fixed;left:50%;top:47%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
 .reaction-burst-particle{position:absolute;left:0;top:0;font-size:var(--size,28px);line-height:1;filter:drop-shadow(0 7px 12px rgba(0,0,0,.32));animation:reactionPop var(--duration,1.2s) cubic-bezier(.13,.76,.2,1) forwards}
-.reaction-burst-core{position:absolute;left:0;top:0;font-size:72px;line-height:1;white-space:nowrap;filter:drop-shadow(0 12px 22px rgba(0,0,0,.28));animation:reactionCountPop 1.08s cubic-bezier(.16,.84,.24,1) forwards}
+.reaction-burst-core{position:absolute;left:0;top:0;font-size:112px;line-height:1;white-space:nowrap;filter:drop-shadow(0 14px 26px rgba(0,0,0,.3));animation:reactionCountPop 1.08s cubic-bezier(.16,.84,.24,1) forwards}
 @keyframes reactionPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0deg)}13%{opacity:1;transform:translate(calc(-50% + var(--x)*.12),calc(-50% + var(--y)*.12)) scale(1.35) rotate(var(--rot))}72%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.72) rotate(calc(var(--rot) * 2))}}
 @keyframes reactionCountPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.22)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}43%{transform:translate(-50%,-50%) scale(.94)}72%{opacity:1;transform:translate(-50%,-54%) scale(1.04)}100%{opacity:0;transform:translate(-50%,-82%) scale(1.18)}}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
@@ -570,7 +572,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-swipe-reply-2';
+const APP_VERSION = '2026-06-20-swipe-reply-4';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -1026,6 +1028,7 @@ function start(role) {
   theirRole = role === 'tr' ? 'vi' : 'tr';
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
+  syncChatVisualViewport();
   try{
     const ct=document.getElementById('chatTitle'); const cs=document.getElementById('chatSubtitle'); const mi=document.getElementById('msgInput');
     if(role === 'tr'){ if(ct) ct.textContent='🇹🇷 → 🇻🇳'; if(cs) cs.textContent='Mesajlar Vietnamcaya çevriliyor'; if(mi) mi.placeholder='Türkçe yaz...'; }
@@ -1534,6 +1537,7 @@ function renderMessage(key, msg) {
   orig.style.position = 'relative';
   setMessageContent(orig, msg);
   addReactionButton(orig, key);
+  bindBubbleDoubleTap(orig, key);
   head.append(orig, flag);
   div.appendChild(head);
   bindSwipeReply(div, head, key);
@@ -1558,6 +1562,7 @@ function renderMessage(key, msg) {
     trans.style.fontStyle = 'normal';
   }
   div.appendChild(trans);
+  bindTranslationDoubleTap(trans, key);
 
   let btnRow = null;
   if (!isMedia) {
@@ -1779,6 +1784,21 @@ function updateReplyComposer() {
   if (close) close.title = uiText('Yanıtı iptal et', 'Hủy trả lời');
 }
 
+function syncChatVisualViewport() {
+  const chat = document.getElementById('chat');
+  const viewport = window.visualViewport;
+  if (!chat || !viewport) return;
+  chat.style.height = Math.max(1, Math.round(viewport.height)) + 'px';
+  chat.style.top = Math.max(0, Math.round(viewport.offsetTop || 0)) + 'px';
+  chat.style.bottom = 'auto';
+}
+
+function settleChatVisualViewport() {
+  syncChatVisualViewport();
+  setTimeout(syncChatVisualViewport, 60);
+  setTimeout(syncChatVisualViewport, 260);
+}
+
 function startReply(key) {
   const reply = buildReplySnapshot(key);
   if (!reply) return;
@@ -1786,8 +1806,9 @@ function startReply(key) {
   updateReplyComposer();
   const input = document.getElementById('msgInput');
   if (input) {
-    try { input.focus({ preventScroll:true }); } catch { input.focus(); }
+    input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
+    settleChatVisualViewport();
   }
 }
 
@@ -1941,9 +1962,7 @@ function addReactionButton(parent, key) {
   btn.className = 'msg-react-btn';
   btn.textContent = '♡';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
-  const DOUBLE_TAP_MS = 650;
-  let longPress = false, longTimer = null, tapTimer = null;
-  let lastTapAt = 0;
+  let longPress = false, longTimer = null;
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -1952,35 +1971,19 @@ function addReactionButton(parent, key) {
     longPress = false;
     longTimer = setTimeout(() => {
       longPress = true;
-      lastTapAt = 0;
-      clearTimeout(tapTimer);
-      tapTimer = null;
       showReactionPicker(key, btn);
     }, 430);
   });
-  btn.addEventListener('pointerup', async e => {
+  btn.addEventListener('pointerup', e => {
     e.preventDefault();
     e.stopPropagation();
     clearTimeout(longTimer);
     parent.classList.remove('react-pressing');
     try { btn.releasePointerCapture(e.pointerId); } catch {}
-    if (longPress) { lastTapAt = 0; clearTimeout(tapTimer); tapTimer = null; return; }
-    const now = Date.now();
-    const doubleTap = lastTapAt && now - lastTapAt <= DOUBLE_TAP_MS;
-    lastTapAt = doubleTap ? 0 : now;
-    clearTimeout(tapTimer);
-    tapTimer = null;
+    if (longPress) return;
     addCurrentMessageReaction(key);
-    if (doubleTap) {
-      await copyMessageTranslation(key, btn, false);
-      return;
-    }
-    tapTimer = setTimeout(() => {
-      lastTapAt = 0;
-      tapTimer = null;
-    }, DOUBLE_TAP_MS);
   });
-  const clearReactionTimers = e => { clearTimeout(longTimer); if (e?.type !== 'pointerleave') { clearTimeout(tapTimer); tapTimer = null; } parent.classList.remove('react-pressing'); };
+  const clearReactionTimers = () => { clearTimeout(longTimer); parent.classList.remove('react-pressing'); };
   btn.addEventListener('pointercancel', clearReactionTimers);
   btn.addEventListener('pointerleave', e => { clearTimeout(longTimer); parent.classList.remove('react-pressing'); });
   btn.addEventListener('contextmenu', e => e.preventDefault());
@@ -2043,6 +2046,77 @@ async function copyMessageTranslation(key, btn, clearOwnReaction=false) {
     btn.classList.remove('pressed');
   }, 900);
   return true;
+}
+
+function bindDoubleTapGesture(el, action, ignoreSelector='') {
+  if (!el || el.dataset.doubleTapBound === '1') return;
+  el.dataset.doubleTapBound = '1';
+  let lastTapAt = 0;
+  let pointerStart = null;
+  let suppressPointerUntil = 0;
+  const touchStarts = new Map();
+  const ignored = target => !!(ignoreSelector && target?.closest?.(ignoreSelector));
+  const registerTap = event => {
+    const now = Date.now();
+    const isDouble = lastTapAt && now - lastTapAt <= 460;
+    lastTapAt = isDouble ? 0 : now;
+    if (!isDouble) return;
+    if (event?.cancelable) event.preventDefault();
+    Promise.resolve(action()).catch(console.error);
+  };
+  el.addEventListener('pointerdown', e => {
+    if (Date.now() < suppressPointerUntil || ignored(e.target)) return;
+    pointerStart = { id:e.pointerId, x:e.clientX, y:e.clientY };
+  });
+  el.addEventListener('pointerup', e => {
+    if (!pointerStart || pointerStart.id !== e.pointerId || ignored(e.target)) return;
+    const distance = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+    pointerStart = null;
+    if (distance <= 10) registerTap(e);
+  });
+  el.addEventListener('pointercancel', () => { pointerStart = null; });
+  el.addEventListener('touchstart', e => {
+    if (ignored(e.target)) return;
+    suppressPointerUntil = Date.now() + 1000;
+    for (const touch of Array.from(e.changedTouches || [])) {
+      touchStarts.set(touch.identifier, { x:touch.clientX, y:touch.clientY });
+    }
+  }, { passive:true });
+  el.addEventListener('touchend', e => {
+    if (ignored(e.target)) return;
+    for (const touch of Array.from(e.changedTouches || [])) {
+      const start = touchStarts.get(touch.identifier);
+      touchStarts.delete(touch.identifier);
+      if (start && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) <= 10) registerTap(e);
+    }
+  }, { passive:false });
+  el.addEventListener('touchcancel', e => {
+    for (const touch of Array.from(e.changedTouches || [])) touchStarts.delete(touch.identifier);
+  }, { passive:true });
+}
+
+function bindBubbleDoubleTap(el, key) {
+  bindDoubleTapGesture(el, () => addCurrentMessageReaction(key), 'button,a,.msg-react-btn,.msg-media-img,.msg-media-video');
+}
+
+function showTranslationCopyTick(key) {
+  const trans = document.getElementById('trans-' + key);
+  if (!trans) return;
+  trans.querySelector('.translation-copy-tick')?.remove();
+  const tick = document.createElement('span');
+  tick.className = 'translation-copy-tick';
+  tick.textContent = '✓';
+  trans.appendChild(tick);
+  setTimeout(() => tick.remove(), 1000);
+}
+
+async function copyTranslationFromText(key) {
+  const copied = await copyMessageTranslation(key, null, false);
+  if (copied) showTranslationCopyTick(key);
+}
+
+function bindTranslationDoubleTap(el, key) {
+  bindDoubleTapGesture(el, () => copyTranslationFromText(key), 'a,button');
 }
 
 function showReactionPicker(key, anchor) {
@@ -2204,8 +2278,7 @@ function reactionBurstChange(before={}, after={}) {
 
 function showReactionBurst(emoji, count=1) {
   if (!emoji) return;
-  const active = Array.from(document.querySelectorAll('.reaction-burst'));
-  active.slice(0, Math.max(0, active.length - 3)).forEach(el => el.remove());
+  if (document.querySelector('.reaction-burst')) return;
   const burst = document.createElement('div');
   burst.className = 'reaction-burst';
   const core = document.createElement('div');
@@ -2250,6 +2323,40 @@ function normalizeReactionState(reactions={}, reactionState={}) {
   return normalized;
 }
 
+function updateReactionCountBadge(btn, count, animate=false) {
+  if (!btn) return;
+  const target = Math.max(0, Number(count) || 0);
+  if (target <= 1) {
+    clearTimeout(btn._reactionCountTimer);
+    btn._reactionCountTimer = null;
+    btn.dataset.displayCount = String(target);
+    btn.dataset.targetCount = String(target);
+    delete btn.dataset.count;
+    return;
+  }
+  btn.dataset.targetCount = String(target);
+  if (btn._reactionCountTimer) return;
+  if (!animate || !btn.dataset.displayCount) {
+    clearTimeout(btn._reactionCountTimer);
+    btn._reactionCountTimer = null;
+    btn.dataset.displayCount = String(target);
+    btn.dataset.count = String(target);
+    return;
+  }
+  const step = () => {
+    btn._reactionCountTimer = null;
+    const latestTarget = Math.max(0, Number(btn.dataset.targetCount) || 0);
+    let displayed = Math.max(0, Number(btn.dataset.displayCount) || 0);
+    if (displayed < latestTarget) displayed += 1;
+    else if (displayed > latestTarget) displayed = latestTarget;
+    btn.dataset.displayCount = String(displayed);
+    if (displayed > 1) btn.dataset.count = String(displayed);
+    else delete btn.dataset.count;
+    if (displayed !== latestTarget) btn._reactionCountTimer = setTimeout(step, 45);
+  };
+  btn._reactionCountTimer = setTimeout(step, 45);
+}
+
 function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
   const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
@@ -2282,10 +2389,7 @@ function updateReactions(key, reactions, reactionState) {
   el.dataset.reactionState = JSON.stringify(nextState);
   const own = nextState[myRole];
   if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own?.emoji || '♡';
-  if (btn) {
-    if (own?.count > 1) btn.dataset.count = String(own.count);
-    else delete btn.dataset.count;
-  }
+  updateReactionCountBadge(btn, own?.count || 0, !!burst);
   if (burst) showReactionBurst(burst.emoji, burst.count);
   const values = Object.values(nextState).filter(item => item?.emoji);
   if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
@@ -3495,7 +3599,14 @@ if(msgInputEl){
   msgInputEl.addEventListener('paste', handleMediaTransferEvent);
   msgInputEl.addEventListener('beforeinput', handleMediaTransferEvent);
   msgInputEl.addEventListener('drop', handleMediaTransferEvent);
+  msgInputEl.addEventListener('focus', settleChatVisualViewport);
+  msgInputEl.addEventListener('blur', () => setTimeout(syncChatVisualViewport, 80));
 }
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncChatVisualViewport, { passive:true });
+  window.visualViewport.addEventListener('scroll', syncChatVisualViewport, { passive:true });
+}
+window.addEventListener('orientationchange', settleChatVisualViewport, { passive:true });
 
 // ── PWA Manifest ─────────────────────────────────────────────────────────
 function setPanelOpen(panelId, btnId, force) {
