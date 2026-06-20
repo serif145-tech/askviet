@@ -572,7 +572,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-swipe-reply-4';
+const APP_VERSION = '2026-06-20-swipe-reply-6';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -1562,7 +1562,6 @@ function renderMessage(key, msg) {
     trans.style.fontStyle = 'normal';
   }
   div.appendChild(trans);
-  bindTranslationDoubleTap(trans, key);
 
   let btnRow = null;
   if (!isMedia) {
@@ -1858,8 +1857,14 @@ function bindSwipeReply(box, head, key) {
       if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy)) return;
       horizontal = true;
     }
-    const direction = dx < 0 ? -1 : 1;
-    move = Math.min(maxMove, Math.abs(dx));
+    if (dx <= 0) {
+      move = 0;
+      head.style.transform = '';
+      box.classList.remove('reply-swipe-ready', 'reply-swipe-left', 'reply-swipe-right');
+      return;
+    }
+    const direction = 1;
+    move = Math.min(maxMove, dx);
     if (event?.cancelable) event.preventDefault();
     head.style.transform = 'translateX(' + (move * direction) + 'px)';
     box.classList.toggle('reply-swipe-left', direction < 0);
@@ -2096,7 +2101,7 @@ function bindDoubleTapGesture(el, action, ignoreSelector='') {
 }
 
 function bindBubbleDoubleTap(el, key) {
-  bindDoubleTapGesture(el, () => addCurrentMessageReaction(key), 'button,a,.msg-react-btn,.msg-media-img,.msg-media-video');
+  bindDoubleTapGesture(el, () => copyTranslationFromText(key), 'button,a,.msg-react-btn,.msg-media-img,.msg-media-video');
 }
 
 function showTranslationCopyTick(key) {
@@ -2113,10 +2118,6 @@ function showTranslationCopyTick(key) {
 async function copyTranslationFromText(key) {
   const copied = await copyMessageTranslation(key, null, false);
   if (copied) showTranslationCopyTick(key);
-}
-
-function bindTranslationDoubleTap(el, key) {
-  bindDoubleTapGesture(el, () => copyTranslationFromText(key), 'a,button');
 }
 
 function showReactionPicker(key, anchor) {
