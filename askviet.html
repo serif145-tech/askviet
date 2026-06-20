@@ -1130,7 +1130,7 @@ function initChat() {
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
-        if (el) { appendLinkedText(el, cleanVisibleText(event.data)); el.style.color = ''; el.style.fontStyle = 'italic'; }
+        if (el) { appendLinkedText(el, displayTranslationText(event.data)); el.style.color = ''; el.style.fontStyle = 'italic'; }
         refreshMessageText(key);
         maybeAutoReadMessage(key);
         reorderRenderedMessages();
@@ -1493,7 +1493,7 @@ function renderMessage(key, msg) {
     trans.textContent = '';
     trans.style.display = 'none';
   } else if (msg.translation) {
-    appendLinkedText(trans, cleanVisibleText(msg.translation));
+    appendLinkedText(trans, displayTranslationText(msg.translation));
   } else {
   appendLinkedText(trans, myRole === 'vi' ? 'Đang dịch...' : 'Çeviriliyor...');
     trans.style.color = 'var(--tr2)';
@@ -1611,7 +1611,7 @@ function updateOrRender(key, msg) {
   }
   const el = document.getElementById('trans-' + key);
   if (el && msg.translation) {
-    appendLinkedText(el, cleanVisibleText(msg.translation));
+    appendLinkedText(el, displayTranslationText(msg.translation));
     el.style.color = '';
     el.style.fontStyle = 'italic';
   }
@@ -1627,13 +1627,13 @@ function getMainText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
-  return cleanVisibleText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
+  return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
 }
 
 function getSubText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   const isMine = msg.role === myRole;
-  if (isMine) return cleanVisibleText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
+  if (isMine) return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
   return msg.text || '';
 }
 
@@ -1757,10 +1757,8 @@ function copyableMessageTranslation(key, box) {
     trans?.innerText || trans?.textContent || ''
   ];
   for (const value of candidates) {
-    const text = cleanVisibleText(value);
+    const text = finalTranslationText(value);
     if (!text) continue;
-    if (isPendingTranslationText(text)) continue;
-    if (/Ceviri hatasi|Çeviri hatası|Loi dich|Lỗi dịch/i.test(text)) continue;
     return text;
   }
   return '';
@@ -1923,7 +1921,7 @@ async function copyOriginalMessage(key, btn) {
   if (!box) return;
   const text = box.dataset.type === 'image' || box.dataset.type === 'video'
     ? (box.dataset.mediaUrl || box.dataset.imageUrl || '')
-    : (box.dataset.text || cleanVisibleText(box.dataset.translation) || '');
+    : (box.dataset.text || finalTranslationText(box.dataset.translation) || '');
   if (!text) return;
   await navigator.clipboard.writeText(text).catch(()=>{});
   btn.textContent = '✓';
@@ -2146,7 +2144,7 @@ function getReadableLang(senderRole) {
 function getReadableText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  return cleanVisibleText(box.dataset.translation) || box.dataset.text || '';
+  return finalTranslationText(box.dataset.translation) || box.dataset.text || '';
 }
 
 function getRecipientRole(senderRole) {
@@ -2156,7 +2154,7 @@ function getRecipientRole(senderRole) {
 function getRecipientText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return '';
-  return cleanVisibleText(box.dataset.translation) || '';
+  return finalTranslationText(box.dataset.translation) || '';
 }
 
 async function requestSpeakForMessage(key, btn) {
@@ -2298,8 +2296,8 @@ function maybeAutoReadMessage(key) {
     autoReadDone.add(key);
     return;
   }
-  const text = box.dataset.translation || '';
-  if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
+  const text = finalTranslationText(box.dataset.translation || '');
+  if (!text) return;
   autoReadDone.add(key);
   enqueueAutoSpeak(text, myRole);
 }
@@ -2728,12 +2726,89 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+const TRANSLATION_STATUS_PREFIX = '__ASKVIET_STATUS__:';
+
+function encodeTranslationStatus(status) {
+  return TRANSLATION_STATUS_PREFIX + JSON.stringify(status || {});
+}
+
+function parseTranslationStatus(text) {
+  const raw = String(text || '');
+  if (!raw.startsWith(TRANSLATION_STATUS_PREFIX)) return null;
+  try { return JSON.parse(raw.slice(TRANSLATION_STATUS_PREFIX.length)); }
+  catch { return null; }
+}
+
+function retryStatusText(role, failedModel='gemini:gemini-3.5-flash', nextModel='', reason='') {
+  const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
+  const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
+  const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
+  const nextName = modelName(nextModel) || (nextProvider === 'openai' ? 'OpenAI' : (nextProvider === 'claude' ? 'Claude' : 'Gemini'));
+  const why = shortRetryReason(reason, role);
+  const suffix = why ? ' (' + why + ')' : '';
+  return role === 'vi'
+    ? (failedName + suffix + ', đang thử ' + nextName + '...')
+    : (failedName + suffix + ', ' + nextName + ' deneniyor...');
+}
+
+function localizeLegacyStatusText(text, role=myRole) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  const vi = role === 'vi';
+  const modelStatus = /Opus|Sonnet|Haiku|GPT|Gemini|Claude/i.test(raw);
+  const toTrReason = value => value
+    .replace(/hết 18 giây/gi, '18 sn doldu')
+    .replace(/model bị từ chối/gi, 'model reddetti')
+    .replace(/giới hạn/gi, 'limit')
+    .replace(/\bbận\b/gi, 'yoğun')
+    .replace(/kết nối/gi, 'bağlantı');
+  const toViReason = value => value
+    .replace(/18 sn doldu/gi, 'hết 18 giây')
+    .replace(/model reddetti/gi, 'model bị từ chối')
+    .replace(/limit/gi, 'giới hạn')
+    .replace(/yoğun/gi, 'bận')
+    .replace(/bağlantı/gi, 'kết nối');
+
+  if (!vi && /^(lỗi dịch|loi dich)\s*:/i.test(raw)) {
+    return 'Çeviri hatası: ' + normalizeApiError(raw.replace(/^(lỗi dịch|loi dich)\s*:/i, '').trim(), 'tr');
+  }
+  if (vi && /^(ç|c)eviri hatas[ıi]\s*:/i.test(raw)) {
+    return 'Lỗi dịch: ' + normalizeApiError(raw.replace(/^(ç|c)eviri hatas[ıi]\s*:/i, '').trim(), 'vi');
+  }
+  if (!modelStatus) return '';
+
+  let m = raw.match(/^(.+?),\s*đang thử\s+(.+?)\.\.\.$/i);
+  if (m && !vi) return toTrReason(m[1]) + ', ' + m[2] + ' deneniyor...';
+  m = raw.match(/^(.+?),\s*(.+?)\s+deneniyor\.\.\.$/i);
+  if (m && vi) return toViReason(m[1]) + ', đang thử ' + m[2] + '...';
+  return '';
+}
+
+function displayTranslationText(text, role=myRole) {
+  const status = parseTranslationStatus(text);
+  if (status) {
+    if (status.kind === 'retry') return retryStatusText(role, status.failedModel, status.nextModel, status.reason);
+    if (status.kind === 'error') return (role === 'vi' ? 'Lỗi dịch: ' : 'Çeviri hatası: ') + normalizeApiError(status.message || '', role);
+  }
+  const legacy = localizeLegacyStatusText(text, role);
+  if (legacy) return legacy;
+  return cleanVisibleText(text);
+}
+
+function finalTranslationText(text) {
+  if (parseTranslationStatus(text)) return '';
+  const clean = cleanVisibleText(text);
+  return isPendingTranslationText(clean) ? '' : clean;
+}
+
 function isFatalTranslationError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
   return /api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized|permission|denied|401|403/.test(s);
 }
 
 function isPendingTranslationText(text) {
+  const status = parseTranslationStatus(text);
+  if (status) return status.kind === 'retry';
   const s = String(text || '').toLowerCase();
   return !s || s.includes('ceviriliyor') || s.includes('çeviriliyor') || s.includes('dang dich') || s.includes('đang dịch') || s.includes('gemini yogun') || s.includes('gemini yoğun') || s.includes('openai yogun') || s.includes('openai yoğun') || s.includes('claude yogun') || s.includes('claude yoğun') || s.includes('dang thu lai') || s.includes('đang thử lại');
 }
@@ -2783,19 +2858,11 @@ function shortRetryReason(msg, role) {
 }
 
 function retryText(role, failedModel='gemini:gemini-3.5-flash', nextModel='', reason='') {
-  const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
-  const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
-  const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
-  const nextName = modelName(nextModel) || (nextProvider === 'openai' ? 'OpenAI' : (nextProvider === 'claude' ? 'Claude' : 'Gemini'));
-  const why = shortRetryReason(reason, role);
-  const suffix = why ? ' (' + why + ')' : '';
-  return role === 'vi'
-    ? (failedName + suffix + ', đang thử ' + nextName + '...')
-    : (failedName + suffix + ', ' + nextName + ' deneniyor...');
+  return encodeTranslationStatus({ kind: 'retry', failedModel, nextModel, reason: String(reason || '').slice(0, 180) });
 }
 
 function errorText(role, msg) {
-  return (role === 'vi' ? 'Lỗi dịch: ' : 'Çeviri hatası: ') + normalizeApiError(msg, role);
+  return encodeTranslationStatus({ kind: 'error', message: String(msg || '').slice(0, 180) });
 }
 
 function isRetryableGeminiError(e) {
