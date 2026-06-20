@@ -579,7 +579,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-cross-reactions-3';
+const APP_VERSION = '2026-06-20-no-speech-reload-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -621,6 +621,7 @@ let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
+const AUTO_REFRESH_IDLE_MS = 4 * 60 * 1000;
 let autoRefreshTimer = null;
 let autoRefreshStartedAt = 0;
 let chatWatchdogTimer = null;
@@ -647,6 +648,7 @@ let autoSpeakRetryTimer = null;
 let audioUnlocking = null, audioUnlockedAt = 0;
 let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
 let ttsPending = new Map();
+let lastChatUserActivityAt = Date.now();
 const SESSION_ID = sessionStorage.getItem('askviet_session_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 sessionStorage.setItem('askviet_session_id', SESSION_ID);
 const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
@@ -1439,12 +1441,21 @@ function stopAutoRefreshTimer() {
   autoRefreshStartedAt = 0;
 }
 
+function markChatUserActivity() {
+  lastChatUserActivityAt = Date.now();
+}
+
 function isSafeToAutoRefresh() {
   if (myRole !== 'tr' && myRole !== 'vi') return false;
   if (document.visibilityState && document.visibilityState !== 'visible') return false;
+  if (typeof getCurrentUiMode === 'function' && getCurrentUiMode() !== 'chat') return false;
+  if (Date.now() - lastChatUserActivityAt < AUTO_REFRESH_IDLE_MS) return false;
   if (rec || recStream || geminiLiveWs || geminiLiveStream || liveStarting) return false;
+  if (pendingMessageQueue.size || outgoingInFlight.size || translationRunTokens.size) return false;
+  if (isTyping || autoSpeakRunning || autoSpeakQueue.length || pendingBlockedAudio) return false;
   const input = document.getElementById('msgInput');
   if (input && input.value && input.value.trim()) return false;
+  if (document.activeElement && document.activeElement === input) return false;
   if (activeReply) return false;
   const upload = document.getElementById('mediaUploadStatus');
   if (upload && upload.style.display !== 'none' && upload.textContent.trim()) return false;
@@ -3090,8 +3101,25 @@ function messagePayloadForServer(msg) {
   });
 }
 
+function ensureLocalOutgoingVisible(key, item) {
+  if (!key || !item || !pendingMessageQueue.has(key)) return;
+  let box = document.getElementById('msg-' + key);
+  if (!box) {
+    renderedKeys.delete(key);
+    visibleMessageKeys.delete(key);
+    renderMessage(key, Object.assign({}, item.msg, { localPending:true, delivery:item.state === 'failed' ? 'failed' : 'pending' }));
+    box = document.getElementById('msg-' + key);
+  }
+  if (box) {
+    box.dataset.localPending = '1';
+    updateDeliveryStatus(key, item.state === 'failed' ? 'failed' : 'pending');
+  }
+  scrollToBottom(true);
+}
+
 function queueOutgoingMessage(msg) {
   if (!canQueueOutgoingMessage()) return null;
+  markChatUserActivity();
   const key = createMessageKey();
   const item = {
     key,
@@ -3105,7 +3133,16 @@ function queueOutgoingMessage(msg) {
   pendingMessageQueue.set(key, item);
   persistPendingMessages();
   renderMessage(key, Object.assign({}, item.msg, { localPending:true, delivery:'pending' }));
-  scrollToBottom();
+  const box = document.getElementById('msg-' + key);
+  if (box) {
+    box.dataset.localPending = '1';
+    const orig = document.getElementById('orig-' + key);
+    if (orig && !orig.textContent.trim() && item.msg.text) setMessageContent(orig, item.msg);
+  }
+  scrollToBottom(true);
+  (window.requestAnimationFrame || setTimeout)(() => scrollToBottom(true), 0);
+  setTimeout(() => ensureLocalOutgoingVisible(key, item), 120);
+  setTimeout(() => ensureLocalOutgoingVisible(key, item), 900);
   flushOutgoingQueue();
   return key;
 }
@@ -3220,6 +3257,7 @@ function retryOutgoingMessage(key) {
 }
 
 function sendMessage() {
+  markChatUserActivity();
   const input = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
   const text = input.value.trim();
@@ -3611,6 +3649,7 @@ function setMyTyping(val) {
 const msgInputEl = document.getElementById('msgInput');
 if(msgInputEl){
   msgInputEl.addEventListener('input', function() {
+    markChatUserActivity();
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     setMyTyping(true);
@@ -3618,6 +3657,7 @@ if(msgInputEl){
     typingTimer = setTimeout(() => setMyTyping(false), 2000);
   });
   msgInputEl.addEventListener('keydown', e => {
+    markChatUserActivity();
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
   msgInputEl.addEventListener('paste', handleMediaTransferEvent);
@@ -5029,10 +5069,29 @@ function noteNoSpeechStop() {
   noSpeechStops.push(now);
   if (noSpeechStops.length < 2) return;
   noSpeechStops = [];
+  markChatUserActivity();
+  try {
+    if (recStream) recStream.getTracks().forEach(t => t.stop());
+    if (recNode) recNode.disconnect();
+  } catch {}
+  recStream = null;
+  recNode = null;
+  rec = null;
+  recAnalyser = null;
+  recData = null;
+  if (recTimer) { clearInterval(recTimer); recTimer = null; }
+  const btn = document.getElementById('micBtn');
+  if (btn) {
+    btn.classList.remove('mic-recording');
+    btn.innerHTML = MIC_ICON;
+  }
   const role = myRole || localStorage.getItem('askviet_last_role') || 'tr';
-  localStorage.setItem('askviet_resume_role', role);
-  localStorage.setItem('askviet_resume_mode', getCurrentUiMode());
-  localStorage.setItem('askviet_last_role', role);
+  if (role === 'tr' || role === 'vi') {
+    localStorage.setItem('askviet_resume_role', role);
+    localStorage.setItem('askviet_resume_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
+    localStorage.setItem('askviet_last_role', role);
+    localStorage.setItem('askviet_last_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
+  }
   setTimeout(() => location.reload(), 120);
 }
 function resetNoSpeechStops() { noSpeechStops = []; }
@@ -5107,7 +5166,7 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-document.addEventListener('pointerdown',e=>{try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b&&!b.closest('.msg-react-btn,.reaction-picker'))b.classList.add('pressed')},{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{markChatUserActivity();try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b&&!b.closest('.msg-react-btn,.reaction-picker'))b.classList.add('pressed')},{capture:true,passive:true});
 document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
@@ -5126,6 +5185,7 @@ async function ensureAudioCtx(){
 }
 
 async function startVoice() {
+  markChatUserActivity();
   const btn = document.getElementById('micBtn');
   if(rec){stopRec();return;}
   recChunks=[];recHadSpeech=false;recSilentSince=0;recVoiceMs=0;recConsecutiveVoiceMs=0;
