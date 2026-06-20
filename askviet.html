@@ -146,7 +146,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .reaction-picker button:active,.reaction-picker button.pressed,.reaction-picker button.flash{transform:none!important;animation:none!important;filter:none!important;box-shadow:none!important}
 .reaction-burst{position:fixed;left:50%;top:47%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
 .reaction-burst-particle{position:absolute;left:0;top:0;font-size:var(--size,28px);line-height:1;filter:drop-shadow(0 7px 12px rgba(0,0,0,.32));animation:reactionPop var(--duration,1.2s) cubic-bezier(.13,.76,.2,1) forwards}
-.reaction-burst-core{position:absolute;left:0;top:0;font-size:112px;line-height:1;white-space:nowrap;filter:drop-shadow(0 14px 26px rgba(0,0,0,.3));animation:reactionCountPop 1.08s cubic-bezier(.16,.84,.24,1) forwards}
+.reaction-burst-core{position:absolute;left:0;top:0;font-size:112px;line-height:1;white-space:nowrap;filter:drop-shadow(0 14px 26px rgba(0,0,0,.3));animation:reactionCountPop .86s cubic-bezier(.16,.84,.24,1) forwards}
 @keyframes reactionPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0deg)}13%{opacity:1;transform:translate(calc(-50% + var(--x)*.12),calc(-50% + var(--y)*.12)) scale(1.35) rotate(var(--rot))}72%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.72) rotate(calc(var(--rot) * 2))}}
 @keyframes reactionCountPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.22)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}43%{transform:translate(-50%,-50%) scale(.94)}72%{opacity:1;transform:translate(-50%,-54%) scale(1.04)}100%{opacity:0;transform:translate(-50%,-82%) scale(1.18)}}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
@@ -572,7 +572,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-swipe-reply-6';
+const APP_VERSION = '2026-06-20-swipe-reply-7';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2177,6 +2177,7 @@ function addCurrentMessageReaction(key) {
 const reactionWriteQueues = new Map();
 const reactionPulseWatermarks = new Map();
 let reactionPulseSequence = 0;
+let lastReactionBurstAt = 0;
 
 function nextReactionPulse() {
   reactionPulseSequence = (reactionPulseSequence + 1) % 1000;
@@ -2279,14 +2280,18 @@ function reactionBurstChange(before={}, after={}) {
 
 function showReactionBurst(emoji, count=1) {
   if (!emoji) return;
-  if (document.querySelector('.reaction-burst')) return;
+  const now = Date.now();
+  if (now - lastReactionBurstAt < 260) return;
+  lastReactionBurstAt = now;
+  const active = Array.from(document.querySelectorAll('.reaction-burst'));
+  if (active.length >= 3) active.slice(0, active.length - 2).forEach(el => el.remove());
   const burst = document.createElement('div');
   burst.className = 'reaction-burst';
   const core = document.createElement('div');
   core.className = 'reaction-burst-core';
   core.textContent = emoji;
   burst.appendChild(core);
-  const particleCount = 24;
+  const particleCount = 16;
   for (let i = 0; i < particleCount; i++) {
     const angle = (Math.PI * 2 * i / particleCount) + (i % 3) * .09;
     const distance = 86 + (i % 5) * 19;
@@ -2298,12 +2303,12 @@ function showReactionBurst(emoji, count=1) {
     s.style.setProperty('--y', point[1].toFixed(1) + 'px');
     s.style.setProperty('--rot', ((i % 2 ? 1 : -1) * (18 + i * 7)) + 'deg');
     s.style.setProperty('--size', (22 + (i % 5) * 5) + 'px');
-    s.style.setProperty('--duration', (1050 + (i % 4) * 120) + 'ms');
+    s.style.setProperty('--duration', (780 + (i % 4) * 70) + 'ms');
     s.style.animationDelay = (i % 6) * 18 + 'ms';
     burst.appendChild(s);
   }
   document.body.appendChild(burst);
-  setTimeout(() => burst.remove(), 1650);
+  setTimeout(() => burst.remove(), 1200);
 }
 
 function normalizeReactionState(reactions={}, reactionState={}) {
