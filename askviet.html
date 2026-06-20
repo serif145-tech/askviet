@@ -137,8 +137,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.mine .msg-react-btn{left:-34px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.msg-reactions{display:none;align-items:center;gap:3px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 6px;margin-top:-3px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
-.msg-reactions.show{display:none}
+.msg-reactions{display:none;align-items:center;gap:4px;background:transparent;border:0;padding:3px 10px 0;margin-top:0;font-size:12px;box-shadow:none;flex-wrap:wrap}
+.msg-reactions.show{display:flex}
+.msg.mine .msg-reactions{justify-content:flex-end}
+.msg.theirs .msg-reactions{justify-content:flex-start}
+.reaction-summary-item{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:2px 7px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
+.reaction-summary-emoji{font-size:14px;line-height:1}
+.reaction-summary-count{min-width:8px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
 .reaction-picker button{width:32px;height:32px;border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center}
@@ -572,7 +577,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-swipe-reply-7';
+const APP_VERSION = '2026-06-20-cross-reactions-2';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2272,7 +2277,7 @@ function reactionBurstChange(before={}, after={}) {
     const oldState = before?.[role] || {};
     const newState = after?.[role] || {};
     if (newState.emoji && newState.pulse && newState.pulse !== oldState.pulse) {
-      return { emoji: newState.emoji, count: Math.max(1, Number(newState.count) || 1) };
+      return { role, emoji: newState.emoji, count: Math.max(1, Number(newState.count) || 1) };
     }
   }
   return null;
@@ -2363,6 +2368,30 @@ function updateReactionCountBadge(btn, count, animate=false) {
   btn._reactionCountTimer = setTimeout(step, 45);
 }
 
+function renderReactionSummary(el, state={}) {
+  if (!el) return;
+  el.textContent = '';
+  const totals = new Map();
+  for (const item of Object.values(state || {})) {
+    if (!item?.emoji) continue;
+    totals.set(item.emoji, (totals.get(item.emoji) || 0) + Math.max(1, Number(item.count) || 1));
+  }
+  for (const [emojiValue, total] of totals.entries()) {
+    const chip = document.createElement('span');
+    chip.className = 'reaction-summary-item';
+    chip.title = uiText('Tepki', 'Cảm xúc');
+    const emoji = document.createElement('span');
+    emoji.className = 'reaction-summary-emoji';
+    emoji.textContent = emojiValue;
+    const count = document.createElement('span');
+    count.className = 'reaction-summary-count';
+    count.textContent = String(total);
+    chip.append(emoji, count);
+    el.appendChild(chip);
+  }
+  el.classList.toggle('show', !!el.children.length);
+}
+
 function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
   const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
@@ -2394,15 +2423,12 @@ function updateReactions(key, reactions, reactionState) {
   el.dataset.reactions = JSON.stringify(nextReactions);
   el.dataset.reactionState = JSON.stringify(nextState);
   const own = nextState[myRole];
-  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own?.emoji || '♡';
-  updateReactionCountBadge(btn, own?.count || 0, !!burst);
+  const visibleRole = own ? myRole : Object.keys(nextState).find(role => nextState[role]?.emoji);
+  const visibleReaction = visibleRole ? nextState[visibleRole] : null;
+  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = visibleReaction?.emoji || '♡';
+  updateReactionCountBadge(btn, visibleReaction?.count || 0, !!burst && burst.role === visibleRole);
   if (burst) showReactionBurst(burst.emoji, burst.count);
-  const values = Object.values(nextState).filter(item => item?.emoji);
-  if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
-  const counts = {};
-  values.forEach(item => counts[item.emoji] = (counts[item.emoji] || 0) + Math.max(1, Number(item.count) || 1));
-  el.textContent = Object.entries(counts).map(([e,c]) => c > 1 ? e + ' ' + c : e).join(' ');
-  el.classList.add('show');
+  renderReactionSummary(el, nextState);
 }
 
 function openMediaPreview(src, type='image') {
