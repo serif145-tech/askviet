@@ -119,6 +119,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
 .msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.msg-react-btn[data-count]:after{content:attr(data-count);position:absolute;right:-7px;top:-7px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#ef476f;color:#fff;border:2px solid #fff;font:800 9px/15px Arial,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.22)}
 .msg.mine .msg-react-btn{left:-34px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
@@ -126,11 +127,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-reactions.show{display:none}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
-.reaction-picker button{border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px}
+.reaction-picker button{width:32px;height:32px;border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center}
+.reaction-picker .reaction-remove{border-radius:50%;background:#fee2e2;color:#dc2626;font:900 20px/1 Arial,sans-serif}
 .reaction-picker button:active,.reaction-picker button.pressed,.reaction-picker button.flash{transform:none!important;animation:none!important;filter:none!important;box-shadow:none!important}
-.reaction-burst{position:fixed;left:50%;top:48%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
-.reaction-burst span{position:absolute;left:0;top:0;font-size:24px;line-height:1;filter:drop-shadow(0 5px 10px rgba(0,0,0,.28));animation:reactionPop .9s cubic-bezier(.18,.8,.25,1) forwards}
-@keyframes reactionPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.45)}18%{opacity:1;transform:translate(calc(-50% + var(--x)*.22),calc(-50% + var(--y)*.22)) scale(1.1)}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.92)}}
+.reaction-burst{position:fixed;left:50%;top:47%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
+.reaction-burst-particle{position:absolute;left:0;top:0;font-size:var(--size,28px);line-height:1;filter:drop-shadow(0 7px 12px rgba(0,0,0,.32));animation:reactionPop var(--duration,1.2s) cubic-bezier(.13,.76,.2,1) forwards}
+.reaction-burst-core{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.94);border:2px solid #fb7185;color:#e11d48;box-shadow:0 10px 32px rgba(225,29,72,.35);font:900 27px/1 Arial,sans-serif;white-space:nowrap;animation:reactionCountPop 1.05s cubic-bezier(.16,.84,.24,1) forwards}
+.reaction-burst-core b{font-size:23px}
+@keyframes reactionPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0deg)}13%{opacity:1;transform:translate(calc(-50% + var(--x)*.12),calc(-50% + var(--y)*.12)) scale(1.35) rotate(var(--rot))}72%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.72) rotate(calc(var(--rot) * 2))}}
+@keyframes reactionCountPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.35)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.28)}42%{transform:translate(-50%,-50%) scale(.96)}72%{opacity:1;transform:translate(-50%,-58%) scale(1)}100%{opacity:0;transform:translate(-50%,-105%) scale(.85)}}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
 .media-lightbox.show{display:flex}
 .media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
@@ -538,7 +543,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-19-reliable-queue-1';
+const APP_VERSION = '2026-06-20-reaction-spam-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -1104,6 +1109,11 @@ function initChat() {
           const current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
           delete current[parts[2]];
           updateReactions(key, current);
+        } else if (parts.length === 3 && parts[1] === 'reactionState') {
+          const el = document.getElementById('react-' + key);
+          const current = el?.dataset.reactionState ? JSON.parse(el.dataset.reactionState) : {};
+          delete current[parts[2]];
+          updateReactions(key, undefined, current);
         } else if (parts.length === 3 && parts[1] === 'read') {
           const box = document.getElementById('msg-' + key);
           if (box) {
@@ -1157,6 +1167,14 @@ function initChat() {
           if (event.data) current[parts[2]] = event.data;
           else delete current[parts[2]];
           updateReactions(key, current);
+        }
+      } else if (parts.length === 3 && parts[1] === 'reactionState') {
+        const el = document.getElementById('react-' + key);
+        if (el) {
+          const current = el.dataset.reactionState ? JSON.parse(el.dataset.reactionState) : {};
+          if (event.data) current[parts[2]] = event.data;
+          else delete current[parts[2]];
+          updateReactions(key, undefined, current);
         }
       }
     }
@@ -1587,7 +1605,7 @@ function renderMessage(key, msg) {
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
   refreshMessageText(key);
-  updateReactions(key, msg.reactions);
+  updateReactions(key, msg.reactions, msg.reactionState);
   updateDeliveryStatus(key, msg.delivery || (msg.localPending ? 'pending' : 'sent'));
   updateReadStatus(key);
   markMessageRead(key, msg);
@@ -1626,7 +1644,7 @@ function updateOrRender(key, msg) {
   }
   refreshMessageText(key);
   if (!pendingMessageQueue.has(key)) updateDeliveryStatus(key, 'sent');
-  updateReactions(key, msg.reactions);
+  updateReactions(key, msg.reactions, msg.reactionState);
   updateReadStatus(key);
   markMessageRead(key, msg);
   maybeAutoReadMessage(key);
@@ -1721,7 +1739,7 @@ function addReactionButton(parent, key) {
     lastTapAt = doubleTap ? 0 : now;
     clearTimeout(tapTimer);
     tapTimer = null;
-    toggleHeartReaction(key);
+    addCurrentMessageReaction(key);
     if (doubleTap) {
       await copyMessageTranslation(key, btn, false);
       return;
@@ -1805,17 +1823,29 @@ function showReactionPicker(key, anchor) {
     document.body.appendChild(picker);
   }
   picker.innerHTML = '';
+  const remove = document.createElement('button');
+  remove.className = 'reaction-remove';
+  remove.textContent = '×';
+  remove.title = myRole === 'vi' ? 'Gỡ cảm xúc' : 'Tepkiyi kaldır';
+  remove.onpointerdown = e => e.preventDefault();
+  remove.onclick = e => {
+    e.preventDefault();
+    clearMessageReaction(key);
+    picker.classList.remove('show');
+  };
+  picker.appendChild(remove);
   reactionEmojis().forEach(emoji => {
     const b = document.createElement('button');
     b.textContent = emoji;
     b.onpointerdown = e => e.preventDefault();
-    b.onclick = e => { e.preventDefault(); setMessageReaction(key, emoji); picker.classList.remove('show'); };
+    b.onclick = e => { e.preventDefault(); addMessageReaction(key, emoji); picker.classList.remove('show'); };
     picker.appendChild(b);
   });
-  const r = anchor.getBoundingClientRect();
-  picker.style.left = Math.min(window.innerWidth - 245, Math.max(8, r.left + r.width / 2 - 122)) + 'px';
-  picker.style.top = Math.max(8, r.top - 58) + 'px';
   picker.classList.add('show');
+  const r = anchor.getBoundingClientRect();
+  const pickerWidth = picker.getBoundingClientRect().width;
+  picker.style.left = Math.min(window.innerWidth - pickerWidth - 8, Math.max(8, r.left + r.width / 2 - pickerWidth / 2)) + 'px';
+  picker.style.top = Math.max(8, r.top - 58) + 'px';
 }
 
 document.addEventListener('pointerdown', e => {
@@ -1823,70 +1853,166 @@ document.addEventListener('pointerdown', e => {
   if (picker && picker.classList.contains('show') && !picker.contains(e.target) && !e.target.closest('.msg-react-btn')) picker.classList.remove('show');
 }, { passive: true });
 
-async function toggleHeartReaction(key) {
+function getStoredReactions(key) {
   const el = document.getElementById('react-' + key);
-  let current = {};
-  try { current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch {}
-  await setMessageReaction(key, current[myRole] ? null : '❤️');
+  try { return el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch { return {}; }
+}
+
+function getStoredReactionState(key) {
+  const el = document.getElementById('react-' + key);
+  try { return el?.dataset.reactionState ? JSON.parse(el.dataset.reactionState) : {}; } catch { return {}; }
+}
+
+function addCurrentMessageReaction(key) {
+  const own = getStoredReactionState(key)[myRole];
+  addMessageReaction(key, own?.emoji || '❤️');
+}
+
+const reactionWriteQueues = new Map();
+let reactionPulseSequence = 0;
+
+function nextReactionPulse() {
+  reactionPulseSequence = (reactionPulseSequence + 1) % 1000;
+  return Date.now() * 1000 + reactionPulseSequence;
+}
+
+function queueReactionWrite(key, emoji, state, syncEmoji=false) {
+  if (!myRole) return Promise.resolve();
+  const queueKey = key + ':' + myRole;
+  const previous = reactionWriteQueues.get(queueKey) || Promise.resolve();
+  const task = previous.catch(() => {}).then(async () => {
+    const reactionPath = MSGS_PATH + '/' + key + '/reactions/' + myRole;
+    const statePath = MSGS_PATH + '/' + key + '/reactionState/' + myRole;
+    if (emoji) {
+      if (syncEmoji) await fbSet(reactionPath, emoji);
+      await fbSet(statePath, state);
+    } else {
+      await Promise.all([fbSet(reactionPath, null), fbSet(statePath, null)]);
+    }
+  });
+  reactionWriteQueues.set(queueKey, task);
+  task.finally(() => {
+    if (reactionWriteQueues.get(queueKey) === task) reactionWriteQueues.delete(queueKey);
+  });
+  return task;
+}
+
+function addMessageReaction(key, emoji) {
+  if (!myRole || !emoji) return;
+  const reactions = getStoredReactions(key);
+  const state = getStoredReactionState(key);
+  const previousEmoji = reactions[myRole] || '';
+  const own = state[myRole] || {};
+  const count = own.emoji === emoji ? Math.max(0, Number(own.count) || 0) + 1 : 1;
+  const next = { emoji, count, pulse: nextReactionPulse() };
+  reactions[myRole] = emoji;
+  state[myRole] = next;
+  updateReactions(key, reactions, state);
+  queueReactionWrite(key, emoji, next, previousEmoji !== emoji).catch(console.error);
+}
+
+function clearMessageReaction(key) {
+  if (!myRole) return;
+  const reactions = getStoredReactions(key);
+  const state = getStoredReactionState(key);
+  delete reactions[myRole];
+  delete state[myRole];
+  updateReactions(key, reactions, state);
+  queueReactionWrite(key, null, null).catch(console.error);
 }
 
 async function setMessageReaction(key, emoji) {
-  if (!myRole) return;
-  const el = document.getElementById('react-' + key);
-  let current = {};
-  try { current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {}; } catch {}
-  if (emoji) current[myRole] = emoji;
-  else delete current[myRole];
-  updateReactions(key, current);
-  await fbSet(MSGS_PATH + '/' + key + '/reactions/' + myRole, emoji || null).catch(console.error);
+  if (emoji) addMessageReaction(key, emoji);
+  else clearMessageReaction(key);
 }
 
-function reactionBurstEmoji(before={}, after={}) {
+function reactionBurstChange(before={}, after={}) {
   const roles = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
   for (const role of roles) {
-    const oldEmoji = before?.[role] || '';
-    const newEmoji = after?.[role] || '';
-    if (newEmoji && newEmoji !== oldEmoji) return newEmoji;
+    const oldState = before?.[role] || {};
+    const newState = after?.[role] || {};
+    if (newState.emoji && newState.pulse && newState.pulse !== oldState.pulse) {
+      return { emoji: newState.emoji, count: Math.max(1, Number(newState.count) || 1) };
+    }
   }
-  return '';
+  return null;
 }
 
-function showReactionBurst(emoji) {
+function showReactionBurst(emoji, count=1) {
   if (!emoji) return;
+  const active = Array.from(document.querySelectorAll('.reaction-burst'));
+  active.slice(0, Math.max(0, active.length - 3)).forEach(el => el.remove());
   const burst = document.createElement('div');
   burst.className = 'reaction-burst';
-  const points = [
-    [-10, -66], [44, -48], [68, 8], [26, 58],
-    [-38, 52], [-70, -4], [-48, -44], [6, -8]
-  ];
-  points.forEach((point, i) => {
+  const core = document.createElement('div');
+  core.className = 'reaction-burst-core';
+  core.innerHTML = '<span></span><b></b>';
+  core.querySelector('span').textContent = emoji;
+  core.querySelector('b').textContent = String(Math.max(1, count));
+  burst.appendChild(core);
+  const particleCount = 24;
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (Math.PI * 2 * i / particleCount) + (i % 3) * .09;
+    const distance = 86 + (i % 5) * 19;
+    const point = [Math.cos(angle) * distance, Math.sin(angle) * distance];
     const s = document.createElement('span');
-    s.textContent = i % 3 === 0 ? emoji : (emoji === '❤️' ? ['💗','💖','💕'][i % 3] : emoji);
-    s.style.setProperty('--x', point[0] + 'px');
-    s.style.setProperty('--y', point[1] + 'px');
-    s.style.animationDelay = (i * 24) + 'ms';
+    s.className = 'reaction-burst-particle';
+    s.textContent = emoji === '❤️' ? ['❤️','💗','💖','💕'][i % 4] : emoji;
+    s.style.setProperty('--x', point[0].toFixed(1) + 'px');
+    s.style.setProperty('--y', point[1].toFixed(1) + 'px');
+    s.style.setProperty('--rot', ((i % 2 ? 1 : -1) * (18 + i * 7)) + 'deg');
+    s.style.setProperty('--size', (22 + (i % 5) * 5) + 'px');
+    s.style.setProperty('--duration', (1050 + (i % 4) * 120) + 'ms');
+    s.style.animationDelay = (i % 6) * 18 + 'ms';
     burst.appendChild(s);
-  });
+  }
   document.body.appendChild(burst);
-  setTimeout(() => burst.remove(), 1150);
+  setTimeout(() => burst.remove(), 1650);
 }
 
-function updateReactions(key, reactions = {}) {
+function normalizeReactionState(reactions={}, reactionState={}) {
+  const normalized = {};
+  const roles = new Set([...Object.keys(reactions || {}), ...Object.keys(reactionState || {})]);
+  for (const role of roles) {
+    const raw = reactionState?.[role];
+    if (raw && typeof raw === 'object' && raw.emoji) {
+      normalized[role] = {
+        emoji: raw.emoji,
+        count: Math.max(1, Number(raw.count) || 1),
+        pulse: Number(raw.pulse) || 0
+      };
+    } else if (reactions?.[role]) {
+      normalized[role] = { emoji: reactions[role], count: 1, pulse: 0 };
+    }
+  }
+  return normalized;
+}
+
+function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
   const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
   if (!el) return;
-  const hadSnapshot = !!el.dataset.reactions;
+  const storedReactions = getStoredReactions(key);
+  const storedState = getStoredReactionState(key);
+  const nextReactions = reactions === undefined ? storedReactions : (reactions || {});
+  const nextState = normalizeReactionState(nextReactions, reactionState === undefined ? storedState : (reactionState || {}));
+  const hadSnapshot = !!el.dataset.reactionState;
   let previous = {};
-  try { previous = hadSnapshot ? JSON.parse(el.dataset.reactions) : {}; } catch {}
-  const burstEmoji = hadSnapshot ? reactionBurstEmoji(previous, reactions || {}) : '';
-  el.dataset.reactions = JSON.stringify(reactions || {});
-  const own = reactions && reactions[myRole];
-  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own || '♡';
-  if (burstEmoji) showReactionBurst(burstEmoji);
-  const values = Object.values(reactions || {}).filter(Boolean);
+  try { previous = hadSnapshot ? JSON.parse(el.dataset.reactionState) : {}; } catch {}
+  const burst = hadSnapshot ? reactionBurstChange(previous, nextState) : null;
+  el.dataset.reactions = JSON.stringify(nextReactions);
+  el.dataset.reactionState = JSON.stringify(nextState);
+  const own = nextState[myRole];
+  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = own?.emoji || '♡';
+  if (btn) {
+    if (own?.count > 1) btn.dataset.count = String(own.count);
+    else delete btn.dataset.count;
+  }
+  if (burst) showReactionBurst(burst.emoji, burst.count);
+  const values = Object.values(nextState).filter(item => item?.emoji);
   if (!values.length) { el.classList.remove('show'); el.textContent = ''; return; }
   const counts = {};
-  values.forEach(e => counts[e] = (counts[e] || 0) + 1);
+  values.forEach(item => counts[item.emoji] = (counts[item.emoji] || 0) + Math.max(1, Number(item.count) || 1));
   el.textContent = Object.entries(counts).map(([e,c]) => c > 1 ? e + ' ' + c : e).join(' ');
   el.classList.add('show');
 }
