@@ -133,17 +133,19 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
 .msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-.msg-react-btn[data-count]:after{content:attr(data-count);position:absolute;right:-8px;top:-7px;min-width:12px;height:12px;padding:0 2px;border-radius:999px;background:#ef476f;color:#fff;border:1px solid #fff;font:800 7px/11px Arial,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.22)}
 .msg.mine .msg-react-btn{left:-34px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.msg-reactions{display:none;align-items:center;gap:4px;background:transparent;border:0;padding:3px 10px 0;margin-top:0;font-size:12px;box-shadow:none;flex-wrap:wrap}
-.msg-reactions.show{display:flex}
-.msg.mine .msg-reactions{justify-content:flex-end}
-.msg.theirs .msg-reactions{justify-content:flex-start}
-.reaction-summary-item{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:2px 7px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
+.msg-reactions{display:none;align-items:center;gap:6px;background:transparent;border:0;padding:0;margin:0 0 0 4px;font-size:12px;box-shadow:none;flex-wrap:wrap;flex:0 0 auto}
+.msg-reactions.show{display:inline-flex}
+.reaction-role-row{display:inline-flex;align-items:center;gap:5px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
+.reaction-role-tag{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;padding:0 7px;border-radius:999px;font-size:10px;line-height:1;font-weight:900;letter-spacing:.2px;flex:0 0 auto}
+.reaction-role-tag.tr{background:rgba(124,58,237,.10);color:var(--tr);border:1px solid rgba(124,58,237,.24)}
+.reaction-role-tag.vi{background:rgba(185,28,110,.10);color:var(--vi);border:1px solid rgba(185,28,110,.24)}
+.reaction-role-tag.other{background:#f8fafc;color:#334155;border:1px solid #e2e8f0}
+.reaction-summary-item{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:2px 8px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
 .reaction-summary-emoji{font-size:14px;line-height:1}
-.reaction-summary-count{min-width:8px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
+.reaction-summary-count{min-width:14px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
 .reaction-picker button{width:32px;height:32px;border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center}
@@ -577,7 +579,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-20-cross-reactions-2';
+const APP_VERSION = '2026-06-20-cross-reactions-3';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -1550,7 +1552,6 @@ function renderMessage(key, msg) {
   const reactions = document.createElement('div');
   reactions.className = 'msg-reactions';
   reactions.id = 'react-' + key;
-  div.appendChild(reactions);
 
   const trans = document.createElement('div');
   trans.className = 'msg-translation';
@@ -1572,7 +1573,7 @@ function renderMessage(key, msg) {
   if (!isMedia) {
   btnRow = document.createElement('div');
   btnRow.className = 'btn-row';
-  btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+  btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
 
   const spBtn = document.createElement('button');
   spBtn.className = 'speakBtn';
@@ -1608,7 +1609,7 @@ function renderMessage(key, msg) {
   } else {
     btnRow = document.createElement('div');
     btnRow.className = 'btn-row';
-    btnRow.style.cssText = 'display:flex;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
+    btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
     const delBtn = document.createElement('button');
     delBtn.innerHTML = '&times;';
     delBtn.title = myRole === 'vi' ? 'Xóa' : 'Sil';
@@ -1617,6 +1618,8 @@ function renderMessage(key, msg) {
     btnRow.appendChild(delBtn);
     div.appendChild(btnRow);
   }
+
+  if (btnRow) btnRow.appendChild(reactions);
 
   const time = document.createElement('div');
   time.className = 'msg-time';
@@ -2336,58 +2339,47 @@ function normalizeReactionState(reactions={}, reactionState={}) {
 
 function updateReactionCountBadge(btn, count, animate=false) {
   if (!btn) return;
+  clearTimeout(btn._reactionCountTimer);
+  btn._reactionCountTimer = null;
   const target = Math.max(0, Number(count) || 0);
-  if (target <= 1) {
-    clearTimeout(btn._reactionCountTimer);
+  btn.dataset.reactionCount = String(target);
+  delete btn.dataset.count;
+  delete btn.dataset.displayCount;
+  delete btn.dataset.targetCount;
+  if (!animate || target <= 0) return;
+  btn.classList.remove('flash');
+  void btn.offsetWidth;
+  btn.classList.add('flash');
+  btn._reactionCountTimer = setTimeout(() => {
+    btn.classList.remove('flash');
     btn._reactionCountTimer = null;
-    btn.dataset.displayCount = String(target);
-    btn.dataset.targetCount = String(target);
-    delete btn.dataset.count;
-    return;
-  }
-  btn.dataset.targetCount = String(target);
-  if (btn._reactionCountTimer) return;
-  if (!animate || !btn.dataset.displayCount) {
-    clearTimeout(btn._reactionCountTimer);
-    btn._reactionCountTimer = null;
-    btn.dataset.displayCount = String(target);
-    btn.dataset.count = String(target);
-    return;
-  }
-  const step = () => {
-    btn._reactionCountTimer = null;
-    const latestTarget = Math.max(0, Number(btn.dataset.targetCount) || 0);
-    let displayed = Math.max(0, Number(btn.dataset.displayCount) || 0);
-    if (displayed < latestTarget) displayed += 1;
-    else if (displayed > latestTarget) displayed = latestTarget;
-    btn.dataset.displayCount = String(displayed);
-    if (displayed > 1) btn.dataset.count = String(displayed);
-    else delete btn.dataset.count;
-    if (displayed !== latestTarget) btn._reactionCountTimer = setTimeout(step, 45);
-  };
-  btn._reactionCountTimer = setTimeout(step, 45);
+  }, 240);
 }
 
 function renderReactionSummary(el, state={}) {
   if (!el) return;
   el.textContent = '';
-  const totals = new Map();
-  for (const item of Object.values(state || {})) {
+  const roles = ['tr', 'vi', ...Object.keys(state || {}).filter(role => role !== 'tr' && role !== 'vi')];
+  for (const role of roles) {
+    const item = state?.[role];
     if (!item?.emoji) continue;
-    totals.set(item.emoji, (totals.get(item.emoji) || 0) + Math.max(1, Number(item.count) || 1));
-  }
-  for (const [emojiValue, total] of totals.entries()) {
+    const row = document.createElement('div');
+    row.className = 'reaction-role-row';
+    const tag = document.createElement('span');
+    tag.className = 'reaction-role-tag ' + (role === 'tr' ? 'tr' : role === 'vi' ? 'vi' : 'other');
+    tag.textContent = role === 'tr' ? 'TR' : role === 'vi' ? 'VI' : String(role).toUpperCase();
     const chip = document.createElement('span');
     chip.className = 'reaction-summary-item';
     chip.title = uiText('Tepki', 'Cảm xúc');
     const emoji = document.createElement('span');
     emoji.className = 'reaction-summary-emoji';
-    emoji.textContent = emojiValue;
+    emoji.textContent = item.emoji;
     const count = document.createElement('span');
     count.className = 'reaction-summary-count';
-    count.textContent = String(total);
+    count.textContent = String(Math.max(1, Number(item.count) || 1));
     chip.append(emoji, count);
-    el.appendChild(chip);
+    row.append(tag, chip);
+    el.appendChild(row);
   }
   el.classList.toggle('show', !!el.children.length);
 }
