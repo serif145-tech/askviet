@@ -579,7 +579,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-21-typing-expiry-1';
+const APP_VERSION = '2026-06-21-ptt-silence-restore-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -623,6 +623,7 @@ let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
 const TRANSLATION_TIMEOUT_MS = 18000;
+const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const AUTO_REFRESH_IDLE_MS = 4 * 60 * 1000;
 let autoRefreshTimer = null;
@@ -648,6 +649,7 @@ let autoSpeakQueue = [];
 let autoSpeakRunning = false;
 let autoSpeakDeferred = new Set();
 let autoSpeakRetryTimer = null;
+let autoSpeakInterruptSeq = 0;
 let audioUnlocking = null, audioUnlockedAt = 0;
 let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
 let ttsPending = new Map();
@@ -2968,9 +2970,15 @@ async function processAutoSpeakQueue() {
   try {
     while (autoSpeakQueue.length) {
       if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); clearTimeout(autoSpeakRetryTimer); autoSpeakRetryTimer = null; break; }
+      const itemSeq = autoSpeakInterruptSeq;
       while (isSpeaking) await sleep(180);
+      if (itemSeq !== autoSpeakInterruptSeq) break;
       const item = autoSpeakQueue.shift();
       const ok = await speak(item.text, item.target, null, true);
+      if (itemSeq !== autoSpeakInterruptSeq) {
+        if (item.id) autoSpeakDeferred.delete(item.id);
+        break;
+      }
       if (!ok && getAutoReadState(myRole)) {
         item.attempts = (item.attempts || 0) + 1;
         autoSpeakQueue.unshift(item);
@@ -3371,6 +3379,27 @@ function translationModelQueue(baseModel) {
       return provider === baseProvider || providerHasKey(provider);
     });
   return filtered.length ? filtered : [base, base];
+}
+
+function fastTranslationModelQueue(baseModel) {
+  const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.5');
+  const baseProvider = String(base || '').split(':')[0] || 'openai';
+  const fastFallbacks = [
+    base,
+    'gemini:gemini-3.5-flash',
+    'openai:gpt-5.4-mini',
+    'openai:gpt-5.5',
+    'claude:claude-haiku-4-5',
+    'claude:claude-sonnet-4-6',
+    'gemini:gemini-3.1-flash-lite'
+  ];
+  const currentQueue = translationModelQueue(base);
+  return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
+    .filter(model => {
+      const provider = String(model || '').split(':')[0] || 'openai';
+      return provider === baseProvider || providerHasKey(provider);
+    })
+    .slice(0, 4);
 }
 
 function withTimeout(promise, ms, label) {
@@ -3777,21 +3806,21 @@ function appendPttLog(text) {
 }
 async function pttTranslate(text, from) {
   const target = from === 'tr' ? 'vi' : 'tr';
-  const modelsToTry = translationModelQueue(selectedModel);
+  const modelsToTry = fastTranslationModelQueue(selectedModel);
   let lastErr = null;
   for (let i = 0; i < modelsToTry.length; i++) {
     const attemptModel = modelsToTry[i];
     const name = modelName(attemptModel);
     setPttLog(roleText(from, name + ' çeviriyor...', name + ' đang dịch...'));
     try {
-      const out = await withTimeout(translateText(text, from, attemptModel), TRANSLATION_TIMEOUT_MS, name);
+      const out = await withTimeout(translateText(text, from, attemptModel), PTT_TRANSLATION_TIMEOUT_MS, name);
       renderPttTurn(text, out, from, target);
       if (out) autoSpeakNowOrQueue(out, target);
       return;
     } catch (e) {
       lastErr = e;
       if (isFatalTranslationError(e) || i >= modelsToTry.length - 1) throw e;
-      await sleep(700 + (i * 600));
+      await sleep(250 + (i * 200));
     }
   }
   throw lastErr || new Error('Bas-konuş çevirisi tamamlanamadı');
@@ -4001,6 +4030,7 @@ async function startPttVoice(from) {
   const btn = document.getElementById(from === 'tr' ? 'pttTrBtn' : 'pttViBtn');
   if (!btn) return;
   if (rec) { stopRec(); return; }
+  interruptAudioForRecording();
   recChunks=[]; recHadSpeech=false; recSilentSince=0; recVoiceMs=0; recConsecutiveVoiceMs=0;
   if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
   btn.dataset.recRole = from;
@@ -4009,7 +4039,7 @@ async function startPttVoice(from) {
   setPttLog(listenText);
   try {
     await tryRequestWakeLock();
-    await keepAudioAwake(90000);
+    keepAudioAwake(90000).catch(()=>{});
     const ctx = await ensureAudioCtx();
     recStream = await requestMicrophoneStream('ptt');
     recNode = ctx.createMediaStreamSource(recStream);
@@ -4049,7 +4079,7 @@ async function startPttVoice(from) {
       const v = rms(recAnalyser, recData), now = Date.now();
       if(v > MIC_VOICE_RMS_THRESHOLD){ recVoiceMs += 120; recConsecutiveVoiceMs += 120; recHadSpeech = recConsecutiveVoiceMs >= MIC_MIN_VOICE_MS || recVoiceMs >= MIC_MIN_VOICE_MS + 240; recSilentSince=0; clearRecCountdown(btn, 'ptt', listenText); return; }
       recConsecutiveVoiceMs = 0;
-      if(recHadSpeech){ if(!recSilentSince) recSilentSince=now; showRecCountdown(btn, recSilentSince, now, 'ptt'); if(now-recSilentSince>MIC_SILENCE_MS) stopRec(); }
+      if(recHadSpeech){ if(!recSilentSince) recSilentSince=now; showRecCountdown(btn, recSilentSince, now, 'ptt'); if(now-recSilentSince>PTT_SILENCE_MS) stopRec(); }
       else if(now-recStarted>MIC_NO_SPEECH_MS) stopRec();
       if(now-recStarted>30000) stopRec();
     },120);
@@ -4613,6 +4643,15 @@ function stopAudio(){
   activeSpeakBtn=null;
   document.querySelectorAll('.speakBtn').forEach(b=>setSpeakBtn(b,false));
 }
+function interruptAudioForRecording() {
+  autoSpeakInterruptSeq++;
+  clearTimeout(autoSpeakRetryTimer);
+  autoSpeakRetryTimer = null;
+  autoSpeakQueue = [];
+  autoSpeakDeferred.clear();
+  pendingBlockedAudio = null;
+  if (isSpeaking || activeSpeakBtn || ttsAbort || audioUrl || audioPlayer?.src) stopAudio();
+}
 function normalizeTtsInput(text) {
   return cleanVisibleText(text || '').replace(/\s+/g, ' ').trim();
 }
@@ -5115,6 +5154,7 @@ const MIC_VOICE_RMS_THRESHOLD = 0.014;
 const MIC_MIN_VOICE_MS = 420;
 const MIC_NO_SPEECH_MS = 4500;
 const MIC_SILENCE_MS = 2000;
+const PTT_SILENCE_MS = 2000;
 const MIN_AUDIO_BLOB_SIZE = 2500;
 const PRESENCE_STALE_MS = 75000;
 function noteNoSpeechStop() {
@@ -5185,15 +5225,15 @@ async function requestMicrophoneStream(kind='mic') {
   });
   return stream;
 }
-function silenceCountdownText(start, now) {
+function silenceCountdownText(start, now, silenceMs=REC_SILENCE_MS) {
   if (!start) return '';
-  const remaining = REC_SILENCE_MS - (now - start);
+  const remaining = silenceMs - (now - start);
   if (remaining <= 0) return '';
   const left = Math.max(1, Math.ceil(remaining / 1000));
   return String(left);
 }
 function showRecCountdown(btn, start, now, kind) {
-  const left = silenceCountdownText(start, now);
+  const left = silenceCountdownText(start, now, kind === 'ptt' ? PTT_SILENCE_MS : REC_SILENCE_MS);
   if (!left) return;
   if (kind === 'ptt') {
     const role = btn?.dataset.recRole || myRole;
@@ -5242,6 +5282,7 @@ async function startVoice() {
   markChatUserActivity();
   const btn = document.getElementById('micBtn');
   if(rec){stopRec();return;}
+  interruptAudioForRecording();
   recChunks=[];recHadSpeech=false;recSilentSince=0;recVoiceMs=0;recConsecutiveVoiceMs=0;
   btn.classList.add('mic-recording');
   btn.innerHTML=MIC_ICON;
