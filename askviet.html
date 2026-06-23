@@ -91,8 +91,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;-webkit-overflow-scrolling:touch;background:#f0ece8;overscroll-behavior:contain}
 #chat.mode-panel-open .jump-bottom{display:none!important}
-.jump-bottom{position:absolute;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translate(-50%,18px) scale(.92);z-index:70;width:46px;height:46px;border-radius:50%;border:1px solid #60a5fa;background:#2563eb;color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(37,99,235,.45);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
+.jump-bottom{position:absolute;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translate(-50%,18px) scale(.92);z-index:70;min-width:46px;height:46px;padding:0 14px;border-radius:999px;border:1px solid #60a5fa;background:#2563eb;color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 8px 24px rgba(37,99,235,.45);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease,background .16s ease}
 .jump-bottom.show{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+.jump-bottom.has-new{background:#16a34a;border-color:#4ade80;font-size:13px;box-shadow:0 8px 24px rgba(22,163,74,.45)}
 
 .msg{display:flex;flex-direction:column;max-width:min(78%,680px);min-width:0;overflow-wrap:anywhere;margin-bottom:8px;position:relative}
 .msg.mine{margin-left:auto;align-items:flex-end}
@@ -495,6 +496,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="ptt-panel" id="pttPanel">
+    <div class="panel-top">
+      <div class="panel-title">Bas-Konuş</div>
+      <button class="status-pill ptt-voice-toggle on" id="pttAutoSpeakBtn" onclick="togglePttAutoSpeak()" title="Bas-konuş çevirisini seslendir">✓ PTT Ses</button>
+    </div>
     <div class="ptt-log" id="pttLog"><div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div></div>
     <div class="flag-actions">
       <button class="roundflag tr" id="pttTrBtn" onclick="startPttVoice('tr')">&#127481;&#127479;<small>&#127481;&#127479; -> &#127483;&#127475;</small></button>
@@ -579,7 +584,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-21-ptt-silence-restore-1';
+const APP_VERSION = '2026-06-23-new-message-pill-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -644,12 +649,15 @@ let outgoingRetryTimer = null;
 let modelPollTimer = null;
 let lastPageHiddenAt = 0;
 let unreadCount = 0;
+let unseenIncomingCount = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
 let autoSpeakRunning = false;
 let autoSpeakDeferred = new Set();
 let autoSpeakRetryTimer = null;
 let autoSpeakInterruptSeq = 0;
+let pttAudioActive = false;
+let pttAutoSpeak = localStorage.getItem('askviet_ptt_autospeak') !== '0';
 let audioUnlocking = null, audioUnlockedAt = 0;
 let autoAudioGuardOsc = null, autoAudioGuardGain = null, autoAudioGuardTimer = null;
 let ttsPending = new Map();
@@ -1190,11 +1198,15 @@ function initChat() {
       const key = parts[0];
       if (parts.length === 1 && typeof event.data === 'object') {
         if (shouldRenderMessage(key, event.data)) {
+          const isNewRender = !renderedKeys.has(key);
           const wasNearBottom = isNearBottom();
           updateOrRender(key, event.data);
           pruneRenderedMessages();
           if (wasNearBottom || event.data.role === myRole) scrollToBottom(true);
-          else updateJumpBottomButton();
+          else {
+            if (isNewRender) noteIncomingWhileAway(event.data);
+            else updateJumpBottomButton();
+          }
         }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
         const wasNearBottom = isNearBottom();
@@ -1261,14 +1273,17 @@ function initChat() {
 function showRemoteTyping(show) {
   const ind = document.getElementById('typingIndicator');
   if (!ind) return;
+  const wasNearBottom = isNearBottom();
   if (remoteTypingHideTimer) clearTimeout(remoteTypingHideTimer);
   remoteTypingHideTimer = null;
   ind.classList.toggle('show', !!show);
   if (!show) return;
-  scrollToBottom();
+  if (wasNearBottom) scrollToBottom(true);
+  else updateJumpBottomButton();
   remoteTypingHideTimer = setTimeout(() => {
     remoteTypingHideTimer = null;
     document.getElementById('typingIndicator')?.classList.remove('show');
+    updateJumpBottomButton();
   }, REMOTE_TYPING_TTL_MS);
 }
 
@@ -1376,6 +1391,7 @@ function applyMessagesSnapshot(data, forceBottom = false) {
 function applyMessagesPatch(data) {
   if (!data || typeof data !== 'object') return;
   const wasNearBottom = isNearBottom();
+  let incomingWhileAway = 0;
   for (const [key, msg] of Object.entries(data)) {
     if (!key) continue;
     if (msg === null) {
@@ -1383,11 +1399,18 @@ function applyMessagesPatch(data) {
       removeMessageElement(key);
       continue;
     }
-    if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) updateOrRender(key, msg);
+    if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) {
+      const isNewRender = !renderedKeys.has(key);
+      updateOrRender(key, msg);
+      if (!wasNearBottom && isNewRender && msg.role && msg.role !== myRole) incomingWhileAway++;
+    }
   }
   pruneRenderedMessages();
   if (wasNearBottom) scrollToBottom(true);
-  else updateJumpBottomButton();
+  else {
+    if (incomingWhileAway) unseenIncomingCount = Math.min(99, unseenIncomingCount + incomingWhileAway);
+    updateJumpBottomButton();
+  }
 }
 
 function sortMessageNodes(nodes) {
@@ -2885,6 +2908,12 @@ async function handleAudioRequest(id, req) {
   if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
   if (Date.now() - req.ts > 60000) return;
   if (req.target !== myRole) return;
+  if (isPttModeOpen()) {
+    handledAudioRequests.add(id);
+    await fbSet(AUDIO_PATH + '/' + id + '/status', 'ptt-busy').catch(()=>{});
+    setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(()=>{}), 500);
+    return;
+  }
   handledAudioRequests.add(id);
   activeAudioRequestId = id;
   await fbSet(AUDIO_PATH + '/' + id + '/status', 'playing');
@@ -2930,6 +2959,7 @@ function scanAutoReadMessages() {
 
 function enqueueAutoSpeak(text, target) {
   if (!text || !target || !getAutoReadState(myRole)) return;
+  if (isPttModeOpen()) return;
   const id = autoSpeakQueueId(text, target);
   if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
   autoSpeakDeferred.add(id);
@@ -2964,11 +2994,23 @@ async function autoSpeakNowOrQueue(text, target) {
   return ok;
 }
 
+async function speakPttText(text, target, btn=null) {
+  if (!text || !target || !pttAutoSpeak) return false;
+  pttAudioActive = true;
+  try {
+    return await speak(text, target, btn, true);
+  } finally {
+    pttAudioActive = false;
+  }
+}
+
 async function processAutoSpeakQueue() {
   if (autoSpeakRunning) return;
+  if (isPttModeOpen()) { suspendChatAutoSpeakForPtt(false); return; }
   autoSpeakRunning = true;
   try {
     while (autoSpeakQueue.length) {
+      if (isPttModeOpen()) { suspendChatAutoSpeakForPtt(false); break; }
       if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); clearTimeout(autoSpeakRetryTimer); autoSpeakRetryTimer = null; break; }
       const itemSeq = autoSpeakInterruptSeq;
       while (isSpeaking) await sleep(180);
@@ -3004,7 +3046,19 @@ function updateJumpBottomButton() {
   const btn = document.getElementById('jumpBottomBtn');
   if (!m || !btn) return;
   const away = m.scrollHeight - m.scrollTop - m.clientHeight > Math.max(360, m.clientHeight * 0.45);
-  btn.classList.toggle('show', away);
+  if (!away) unseenIncomingCount = 0;
+  btn.classList.toggle('has-new', unseenIncomingCount > 0);
+  btn.innerHTML = unseenIncomingCount > 0
+    ? ('<span>&#8595;</span><span>' + uiText('Yeni mesaj', 'Tin nhắn mới') + (unseenIncomingCount > 1 ? ' ' + unseenIncomingCount : '') + '</span>')
+    : '&#8595;';
+  btn.title = unseenIncomingCount > 0 ? uiText('Yeni mesaja git', 'Đi tới tin nhắn mới') : uiText('En alta in', 'Xuống cuối');
+  btn.classList.toggle('show', away || unseenIncomingCount > 0);
+}
+
+function noteIncomingWhileAway(msg) {
+  if (!msg || msg.role === myRole || isNearBottom()) return;
+  unseenIncomingCount = Math.min(99, unseenIncomingCount + 1);
+  updateJumpBottomButton();
 }
 
 function setupJumpBottomButton() {
@@ -3017,7 +3071,7 @@ function setupJumpBottomButton() {
 
 function scrollToBottom(force=false) {
   const m = document.getElementById('messages');
-  if (m) setTimeout(() => { m.scrollTop = m.scrollHeight; updateJumpBottomButton(); }, force ? 0 : 50);
+  if (m) setTimeout(() => { unseenIncomingCount = 0; m.scrollTop = m.scrollHeight; updateJumpBottomButton(); }, force ? 0 : 50);
 }
 
 function openGallery(){document.getElementById('galleryInput')?.click()}
@@ -3774,7 +3828,45 @@ function persistSessionState(modeOverride) {
 }
 
 function togglePttMode(force) {
-  if (setPanelOpen('pttPanel', 'pttModeBtn', force)) toggleRealLive(false);
+  const open = setPanelOpen('pttPanel', 'pttModeBtn', force);
+  if (open) {
+    toggleRealLive(false);
+    suspendChatAutoSpeakForPtt(true);
+  } else {
+    updatePttAutoSpeakUI();
+  }
+}
+
+function isPttModeOpen() {
+  return !!document.getElementById('pttPanel')?.classList.contains('open');
+}
+
+function suspendChatAutoSpeakForPtt(stopCurrent=false) {
+  autoSpeakInterruptSeq++;
+  clearTimeout(autoSpeakRetryTimer);
+  autoSpeakRetryTimer = null;
+  autoSpeakQueue = [];
+  autoSpeakDeferred.clear();
+  pendingBlockedAudio = null;
+  if (stopCurrent && !pttAudioActive && (isSpeaking || activeSpeakBtn || ttsAbort || audioUrl)) stopAudio();
+}
+
+function togglePttAutoSpeak() {
+  pttAutoSpeak = !pttAutoSpeak;
+  localStorage.setItem('askviet_ptt_autospeak', pttAutoSpeak ? '1' : '0');
+  updatePttAutoSpeakUI();
+  if (!pttAutoSpeak && pttAudioActive) stopAudio();
+}
+
+function updatePttAutoSpeakUI() {
+  const btn = document.getElementById('pttAutoSpeakBtn');
+  if (!btn) return;
+  const on = !!pttAutoSpeak;
+  btn.classList.toggle('on', on);
+  btn.textContent = viMode() ? (on ? '✓ Giọng PTT' : '🔇 Giọng PTT') : (on ? '✓ PTT Ses' : '🔇 PTT Ses');
+  btn.title = viMode()
+    ? (on ? 'Bản dịch bấm nói sẽ được đọc' : 'Không đọc bản dịch bấm nói')
+    : (on ? 'Bas-konuş çevirisini seslendir' : 'Bas-konuş çevirisini seslendirme');
 }
 
 function updateModePanelState() {
@@ -3782,6 +3874,15 @@ function updateModePanelState() {
   const pttOpen = document.getElementById('pttPanel')?.classList.contains('open');
   const liveOpen = document.getElementById('realLivePanel')?.classList.contains('open');
   if (chat) chat.classList.toggle('mode-panel-open', !!(pttOpen || liveOpen));
+  updateModeVoiceControls();
+}
+
+function updateModeVoiceControls() {
+  const pttOpen = isPttModeOpen();
+  const autoBtn = document.getElementById('autoReadStatus');
+  const ownBtn = document.getElementById('ownAutoReadStatus');
+  if (autoBtn) autoBtn.style.display = pttOpen ? 'none' : '';
+  if (ownBtn) ownBtn.style.display = pttOpen || myRole !== 'tr' ? 'none' : '';
 }
 
 function setPttLog(text) {
@@ -3815,7 +3916,7 @@ async function pttTranslate(text, from) {
     try {
       const out = await withTimeout(translateText(text, from, attemptModel), PTT_TRANSLATION_TIMEOUT_MS, name);
       renderPttTurn(text, out, from, target);
-      if (out) autoSpeakNowOrQueue(out, target);
+      if (out) speakPttText(out, target);
       return;
     } catch (e) {
       lastErr = e;
@@ -3857,7 +3958,7 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
 
   const speakBtn = makeToolButton('▶', () => {});
   speakBtn.classList.add('speakBtn');
-  bindSpeakAction(speakBtn, () => speak(translatedText, targetRole, speakBtn));
+  bindSpeakAction(speakBtn, () => speakPttText(translatedText, targetRole, speakBtn));
 
   const block = makeToolButton('Engelle', () => {
     if (block.dataset.confirm === '1') {
@@ -3886,7 +3987,7 @@ function sendPttMisunderstood(role, btn) {
     ? 'Em không hiểu, anh nói lại được không?'
     : 'Anlamadım aşkım, tekrar söyler misin?';
   renderPttNotice(text);
-  if (getLocalAutoSpeakEnabled()) enqueueAutoSpeak(text, role);
+  speakPttText(text, role);
 }
 
 function renderPttNotice(text) {
@@ -4860,6 +4961,7 @@ function setupChatControls() {
     else leftControls.appendChild(autoBtn);
   }
   if (ownBtn) ownBtn.style.display = myRole === 'tr' ? '' : 'none';
+  updateModeVoiceControls();
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
   const modeRow = document.getElementById('modeRow');
@@ -4905,6 +5007,7 @@ function applyLocaleUI() {
   if (pttInput) pttInput.placeholder = isVi ? 'Nếu micro không chạy, viết vào đây...' : 'Ses çalışmazsa buraya yaz...';
   const pttLog = document.getElementById('pttLog');
   if (pttLog && /Hazir\.|Hazır\.|San sang\.|Sẵn sàng\./.test(pttLog.textContent)) pttLog.textContent = isVi ? 'Sẵn sàng.' : 'Hazır.';
+  updatePttAutoSpeakUI();
   const liveTitle = document.querySelector('#realLivePanel .panel-title');
   if (liveTitle) liveTitle.textContent = isVi ? 'Dịch Live Gemini' : 'Gemini Live Translate';
   const liveLabels = document.querySelectorAll('#realLivePanel .live-settings label');
