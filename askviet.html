@@ -610,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-push-settings-2';
+const APP_VERSION = '2026-06-23-push-role-latest-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2829,9 +2829,10 @@ async function getWebPushSubscription() {
 }
 
 async function removeStoredWebPushRemote() {
-  const oldRole = localStorage.getItem('askviet_web_push_role');
   const oldId = localStorage.getItem('askviet_web_push_id');
-  if (oldRole && oldId) await fbRemove(PUSH_SUBS_PATH + '/' + oldRole + '/' + oldId).catch(()=>{});
+  if (oldId) {
+    await Promise.all(['tr', 'vi'].map(role => fbRemove(PUSH_SUBS_PATH + '/' + role + '/' + oldId).catch(()=>{})));
+  }
   localStorage.removeItem('askviet_web_push_role');
   localStorage.removeItem('askviet_web_push_id');
 }
@@ -2846,6 +2847,9 @@ async function syncWebPushSubscription(subscription) {
   if (oldRole && oldId && (oldRole !== myRole || oldId !== id)) {
     await fbRemove(PUSH_SUBS_PATH + '/' + oldRole + '/' + oldId).catch(()=>{});
   }
+  await Promise.all(['tr', 'vi']
+    .filter(role => role !== myRole)
+    .map(role => fbRemove(PUSH_SUBS_PATH + '/' + role + '/' + id).catch(()=>{})));
   await fbSet(PUSH_SUBS_PATH + '/' + myRole + '/' + id, {
     endpoint: json.endpoint,
     keys: json.keys,
