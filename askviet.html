@@ -288,6 +288,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .list-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1c1c1f}
 .list-row span{flex:1;font-size:13px;color:#ddd;word-break:break-word}
 .list-row button{flex:none;padding:6px 9px;border-radius:7px;border:1px solid #ef4444;background:#dc2626;color:#fff;font-size:12px;font-weight:900}
+.confirm-modal{position:fixed;inset:0;z-index:100004;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:18px}
+.confirm-modal.show{display:flex}
+.confirm-box{width:min(340px,100%);background:#111116;border:1px solid #353541;border-radius:14px;box-shadow:0 20px 55px rgba(0,0,0,.55);padding:18px;color:#fff;text-align:center}
+.confirm-title{font-size:17px;font-weight:950;line-height:1.25;margin-bottom:8px}
+.confirm-text{font-size:14px;line-height:1.42;color:#d1d5db;margin-bottom:16px}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.confirm-actions button{min-height:44px;border-radius:10px;border:1px solid transparent;color:#fff;font-weight:950;font-size:14px;cursor:pointer}
+.confirm-no{background:#dc2626;border-color:#f87171!important}
+.confirm-yes{background:#16a34a;border-color:#4ade80!important}
 .btn-row button{touch-action:manipulation}
 .input-bar{position:relative;z-index:5}
 @media (max-width: 520px){
@@ -495,6 +504,17 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
   </div>
 
+  <div class="confirm-modal" id="confirmModal">
+    <div class="confirm-box">
+      <div class="confirm-title" id="confirmTitle">Emin misin?</div>
+      <div class="confirm-text" id="confirmText"></div>
+      <div class="confirm-actions">
+        <button class="confirm-no" id="confirmNoBtn">Hayır</button>
+        <button class="confirm-yes" id="confirmYesBtn">Evet</button>
+      </div>
+    </div>
+  </div>
+
   <div class="ptt-panel" id="pttPanel">
     <div class="panel-top">
       <div class="panel-title">Bas-Konuş</div>
@@ -584,7 +604,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-new-message-pill-1';
+const APP_VERSION = '2026-06-23-confirm-danger-audio-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2749,6 +2769,7 @@ function removeMessageElement(key) {
 }
 
 async function deleteMessage(key) {
+  if (!(await askConfirm('delete'))) return;
   const el = document.getElementById('msg-' + key);
   const msg = el ? {
     role: el.dataset.role,
@@ -2809,6 +2830,7 @@ async function requestSpeakForMessage(key, btn) {
   const targetRole = getRecipientRole(box.dataset.role);
   const text = getRecipientText(key);
   if (!text || /Çeviriliyor|Ceviriliyor|Đang dịch|Dang dich|Ceviri hatasi|Çeviri hatasi|Loi dich|Lỗi dịch/i.test(text)) return;
+  if (!(await askConfirm('speak'))) return;
   if (targetRole === myRole) {
     btn.dataset.busy = '1';
     try {
@@ -4979,6 +5001,49 @@ function setupChatControls() {
 
 function viMode() { return myRole === 'vi'; }
 function uiText(tr, vi) { return viMode() ? vi : tr; }
+function askConfirm(kind) {
+  const modal = document.getElementById('confirmModal');
+  const title = document.getElementById('confirmTitle');
+  const text = document.getElementById('confirmText');
+  const no = document.getElementById('confirmNoBtn');
+  const yes = document.getElementById('confirmYesBtn');
+  if (!modal || !title || !text || !no || !yes) return Promise.resolve(false);
+  const isVi = viMode();
+  const copy = {
+    autoSound: {
+      title: isVi ? 'Bật tự động đọc?' : 'Ses açılacak',
+      text: isVi ? 'Tự động đọc tin nhắn sẽ bật. Bạn chắc chứ?' : 'Otomatik seslendirme açılacak. Emin misin?'
+    },
+    speak: {
+      title: isVi ? 'Phát âm thanh?' : 'Ses çalınacak',
+      text: isVi ? 'Tin nhắn này sẽ được đọc bằng giọng nói. Bạn chắc chứ?' : 'Bu mesaj sesli okunacak. Emin misin?'
+    },
+    delete: {
+      title: isVi ? 'Xóa tin nhắn?' : 'Mesaj silinecek',
+      text: isVi ? 'Tin nhắn silinecek. Bạn chắc chứ?' : 'Bu mesaj silinecek. Emin misin?'
+    }
+  }[kind] || {
+    title: isVi ? 'Bạn chắc chứ?' : 'Emin misin?',
+    text: ''
+  };
+  title.textContent = copy.title;
+  text.textContent = copy.text;
+  no.textContent = isVi ? 'Không' : 'Hayır';
+  yes.textContent = isVi ? 'Có' : 'Evet';
+  modal.classList.add('show');
+  return new Promise(resolve => {
+    const cleanup = result => {
+      modal.classList.remove('show');
+      no.onclick = null;
+      yes.onclick = null;
+      modal.onclick = null;
+      resolve(result);
+    };
+    no.onclick = e => { e.preventDefault(); e.stopPropagation(); cleanup(false); };
+    yes.onclick = e => { e.preventDefault(); e.stopPropagation(); cleanup(true); };
+    modal.onclick = e => { if (e.target === modal) cleanup(false); };
+  });
+}
 function autoReadControlRole() { return myRole === 'tr' ? 'vi' : myRole; }
 function getAutoReadState(role) {
   const v = autoReadStates[role];
@@ -5098,10 +5163,11 @@ function applyAutoReadData(data, path='/') {
   if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
   scanAutoReadMessages();
 }
-function toggleAutoRead() {
+async function toggleAutoRead() {
   unlockAudio();
   const role = autoReadControlRole();
   const next = !getAutoReadState(role);
+  if (next && !(await askConfirm('autoSound'))) return;
   autoReadStates[role] = next;
   if (role === myRole) { autoRead = next; localStorage.setItem('askviet_autoread', next ? '1' : '0'); }
   updateAutoReadUI();
@@ -5109,10 +5175,11 @@ function toggleAutoRead() {
   if (role === myRole && !next) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
   if (role === myRole && next) scanAutoReadMessages();
 }
-function toggleOwnAutoRead() {
+async function toggleOwnAutoRead() {
   unlockAudio();
   if (!myRole) return;
   const next = !getAutoReadState(myRole);
+  if (next && !(await askConfirm('autoSound'))) return;
   autoReadStates[myRole] = next;
   autoRead = next;
   localStorage.setItem('askviet_autoread', next ? '1' : '0');
