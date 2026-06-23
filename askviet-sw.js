@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-06-23-web-push-1';
+const ASKVIET_SW_VERSION = '2026-06-23-witch-icon-1';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -20,6 +20,7 @@ self.addEventListener('push', event => {
   const url = data.url || './askviet.html';
   event.waitUntil(self.registration.showNotification(title, {
     body,
+    icon: './witch.png',
     tag: data.tag || 'askviet-new-message',
     renotify: true,
     data: { url, version: ASKVIET_SW_VERSION }
