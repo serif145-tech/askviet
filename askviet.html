@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -209,7 +209,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .own-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
 .notify-toggle{font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;border:1px solid #22c55e;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap;box-shadow:0 1px 5px rgba(22,163,74,.3)}
 .notify-toggle.off{border-color:#f87171;background:#dc2626;box-shadow:0 1px 5px rgba(220,38,38,.3)}
-.right-controls #webPushBtn{display:none}
+#webPushBtn{display:none!important}
 .live-panel{display:none;flex-shrink:0;margin:8px 10px 0;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.28);z-index:6}
 .live-panel.open{display:block}
 .live-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
@@ -450,7 +450,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
-          <button class="notify-toggle off" id="webPushBtn" onclick="toggleWebPush()" title="PWA push bildirimi">Push kapalı</button>
         </div>
       </div>
         <div class="tts-panel" id="ttsPanel">
@@ -611,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-push-settings-1';
+const APP_VERSION = '2026-06-23-push-settings-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
