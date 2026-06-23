@@ -604,7 +604,7 @@ const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-confirm-danger-audio-1';
+const APP_VERSION = '2026-06-23-copy-reset-1';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -2105,6 +2105,25 @@ async function copyTextFallback(text) {
   } catch { return false; }
 }
 
+function flashCopyButton(btn, idleText, idleClass='') {
+  if (!btn) return;
+  const resetText = idleText ?? btn.dataset.copyIdleText ?? btn.textContent;
+  if (!btn.dataset.copyIdleText) btn.dataset.copyIdleText = resetText;
+  if (!btn.dataset.copyIdleStyle) btn.dataset.copyIdleStyle = btn.style.cssText || '';
+  clearTimeout(btn._copyResetTimer);
+  btn.textContent = '✓';
+  btn.classList.add('confirm');
+  btn.style.background = '#dcfce7';
+  btn.style.borderColor = '#22c55e';
+  btn.style.color = '#15803d';
+  btn._copyResetTimer = setTimeout(() => {
+    btn.textContent = resetText;
+    btn.classList.remove('confirm');
+    if (idleClass) btn.className = idleClass;
+    btn.style.cssText = btn.dataset.copyIdleStyle || '';
+  }, 850);
+}
+
 function copyableMessageTranslation(key, box) {
   const trans = document.getElementById('trans-' + key);
   const candidates = [
@@ -2585,11 +2604,9 @@ async function copyOriginalMessage(key, btn) {
     ? (box.dataset.mediaUrl || box.dataset.imageUrl || '')
     : (box.dataset.text || finalTranslationText(box.dataset.translation) || '');
   if (!text) return;
-  await navigator.clipboard.writeText(text).catch(()=>{});
-  btn.textContent = '✓';
-  btn.style.background = '#dcfce7';
-  btn.style.borderColor = '#22c55e';
-  btn.style.color = '#15803d';
+  const ok = await copyTextFallback(text);
+  if (!ok) return;
+  flashCopyButton(btn, '⧉');
 }
 
 function refreshMessageText(key) {
@@ -3973,9 +3990,8 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   });
 
   const copy = makeToolButton('📋', async () => {
-    await navigator.clipboard.writeText(translatedText).catch(()=>{});
-    copy.textContent = '✓';
-    copy.classList.add('confirm');
+    const ok = await copyTextFallback(translatedText);
+    if (ok) flashCopyButton(copy, '📋', 'tool-btn');
   });
 
   const speakBtn = makeToolButton('▶', () => {});
