@@ -314,7 +314,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
 }
 </style>
-<link rel="manifest" id="pwaManifest">
+<link rel="manifest" id="pwaManifest" href="./manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -446,6 +446,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
+          <button class="notify-toggle off" id="webPushBtn" onclick="toggleWebPush()" title="PWA push bildirimi">Push kapalı</button>
         </div>
       </div>
         <div class="tts-panel" id="ttsPanel">
@@ -601,10 +602,13 @@ const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
 const PRESENCE_PATH = CONFIG_PATH + '/presence';
 const PRESENCE_SESSIONS_PATH = CONFIG_PATH + '/presenceSessions';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
+const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-copy-reset-1';
+const APP_VERSION = '2026-06-23-model-lock-1';
+const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
+const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
 let myRole = null;
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
@@ -795,6 +799,7 @@ function saveTtsSettings() {
   }
 }
 function normalizeChatModel(model) {
+  if (model && typeof model === 'object') model = model.model || model.value || model.name || '';
   const oldGemini = {
     'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.5-flash',
     'gemini:gemini-2.5-flash': 'gemini:gemini-3.5-flash',
@@ -886,6 +891,8 @@ function loadSaved() {
     // apiLabel kaldırıldı — artık ayrı alanlar var
 
   }
+  const setupModelSelect = document.getElementById('modelSelect');
+  if (setupModelSelect) setupModelSelect.onchange = () => setSelectedModel(setupModelSelect.value);
   resumeSavedSession();
 }
 
@@ -911,9 +918,6 @@ function ensureFreshAppVersion() {
   if (prev === APP_VERSION) return;
   localStorage.setItem('askviet_app_version', APP_VERSION);
   try {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations?.().then(regs => regs.forEach(r => r.unregister())).catch(()=>{});
-    }
     if (window.caches?.keys) {
       caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(()=>{});
     }
@@ -1047,14 +1051,12 @@ function start(role) {
     if (pass !== '1453') { alert('Hatalı şifre'); return; }
     localStorage.setItem('askviet_tr_side_auth', '1');
   }
-  selectedModel = document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5';
-  const [provider] = selectedModel.split(':');
+  selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5');
   const openaiKey = extractApiKey(document.getElementById('apiKeyInput')?.value || localStorage.getItem('askviet_key') || '', 'openai');
   const geminiKey = extractApiKey(document.getElementById('geminiKeyInput')?.value || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
   const claudeKey = extractApiKey(document.getElementById('claudeKeyInput')?.value || localStorage.getItem('askviet_claude_key') || '', 'claude');
-  if (provider === 'openai' && !openaiKey) { alert(role === 'vi' ? 'Cần OpenAI API key!' : 'OpenAI API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
-  if (provider === 'gemini' && !geminiKey) { alert(role === 'vi' ? 'Cần Gemini API key!' : 'Gemini API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
-  if (provider === 'claude' && !claudeKey) { alert(role === 'vi' ? 'Cần Claude API key!' : 'Claude API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
+  const hasAnyTranslateKey = !!(openaiKey || geminiKey || claudeKey);
+  if (!hasAnyTranslateKey) { alert(role === 'vi' ? 'Cần API key!' : 'API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
   apiKey = openaiKey;
   geminiApiKey = geminiKey;
   claudeApiKey = claudeKey;
@@ -1087,7 +1089,6 @@ function start(role) {
   setupChatControls();
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henuz mesaj yok.<br>Ilk mesaji gonder!' : 'Chua co tin nhan.<br>Gui tin nhan dau tien!';},100);
   try{ const myBadge = document.getElementById('myModelBadge'); if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1]; }catch(e){}
-  if (myRole === 'tr') syncMyModel(selectedModel);
   listenAutoReadConfig();
   startPresence();
   listenPresence();
@@ -1099,6 +1100,10 @@ function start(role) {
       updateNotifySoundUI();
     }
   }).catch(()=>{});
+  ensureAskVietServiceWorker().then(() => {
+    syncCurrentWebPushSubscription();
+    updateWebPushButton();
+  }).catch(() => updateWebPushButton());
   listenModelConfig();
   initChat();
   restorePendingMessages();
@@ -2774,6 +2779,154 @@ async function requestNotifyPermission() {
   } catch { return 'error'; }
 }
 
+function isIOSLike() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isStandalonePwa() {
+  return !!(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone);
+}
+
+function webPushSupported() {
+  return !!(window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function hashWebPushEndpoint(endpoint) {
+  try {
+    const data = new TextEncoder().encode(endpoint);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return btoa(endpoint).replace(/[^a-zA-Z0-9]/g, '').slice(0, 64);
+  }
+}
+
+async function ensureAskVietServiceWorker() {
+  if (!webPushSupported()) return null;
+  const reg = await navigator.serviceWorker.register('./askviet-sw.js?v=' + APP_VERSION, { scope: './' });
+  try { await reg.update(); } catch {}
+  return await navigator.serviceWorker.ready;
+}
+
+async function getWebPushSubscription() {
+  const reg = await ensureAskVietServiceWorker();
+  if (!reg) return null;
+  return await reg.pushManager.getSubscription();
+}
+
+async function removeStoredWebPushRemote() {
+  const oldRole = localStorage.getItem('askviet_web_push_role');
+  const oldId = localStorage.getItem('askviet_web_push_id');
+  if (oldRole && oldId) await fbRemove(PUSH_SUBS_PATH + '/' + oldRole + '/' + oldId).catch(()=>{});
+  localStorage.removeItem('askviet_web_push_role');
+  localStorage.removeItem('askviet_web_push_id');
+}
+
+async function syncWebPushSubscription(subscription) {
+  if (!subscription || !myRole) return false;
+  const json = subscription.toJSON ? subscription.toJSON() : {};
+  if (!json.endpoint || !json.keys) return false;
+  const id = await hashWebPushEndpoint(json.endpoint);
+  const oldRole = localStorage.getItem('askviet_web_push_role');
+  const oldId = localStorage.getItem('askviet_web_push_id');
+  if (oldRole && oldId && (oldRole !== myRole || oldId !== id)) {
+    await fbRemove(PUSH_SUBS_PATH + '/' + oldRole + '/' + oldId).catch(()=>{});
+  }
+  await fbSet(PUSH_SUBS_PATH + '/' + myRole + '/' + id, {
+    endpoint: json.endpoint,
+    keys: json.keys,
+    role: myRole,
+    ua: (navigator.userAgent || '').slice(0, 180),
+    standalone: isStandalonePwa(),
+    updatedAt: { '.sv':'timestamp' }
+  }, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 3500));
+  localStorage.setItem('askviet_web_push_role', myRole);
+  localStorage.setItem('askviet_web_push_id', id);
+  return true;
+}
+
+async function syncCurrentWebPushSubscription() {
+  try {
+    if (!myRole || !webPushSupported() || Notification.permission !== 'granted') return false;
+    const sub = await getWebPushSubscription();
+    if (!sub) return false;
+    return await syncWebPushSubscription(sub);
+  } catch { return false; }
+}
+
+async function toggleWebPush() {
+  if (!myRole) {
+    alert('Önce TR veya VI tarafını aç.');
+    return;
+  }
+  if (!webPushSupported()) {
+    alert(uiText('Bu tarayıcı push bildirimi desteklemiyor.', 'Trình duyệt này không hỗ trợ thông báo push.'));
+    updateWebPushButton(false);
+    return;
+  }
+  if (isIOSLike() && !isStandalonePwa()) {
+    alert(uiText('iPhone için Safari’den Ana Ekrana eklediğin AskViet uygulamasından açman lazım.', 'Trên iPhone, hãy mở AskViet từ biểu tượng đã thêm vào Màn hình chính.'));
+    updateWebPushButton(false);
+    return;
+  }
+  try {
+    const existing = await getWebPushSubscription();
+    if (existing) {
+      await removeStoredWebPushRemote();
+      await existing.unsubscribe().catch(()=>{});
+      updateWebPushButton(false);
+      alert(uiText('Push bildirimi kapandı.', 'Đã tắt thông báo push.'));
+      return;
+    }
+    const perm = await requestNotifyPermission();
+    if (perm !== 'granted') {
+      updateWebPushButton(false);
+      alert(uiText('Bildirim izni verilmedi. iPhone Ayarlar > Bildirimler > AskViet kısmından da kontrol edebilirsin.', 'Chưa cấp quyền thông báo. Bạn cũng có thể kiểm tra trong Cài đặt > Thông báo > AskViet.'));
+      return;
+    }
+    const reg = await ensureAskVietServiceWorker();
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(WEB_PUSH_PUBLIC_KEY)
+    });
+    await syncWebPushSubscription(sub);
+    updateWebPushButton(true);
+    alert(uiText('Push bildirimi açıldı.', 'Đã bật thông báo push.'));
+  } catch (e) {
+    console.error('Web push açılamadı:', e);
+    updateWebPushButton(false);
+    alert(uiText('Push açılamadı. Uygulamayı ana ekrandan açıp tekrar dene.', 'Không bật được push. Hãy mở ứng dụng từ Màn hình chính rồi thử lại.'));
+  }
+}
+
+async function updateWebPushButton(knownOn=null) {
+  const btn = document.getElementById('webPushBtn');
+  if (!btn) return;
+  let on = !!knownOn;
+  if (knownOn === null) {
+    try { on = webPushSupported() && Notification.permission === 'granted' && !!(await getWebPushSubscription()); }
+    catch { on = false; }
+  }
+  if (viMode()) {
+    btn.textContent = on ? 'Push bật' : 'Push tắt';
+    btn.title = on ? 'Thông báo push đang bật' : 'Thông báo push đang tắt';
+  } else {
+    btn.textContent = on ? 'Push açık' : 'Push kapalı';
+    btn.title = on ? 'PWA push bildirimi açık' : 'PWA push bildirimi kapalı';
+  }
+  btn.classList.toggle('off', !on);
+}
+
 function removeMessageElement(key) {
   const el = document.getElementById('msg-' + key);
   if (el) el.remove();
@@ -3465,18 +3618,16 @@ function translationModelQueue(baseModel) {
   } else {
     queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
   }
-  const baseProvider = String(base || '').split(':')[0] || 'openai';
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
-      return provider === baseProvider || providerHasKey(provider);
+      return providerHasKey(provider);
     });
   return filtered.length ? filtered : [base, base];
 }
 
 function fastTranslationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.5');
-  const baseProvider = String(base || '').split(':')[0] || 'openai';
   const fastFallbacks = [
     base,
     'gemini:gemini-3.5-flash',
@@ -3490,7 +3641,7 @@ function fastTranslationModelQueue(baseModel) {
   return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
-      return provider === baseProvider || providerHasKey(provider);
+      return providerHasKey(provider);
     })
     .slice(0, 4);
 }
@@ -4628,22 +4779,9 @@ async function startGeminiLive(from, modelQueue) {
   };
 }
 function initPWA() {
-  const manifest = {
-    name: 'AskViet',
-    short_name: 'AskViet',
-    start_url: './?v=' + APP_VERSION,
-    display: 'standalone',
-    background_color: '#0a0a0f',
-    theme_color: '#0a0a0f',
-    icons: [{
-      src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%230a0a0f"/><text y=".9em" font-size="80">💬</text></svg>',
-      sizes: '192x192',
-      type: 'image/svg+xml'
-    }]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  document.getElementById('pwaManifest').href = url;
+  const link = document.getElementById('pwaManifest');
+  if (link) link.href = './manifest.webmanifest?v=' + APP_VERSION;
+  ensureAskVietServiceWorker().catch(()=>{});
 }
 initPWA();
 
@@ -4962,11 +5100,34 @@ function modelName(model) {
   return MODEL_NAMES[model] || (model || '').split(':')[1] || '-';
 }
 
+function parseRemoteModelConfig(data) {
+  if (!data) return { model: '', ts: 0 };
+  if (typeof data === 'string') return { model: normalizeChatModel(data), ts: 0 };
+  if (typeof data === 'object') {
+    return {
+      model: normalizeChatModel(data.model || data.value || ''),
+      ts: Number(data.updatedAt || data.ts || 0)
+    };
+  }
+  return { model: '', ts: 0 };
+}
+
+function localModelUpdatedAt() {
+  return Number(localStorage.getItem(MODEL_LOCAL_TS_KEY) || 0);
+}
+
+function markLocalModelUpdated() {
+  const ts = Date.now();
+  localStorage.setItem(MODEL_LOCAL_TS_KEY, String(ts));
+  return ts;
+}
+
 function setSelectedModel(model, fromRemote=false) {
   if (!model) return;
   model = normalizeChatModel(model);
   selectedModel = model;
   localStorage.setItem('askviet_model', model);
+  if (!fromRemote) markLocalModelUpdated();
   const setupSelect = document.getElementById('modelSelect');
   const chatSelect = document.getElementById('chatModelSelect');
   if (setupSelect && setupSelect.value !== model) setupSelect.value = model;
@@ -5013,6 +5174,7 @@ function setupChatControls() {
   setSelectedModel(selectedModel, true);
   updateAutoReadUI();
   updateNotifySoundUI();
+  updateWebPushButton();
 }
 
 function viMode() { return myRole === 'vi'; }
@@ -5119,6 +5281,7 @@ function applyLocaleUI() {
   if (liveStatus && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Chưa nghe' : 'Dinleniyor değil';
   updateAutoReadUI();
   updateNotifySoundUI();
+  updateWebPushButton();
   updateReplyComposer();
 }
 async function toggleNotifySound() {
@@ -5149,23 +5312,63 @@ function updateNotifySoundUI() {
 }
 function syncMyModel(model) {
   if (myRole !== 'tr') return;
-  fbSet(MODEL_PATH, model);
+  const normalized = normalizeChatModel(model || selectedModel || 'openai:gpt-5.5');
+  fbSet(MODEL_PATH, {
+    model: normalized,
+    updatedAt: { '.sv':'timestamp' },
+    source: SESSION_ID
+  }).catch(e => recordConnectionEvent('model-sync-error', e?.message || e));
 }
+
+function applyRemoteModelConfig(data) {
+  const remote = parseRemoteModelConfig(data);
+  if (!remote.model) return false;
+  if (myRole === 'tr') {
+    const localTs = localModelUpdatedAt();
+    if (localTs && remote.ts && remote.ts < localTs) return false;
+  }
+  if (remote.model !== selectedModel) setSelectedModel(remote.model, true);
+  return true;
+}
+
+async function reconcileModelConfig() {
+  try {
+    const remote = parseRemoteModelConfig(await fbGet(MODEL_PATH, true));
+    const local = normalizeChatModel(selectedModel || localStorage.getItem('askviet_model') || 'openai:gpt-5.5');
+    const localTs = localModelUpdatedAt();
+    if (myRole === 'tr') {
+      if (remote.model && (!localTs || (remote.ts && remote.ts >= localTs))) {
+        setSelectedModel(remote.model, true);
+      } else {
+        syncMyModel(local);
+      }
+    } else if (remote.model) {
+      setSelectedModel(remote.model, true);
+    }
+  } catch (e) {
+    recordConnectionEvent('model-reconcile-error', e?.message || e);
+    if (myRole === 'tr' && localModelUpdatedAt()) syncMyModel(selectedModel);
+  }
+}
+
 function listenModelConfig() {
   if (unsubModel) unsubModel();
   if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
-  if (myRole === 'tr') {
-    syncMyModel(selectedModel);
-    unsubModel = () => {};
-    return;
-  }
+  reconcileModelConfig();
   const poll = () => fbGet(MODEL_PATH, true)
-    .then(m => { if (m) setSelectedModel(m, true); })
+    .then(m => applyRemoteModelConfig(m))
     .catch(e => recordConnectionEvent('model-poll-error', e?.message || e));
-  poll();
-  modelPollTimer = setInterval(poll, 8000);
+  modelPollTimer = setInterval(poll, 3000);
+  let stopListen = null;
+  try {
+    stopListen = fbListen(MODEL_PATH, event => {
+      if (event.path === '/') applyRemoteModelConfig(event.data);
+      else poll();
+    }, { onerror: () => recordConnectionEvent('model-listen-error', 'sse') });
+  } catch {}
   unsubModel = () => {
     if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
+    if (stopListen) stopListen();
   };
 }
 function applyAutoReadData(data, path='/') {
