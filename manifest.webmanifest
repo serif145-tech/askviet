@@ -1,0 +1,11 @@
+{
+  "id": "/askviet/",
+  "name": "AskViet",
+  "short_name": "AskViet",
+  "start_url": "./askviet.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "description": "AskViet mesaj ve ceviri uygulamasi"
+}
