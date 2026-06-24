@@ -610,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-23-push-role-latest-1';
+const APP_VERSION = '2026-06-24-clear-ios-badge-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2723,9 +2723,36 @@ async function setBadgeCount(count) {
   } catch {}
 }
 
+function clearDeliveredPushNotifications() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(reg => {
+      try {
+        if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+      } catch {}
+      try {
+        if (reg.active) reg.active.postMessage({ type: 'ASKVIET_CLEAR_BADGE' });
+      } catch {}
+      try {
+        if (reg.getNotifications) {
+          reg.getNotifications({ includeTriggered: true }).then(list => {
+            list.forEach(n => {
+              try {
+                const url = n.data && n.data.url;
+                if (!url || String(url).includes('askviet')) n.close();
+              } catch {}
+            });
+          }).catch(() => {});
+        }
+      } catch {}
+    }).catch(() => {});
+  } catch {}
+}
+
 function clearUnreadCount() {
   unreadCount = 0;
   setBadgeCount(0);
+  clearDeliveredPushNotifications();
   document.title = 'AskViet';
 }
 
@@ -5859,13 +5886,16 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('pageshow', e => {
+  clearUnreadCount();
   if (myRole && (e.persisted || lastPageHiddenAt)) resumeChatTransport();
 });
+window.addEventListener('focus', clearUnreadCount);
 window.addEventListener('online', () => {
   setConnected(true);
   if (myRole) resumeChatTransport();
 });
 window.addEventListener('offline', () => setConnected(false));
+clearUnreadCount();
 </script>
 </body>
 </html>
