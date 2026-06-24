@@ -618,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-model-request-payload-2';
+const APP_VERSION = '2026-06-24-opus-temperature-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -4313,10 +4313,10 @@ async function translateText(text, from, modelOverride) {
     const claudePayload = {
       model,
       max_tokens: 1200,
-      temperature: 0,
       system: sysPrompt,
       messages: [{ role: 'user', content: text }]
     };
+    if (!/claude-opus/i.test(model)) claudePayload.temperature = 0;
     let r;
     try {
       r = await fetch(endpoint, {
