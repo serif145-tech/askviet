@@ -118,6 +118,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
 .msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
 .msg.media-msg.theirs .msg-original{border:1px solid rgba(185,28,110,.36);border-bottom-left-radius:5px}
+.msg-deleted{padding:4px 0 2px;font-size:13px;font-weight:900;font-style:italic;opacity:.8;letter-spacing:.1px}
+.msg.mine .msg-deleted{color:rgba(255,255,255,.92)}
+.msg.theirs .msg-deleted{color:rgba(255,255,255,.92)}
 .msg-original a,.msg-translation a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:800}
 .msg-original a:active,.msg-translation a:active{opacity:.75}
 .msg-reply-quote{width:100%;max-width:100%;display:block;text-align:left;border:0;border-left:3px solid rgba(255,255,255,.78);border-radius:4px;background:rgba(0,0,0,.16);color:inherit;padding:6px 8px;margin:0 0 7px;cursor:pointer;font-family:inherit}
@@ -615,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-translation-prompt-only-1';
+const APP_VERSION = '2026-06-24-deleted-message-tombstones-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -649,6 +652,7 @@ let unsubAudio = null;
 let renderedKeys = new Set();
 let visibleMessageKeys = new Set();
 let deletedMessageKeys = new Set();
+let deletedMessageSnapshots = new Map();
 let translationRunSeq = 0;
 let translationRunTokens = new Map();
 let oldestVisibleMessage = null;
@@ -660,6 +664,7 @@ let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
+const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
@@ -965,6 +970,10 @@ function pendingReadsStorageKey(role=myRole) {
   return 'askviet_pending_reads_' + ROOM + '_' + (role || 'none');
 }
 
+function deletedMessagesStorageKey(role=myRole) {
+  return 'askviet_deleted_messages_' + ROOM + '_' + (role || 'none');
+}
+
 function persistPendingMessages() {
   if (!myRole) return;
   try {
@@ -979,9 +988,28 @@ function persistPendingReads() {
   } catch {}
 }
 
+function persistDeletedMessages() {
+  if (!myRole) return;
+  try {
+    localStorage.setItem(deletedMessagesStorageKey(), JSON.stringify(Array.from(deletedMessageSnapshots.values()).slice(-MAX_PERSISTED_DELETED_MESSAGES)));
+  } catch {}
+}
+
+function restoreDeletedMessageTombstones() {
+  const items = Array.from(deletedMessageSnapshots.values())
+    .filter(item => item && item.key && item.role)
+    .sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+  for (const item of items) {
+    deletedMessageKeys.add(String(item.key));
+    renderMessage(String(item.key), Object.assign({}, item, { deleted:true }));
+  }
+  for (const item of items) markRepliesToDeleted(item.key);
+}
+
 function loadPersistentQueues() {
   pendingMessageQueue = new Map();
   pendingReadReceipts = new Set();
+  deletedMessageSnapshots = new Map();
   if (!myRole) return;
   try {
     const items = JSON.parse(localStorage.getItem(pendingMessagesStorageKey()) || '[]');
@@ -995,6 +1023,28 @@ function loadPersistentQueues() {
   try {
     const keys = JSON.parse(localStorage.getItem(pendingReadsStorageKey()) || '[]');
     for (const key of Array.isArray(keys) ? keys : []) if (key) pendingReadReceipts.add(String(key));
+  } catch {}
+  try {
+    const items = JSON.parse(localStorage.getItem(deletedMessagesStorageKey()) || '[]');
+    for (const item of Array.isArray(items) ? items : []) {
+      if (!item || !item.key) continue;
+      const snap = {
+        key: String(item.key),
+        role: item.role || '',
+        text: item.text || '',
+        translation: item.translation || '',
+        type: item.type || 'text',
+        imageUrl: item.imageUrl || '',
+        mediaUrl: item.mediaUrl || item.imageUrl || '',
+        mime: item.mime || '',
+        ts: Number(item.ts || Date.now()),
+        read: item.read || null,
+        replyTo: item.replyTo || null,
+        deleted: true
+      };
+      deletedMessageKeys.add(snap.key);
+      deletedMessageSnapshots.set(snap.key, snap);
+    }
   } catch {}
 }
 
@@ -1108,6 +1158,7 @@ function goBack() {
   renderedKeys.clear();
   visibleMessageKeys.clear();
   deletedMessageKeys.clear();
+  deletedMessageSnapshots.clear();
   oldestVisibleMessage = null;
   autoReadDone.clear();
   pendingReadReceipts.clear();
@@ -1128,6 +1179,7 @@ function initChat() {
   chatListenStartedAt = Date.now();
   lastMessageStreamActivityAt = Date.now();
   setupJumpBottomButton();
+  restoreDeletedMessageTombstones();
   if (unsubMessages) { unsubMessages(); unsubMessages = null; }
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (chatPollTimer) clearInterval(chatPollTimer);
@@ -1151,16 +1203,18 @@ function initChat() {
         document.querySelectorAll('.msg').forEach(el => el.remove());
         renderedKeys.clear();
         visibleMessageKeys.clear();
-        deletedMessageKeys.clear();
         oldestVisibleMessage = null;
         autoReadDone.clear();
+        restoreDeletedMessageTombstones();
         stopAudio();
       } else {
         const parts = path.replace(/^\//, '').split('/');
         const key = parts[0];
         if (parts.length === 1) {
           deletedMessageKeys.add(key);
-          removeMessageElement(key);
+          const snap = markMessageDeleted(key) || null;
+          if (snap) deletedMessageSnapshots.set(String(key), snap);
+          persistDeletedMessages();
         } else if (parts.length === 3 && parts[1] === 'reactions') {
           const el = document.getElementById('react-' + key);
           const current = el?.dataset.reactions ? JSON.parse(el.dataset.reactions) : {};
@@ -1375,13 +1429,14 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   const scrollAnchor = followBottom ? null : captureScrollAnchor();
   document.querySelectorAll('.msg').forEach(el => {
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
-    if (!keep.has(key) && !pendingMessageQueue.has(key)) {
+    if (!keep.has(key) && !pendingMessageQueue.has(key) && !deletedMessageKeys.has(key)) {
       el.remove();
       renderedKeys.delete(key);
       autoReadDone.delete(key);
     }
   });
   entries.forEach(([k, v]) => updateOrRender(k, v));
+  for (const key of deletedMessageKeys) markRepliesToDeleted(key);
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
   if (followBottom) scrollToBottom(true);
@@ -1397,7 +1452,7 @@ function applyMessagesPatch(data) {
     if (!key) continue;
     if (msg === null) {
       deletedMessageKeys.add(key);
-      removeMessageElement(key);
+      markMessageDeleted(key);
       continue;
     }
     if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) {
@@ -1406,6 +1461,7 @@ function applyMessagesPatch(data) {
       if (!followBottom && isNewRender && msg.role && msg.role !== myRole) incomingWhileAway++;
     }
   }
+  for (const key of deletedMessageKeys) markRepliesToDeleted(key);
   pruneRenderedMessages();
   if (followBottom) scrollToBottom(true);
   else {
@@ -1458,7 +1514,7 @@ function shouldRenderMessage(key, msg) {
 
 function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
   const nodes = sortMessageNodes(Array.from(document.querySelectorAll('.msg')));
-  let removable = nodes.filter(el => !pendingMessageQueue.has(el.dataset.key || el.id.replace(/^msg-/, '')));
+  let removable = nodes.filter(el => !pendingMessageQueue.has(el.dataset.key || el.id.replace(/^msg-/, '')) && !deletedMessageKeys.has(el.dataset.key || el.id.replace(/^msg-/, '')));
   while (nodes.length > limit && removable.length) {
     const el = removable.shift();
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
@@ -1637,18 +1693,19 @@ function renderMessage(key, msg) {
   div.id = 'msg-' + key;
   div.dataset.key = key;
   div.dataset.role = msg.role || '';
-  div.dataset.text = msg.text || '';
-  div.dataset.translation = msg.translation || '';
-  div.dataset.type = msg.type || '';
-  div.dataset.imageUrl = msg.imageUrl || '';
-  div.dataset.mediaUrl = msg.mediaUrl || msg.imageUrl || '';
-  div.dataset.mime = msg.mime || '';
+  div.dataset.text = msg.deleted ? '' : (msg.text || '');
+  div.dataset.translation = msg.deleted ? '' : (msg.translation || '');
+  div.dataset.type = msg.deleted ? 'text' : (msg.type || '');
+  div.dataset.imageUrl = msg.deleted ? '' : (msg.imageUrl || '');
+  div.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || '');
+  div.dataset.mime = msg.deleted ? '' : (msg.mime || '');
   div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
   div.dataset.localPending = msg.localPending ? '1' : '';
   div.dataset.delivery = msg.delivery || '';
   div.dataset.replyTo = JSON.stringify(msg.replyTo || {});
+  div.dataset.deleted = msg.deleted ? '1' : '';
   const isMedia = msg.type === 'image' || msg.type === 'video';
   div.classList.toggle('media-msg', isMedia);
 
@@ -1664,11 +1721,13 @@ function renderMessage(key, msg) {
   orig.id = 'orig-' + key;
   orig.style.position = 'relative';
   setMessageContent(orig, msg);
-  addReactionButton(orig, key);
-  bindBubbleDoubleTap(orig, key);
+  if (!msg.deleted) {
+    addReactionButton(orig, key);
+    bindBubbleDoubleTap(orig, key);
+  }
   head.append(orig, flag);
   div.appendChild(head);
-  bindSwipeReply(div, head, key);
+  if (!msg.deleted) bindSwipeReply(div, head, key);
 
   const reactions = document.createElement('div');
   reactions.className = 'msg-reactions';
@@ -1678,7 +1737,7 @@ function renderMessage(key, msg) {
   trans.className = 'msg-translation';
   trans.id = 'trans-' + key;
   // Her iki taraf için çeviri göster
-  if (msg.type === 'image' || msg.type === 'video') {
+  if (msg.deleted || msg.type === 'image' || msg.type === 'video') {
     trans.textContent = '';
     trans.style.display = 'none';
   } else if (msg.translation) {
@@ -1691,7 +1750,7 @@ function renderMessage(key, msg) {
   div.appendChild(trans);
 
   let btnRow = null;
-  if (!isMedia) {
+  if (!isMedia && !msg.deleted) {
   btnRow = document.createElement('div');
   btnRow.className = 'btn-row';
   btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
@@ -1727,7 +1786,7 @@ function renderMessage(key, msg) {
 
   btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
   div.appendChild(btnRow);
-  } else {
+  } else if (!msg.deleted) {
     btnRow = document.createElement('div');
     btnRow.className = 'btn-row';
     btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
@@ -1773,9 +1832,11 @@ function renderMessage(key, msg) {
   updateReactions(key, msg.reactions, msg.reactionState);
   updateDeliveryStatus(key, msg.delivery || (msg.localPending ? 'pending' : 'sent'));
   updateReadStatus(key);
-  markMessageRead(key, msg);
-  maybeNotifyIncoming(key, msg);
-  if (!isMedia && !msg.localPending) maybeRetryMissingTranslation(key, msg);
+  if (!msg.deleted) {
+    markMessageRead(key, msg);
+    maybeNotifyIncoming(key, msg);
+  }
+  if (!isMedia && !msg.localPending && !msg.deleted) maybeRetryMissingTranslation(key, msg);
   if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
   else {
     reorderRenderedMessages();
@@ -1797,16 +1858,19 @@ function updateOrRender(key, msg) {
       imageUrl: box.dataset.imageUrl || '',
       mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
       mime: box.dataset.mime || '',
-      replyTo: parseReplyData(box.dataset.replyTo)
+      replyTo: parseReplyData(box.dataset.replyTo),
+      deleted: box.dataset.deleted === '1'
     });
     box.dataset.role = msg.role || box.dataset.role || '';
-    box.dataset.text = msg.text || box.dataset.text || '';
-    box.dataset.type = msg.type || box.dataset.type || '';
+    box.dataset.text = msg.deleted ? '' : (msg.text || box.dataset.text || '');
+    box.dataset.type = msg.deleted ? 'text' : (msg.type || box.dataset.type || '');
     box.classList.toggle('media-msg', box.dataset.type === 'image' || box.dataset.type === 'video');
-    box.dataset.imageUrl = msg.imageUrl || box.dataset.imageUrl || '';
-    box.dataset.mediaUrl = msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '';
-    box.dataset.mime = msg.mime || box.dataset.mime || '';
-    if (msg.translation) box.dataset.translation = msg.translation;
+    box.dataset.imageUrl = msg.deleted ? '' : (msg.imageUrl || box.dataset.imageUrl || '');
+    box.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '');
+    box.dataset.mime = msg.deleted ? '' : (msg.mime || box.dataset.mime || '');
+    box.dataset.deleted = msg.deleted ? '1' : '';
+    if (msg.deleted) box.dataset.translation = '';
+    else if (msg.translation) box.dataset.translation = msg.translation;
     if (msg.ts) box.dataset.ts = msg.ts;
     if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
     if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
@@ -1821,14 +1885,17 @@ function updateOrRender(key, msg) {
     imageUrl: box.dataset.imageUrl || '',
     mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
     mime: box.dataset.mime || '',
-    replyTo: parseReplyData(box.dataset.replyTo)
+    replyTo: parseReplyData(box.dataset.replyTo),
+    deleted: box.dataset.deleted === '1'
   }) : '';
   if (oldContentSig !== newContentSig) refreshMessageText(key);
   if (!pendingMessageQueue.has(key)) updateDeliveryStatus(key, 'sent');
   updateReactions(key, msg.reactions, msg.reactionState);
   updateReadStatus(key);
-  markMessageRead(key, msg);
-  maybeAutoReadMessage(key);
+  if (!msg.deleted) {
+    markMessageRead(key, msg);
+    maybeAutoReadMessage(key);
+  }
 }
 
 function messageContentSignature(msg) {
@@ -1840,12 +1907,14 @@ function messageContentSignature(msg) {
     imageUrl: msg.imageUrl || '',
     mediaUrl: msg.mediaUrl || msg.imageUrl || '',
     mime: msg.mime || '',
-    replyTo: msg.replyTo || null
+    replyTo: msg.replyTo || null,
+    deleted: !!msg.deleted
   });
 }
 
 function getMainText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
+  if (msg.deleted) return deletedMessageLabel();
   const isMine = msg.role === myRole;
   if (isMine) return msg.text || '';
   return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
@@ -1853,6 +1922,7 @@ function getMainText(msg) {
 
 function getSubText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
+  if (msg.deleted) return '';
   const isMine = msg.role === myRole;
   if (isMine) return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
   return msg.text || '';
@@ -1873,8 +1943,13 @@ function replyRoleLabel(reply) {
   return uiText('Mesaj', 'Tin nhắn');
 }
 
+function deletedMessageLabel() {
+  return uiText('Silindi', 'Đã xóa');
+}
+
 function replyDisplayText(reply) {
   if (!reply) return '';
+  if (reply.deleted) return deletedMessageLabel();
   if (reply.type === 'image') return uiText('Fotoğraf', 'Ảnh');
   if (reply.type === 'video') return uiText('Video', 'Video');
   const translated = finalTranslationText(reply.translation || '');
@@ -1920,7 +1995,8 @@ function buildReplySnapshot(key) {
     role: box.dataset.role || '',
     type,
     text: String(box.dataset.text || '').slice(0, 500),
-    translation: finalTranslationText(box.dataset.translation || '').slice(0, 500)
+    translation: finalTranslationText(box.dataset.translation || '').slice(0, 500),
+    deleted: box.dataset.deleted === '1'
   };
 }
 
@@ -2091,6 +2167,14 @@ function setMessageContent(el, msg) {
   const existingReact = el.querySelector('.msg-react-btn');
   el.textContent = '';
   appendReplyQuote(el, msg.replyTo);
+  if (msg.deleted) {
+    const deleted = document.createElement('div');
+    deleted.className = 'msg-deleted';
+    deleted.textContent = deletedMessageLabel();
+    el.appendChild(deleted);
+    if (existingReact) el.appendChild(existingReact);
+    return;
+  }
   const mediaUrl = msg.mediaUrl || msg.imageUrl || '';
   if (msg.type === 'image' && mediaUrl) {
     const img = document.createElement('img');
@@ -2754,12 +2838,18 @@ function refreshMessageText(key) {
     imageUrl: box.dataset.imageUrl || '',
     mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
     mime: box.dataset.mime || '',
-    replyTo: parseReplyData(box.dataset.replyTo)
+    replyTo: parseReplyData(box.dataset.replyTo),
+    deleted: box.dataset.deleted === '1'
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
   if (orig) setMessageContent(orig, msg);
   if (trans) {
+    if (msg.deleted) {
+      trans.textContent = '';
+      trans.style.display = 'none';
+      return;
+    }
     if (box.dataset.localPending === '1') {
       trans.textContent = '';
       trans.style.display = 'none';
@@ -3127,13 +3217,24 @@ async function deleteMessage(key) {
     return;
   }
   deletedMessageKeys.add(key);
-  removeMessageElement(key);
+  const deletedSnapshot = markMessageDeleted(key, msg);
   try {
-    await fbRemove(MSGS_PATH + '/' + key);
+    const tombstone = {
+      role: deletedSnapshot?.role || msg?.role || myRole,
+      ts: deletedSnapshot?.ts || msg?.ts || Date.now(),
+      deleted: true,
+      deletedBy: myRole,
+      deletedAt: { '.sv': 'timestamp' },
+      replyTo: deletedSnapshot?.replyTo || msg?.replyTo || null
+    };
+    const saved = await fbSet(MSGS_PATH + '/' + key, tombstone);
+    if (!saved) throw new Error('Silinen mesaj kaydı yazılamadı');
   } catch (e) {
     console.error('Mesaj silinemedi:', e);
     deletedMessageKeys.delete(key);
-    if (msg) renderMessage(key, msg);
+    deletedMessageSnapshots.delete(String(key));
+    persistDeletedMessages();
+    if (msg) updateOrRender(key, Object.assign({}, msg, { deleted:false }));
   }
 }
 
@@ -4038,6 +4139,91 @@ function cleanModelTranslationOutput(text) {
     .replace(/\s*```$/i, '')
     .replace(/^(?:çeviri|translation|bản dịch|dịch)\s*:\s*/i, '')
     .trim();
+}
+
+function captureMessageSnapshotFromBox(box, key) {
+  if (!box) return null;
+  return {
+    key: String(key || box.dataset.key || box.id.replace(/^msg-/, '')),
+    role: box.dataset.role || '',
+    text: box.dataset.text || '',
+    translation: box.dataset.translation || '',
+    type: box.dataset.type || '',
+    imageUrl: box.dataset.imageUrl || '',
+    mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
+    mime: box.dataset.mime || '',
+    ts: Number(box.dataset.ts || Date.now()),
+    read: { tr: box.dataset.readTr || null, vi: box.dataset.readVi || null },
+    replyTo: parseReplyData(box.dataset.replyTo),
+    deleted: box.dataset.deleted === '1'
+  };
+}
+
+function markMessageDeleted(key, msg=null) {
+  const box = document.getElementById('msg-' + key);
+  const snapshot = Object.assign({}, msg || captureMessageSnapshotFromBox(box, key) || deletedMessageSnapshots.get(String(key)) || {}, {
+    key: String(key),
+    deleted: true
+  });
+  if (!snapshot.role) return null;
+  deletedMessageKeys.add(String(key));
+  deletedMessageSnapshots.set(String(key), snapshot);
+  persistDeletedMessages();
+  if (!box) {
+    renderMessage(key, snapshot);
+    markRepliesToDeleted(key);
+    return snapshot;
+  }
+  box.dataset.deleted = '1';
+  box.dataset.text = '';
+  box.dataset.translation = '';
+  box.dataset.type = 'text';
+  box.dataset.imageUrl = '';
+  box.dataset.mediaUrl = '';
+  box.dataset.mime = '';
+  box.dataset.localPending = '';
+  box.dataset.delivery = 'sent';
+  if (snapshot?.replyTo) box.dataset.replyTo = JSON.stringify(snapshot.replyTo);
+  const orig = document.getElementById('orig-' + key);
+  const trans = document.getElementById('trans-' + key);
+  if (orig) {
+    const existingReact = orig.querySelector('.msg-react-btn');
+    orig.textContent = '';
+    const del = document.createElement('div');
+    del.className = 'msg-deleted';
+    del.textContent = deletedMessageLabel();
+    orig.appendChild(del);
+    if (existingReact) orig.appendChild(existingReact);
+  }
+  if (trans) {
+    trans.textContent = '';
+    trans.style.display = 'none';
+  }
+  refreshMessageText(key);
+  updateReadStatus(key);
+  persistPendingReads();
+  markRepliesToDeleted(key);
+  return snapshot;
+}
+
+function markRepliesToDeleted(deletedKey) {
+  document.querySelectorAll('.msg').forEach(box => {
+    const reply = parseReplyData(box.dataset.replyTo);
+    if (!reply || String(reply.key) !== String(deletedKey) || reply.deleted) return;
+    reply.deleted = true;
+    reply.text = '';
+    reply.translation = '';
+    reply.type = 'text';
+    box.dataset.replyTo = JSON.stringify(reply);
+    refreshMessageText(box.dataset.key || box.id.replace(/^msg-/, ''));
+  });
+  if (activeReply && String(activeReply.key) === String(deletedKey)) {
+    activeReply.deleted = true;
+    activeReply.text = '';
+    activeReply.translation = '';
+    activeReply.type = 'text';
+    updateReplyComposer();
+  }
 }
 
 function validateTranslationOutput(source, output, fromRole) {
