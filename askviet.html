@@ -618,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-opus-temperature-fix-1';
+const APP_VERSION = '2026-06-24-short-translate-prompt-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -664,6 +664,8 @@ let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
 const CHAT_RENDER_LIMIT = 80;
+const MESSAGE_RECONCILE_DELAY_MS = 900;
+const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
 const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
@@ -676,6 +678,8 @@ let chatReloading = false;
 let chatHealthTimer = null;
 let lastMessageStreamActivityAt = 0;
 let chatStreamRestarting = false;
+let messageReconcileTimer = null;
+let lastMessageReconcileAt = 0;
 let readReceiptFlushRunning = false;
 let readReceiptRetryTimer = null;
 let resumeSyncTimer = null;
@@ -1241,6 +1245,7 @@ function initChat() {
       if (typeof event.data === 'object') {
         if (event.type === 'patch') applyMessagesPatch(event.data);
         else applyMessagesSnapshot(event.data, renderedKeys.size === 0);
+        scheduleMessageSnapshotReconcile('root-' + event.type);
       }
     } else {
       const parts = path.replace(/^\//, '').split('/');
@@ -1257,6 +1262,7 @@ function initChat() {
             if (isNewRender) noteIncomingWhileAway(event.data);
             restoreScrollAnchor(scrollAnchor);
           }
+          scheduleMessageSnapshotReconcile('message-put');
         }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
         const followBottom = shouldFollowChatBottom();
@@ -1353,6 +1359,20 @@ async function pollMessagesSnapshot(fresh=false) {
   } finally {
     scheduleChatWatchdog();
   }
+}
+
+function scheduleMessageSnapshotReconcile(reason='message') {
+  if (!myRole || document.visibilityState === 'hidden') return;
+  if (messageReconcileTimer) clearTimeout(messageReconcileTimer);
+  const sinceLast = Date.now() - lastMessageReconcileAt;
+  const delay = sinceLast < MESSAGE_RECONCILE_MIN_GAP_MS
+    ? MESSAGE_RECONCILE_MIN_GAP_MS - sinceLast
+    : MESSAGE_RECONCILE_DELAY_MS;
+  messageReconcileTimer = setTimeout(async () => {
+    messageReconcileTimer = null;
+    lastMessageReconcileAt = Date.now();
+    await pollMessagesSnapshot(true);
+  }, delay);
 }
 
 function startChatHealthWatchdog() {
@@ -1848,36 +1868,13 @@ function updateOrRender(key, msg) {
   if (!renderedKeys.has(key)) { renderMessage(key, msg); return; }
   if (pendingMessageQueue.has(key) && msg && msg.role === myRole) confirmOutgoingMessage(key, msg);
   const box = document.getElementById('msg-' + key);
-  let oldContentSig = '';
-  if (box) {
-    oldContentSig = messageContentSignature({
-      role: box.dataset.role || '',
-      text: box.dataset.text || '',
-      translation: box.dataset.translation || '',
-      type: box.dataset.type || '',
-      imageUrl: box.dataset.imageUrl || '',
-      mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
-      mime: box.dataset.mime || '',
-      replyTo: parseReplyData(box.dataset.replyTo),
-      deleted: box.dataset.deleted === '1'
-    });
-    box.dataset.role = msg.role || box.dataset.role || '';
-    box.dataset.text = msg.deleted ? '' : (msg.text || box.dataset.text || '');
-    box.dataset.type = msg.deleted ? 'text' : (msg.type || box.dataset.type || '');
-    box.classList.toggle('media-msg', box.dataset.type === 'image' || box.dataset.type === 'video');
-    box.dataset.imageUrl = msg.deleted ? '' : (msg.imageUrl || box.dataset.imageUrl || '');
-    box.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '');
-    box.dataset.mime = msg.deleted ? '' : (msg.mime || box.dataset.mime || '');
-    box.dataset.deleted = msg.deleted ? '1' : '';
-    if (msg.deleted) box.dataset.translation = '';
-    else if (msg.translation) box.dataset.translation = msg.translation;
-    if (msg.ts) box.dataset.ts = msg.ts;
-    if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
-    if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
-    if (Object.prototype.hasOwnProperty.call(msg, 'replyTo')) box.dataset.replyTo = JSON.stringify(msg.replyTo || {});
-    if (!pendingMessageQueue.has(key)) box.dataset.localPending = '';
+  if (!box) {
+    renderedKeys.delete(key);
+    renderMessage(key, msg);
+    return;
   }
-  const newContentSig = box ? messageContentSignature({
+  let oldContentSig = '';
+  oldContentSig = messageContentSignature({
     role: box.dataset.role || '',
     text: box.dataset.text || '',
     translation: box.dataset.translation || '',
@@ -1887,7 +1884,33 @@ function updateOrRender(key, msg) {
     mime: box.dataset.mime || '',
     replyTo: parseReplyData(box.dataset.replyTo),
     deleted: box.dataset.deleted === '1'
-  }) : '';
+  });
+  box.dataset.role = msg.role || box.dataset.role || '';
+  box.dataset.text = msg.deleted ? '' : (msg.text || box.dataset.text || '');
+  box.dataset.type = msg.deleted ? 'text' : (msg.type || box.dataset.type || '');
+  box.classList.toggle('media-msg', box.dataset.type === 'image' || box.dataset.type === 'video');
+  box.dataset.imageUrl = msg.deleted ? '' : (msg.imageUrl || box.dataset.imageUrl || '');
+  box.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '');
+  box.dataset.mime = msg.deleted ? '' : (msg.mime || box.dataset.mime || '');
+  box.dataset.deleted = msg.deleted ? '1' : '';
+  if (msg.deleted) box.dataset.translation = '';
+  else if (msg.translation) box.dataset.translation = msg.translation;
+  if (msg.ts) box.dataset.ts = msg.ts;
+  if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
+  if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
+  if (Object.prototype.hasOwnProperty.call(msg, 'replyTo')) box.dataset.replyTo = JSON.stringify(msg.replyTo || {});
+  if (!pendingMessageQueue.has(key)) box.dataset.localPending = '';
+  const newContentSig = messageContentSignature({
+    role: box.dataset.role || '',
+    text: box.dataset.text || '',
+    translation: box.dataset.translation || '',
+    type: box.dataset.type || '',
+    imageUrl: box.dataset.imageUrl || '',
+    mediaUrl: box.dataset.mediaUrl || box.dataset.imageUrl || '',
+    mime: box.dataset.mime || '',
+    replyTo: parseReplyData(box.dataset.replyTo),
+    deleted: box.dataset.deleted === '1'
+  });
   if (oldContentSig !== newContentSig) refreshMessageText(key);
   if (!pendingMessageQueue.has(key)) updateDeliveryStatus(key, 'sent');
   updateReactions(key, msg.reactions, msg.reactionState);
@@ -3781,12 +3804,14 @@ async function sendQueuedItem(item) {
     if (!ok) throw new Error('Firebase mesajı kaydetmedi');
     setConnected(true);
     confirmOutgoingMessage(item.key);
+    scheduleMessageSnapshotReconcile('outgoing-sent');
   } catch (e) {
     setConnected(false);
     let remote = null;
     try { remote = await fbGet(MSGS_PATH + '/' + item.key, true); } catch {}
     if (remote && typeof remote === 'object') {
       confirmOutgoingMessage(item.key, remote);
+      scheduleMessageSnapshotReconcile('outgoing-confirmed-remote');
     } else if (pendingMessageQueue.has(item.key)) {
       item.attempts = Number(item.attempts || 0) + 1;
       recordConnectionEvent('message-send-error', e?.message || e);
@@ -4277,7 +4302,7 @@ function isRetryableGeminiError(e) {
 async function translateText(text, from, modelOverride) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Yanıtın tamamı yalnızca ${toName} olmalı. Kaynak metni asla aynen geri yazma. Kaynak dilden tek kelime bile açıklama amaçlı ekleme. Kaynak ve hedef dili birlikte yazma. İki dilli cevap, karşılaştırma, alternatif çeviri, parantez içinde orijinal metin, "Türkçe:", "Vietnamca:", "Çeviri:" gibi etiketler yasak. Sadece tek satır ya da doğal paragraf halinde hedef dilde çeviriyi döndür. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür.`;
+  const sysPrompt = `Sadece çeviri yap. Kaynak: ${fromName}. Hedef: ${toName}. Cevabın yalnızca ${toName} olsun; açıklama, etiket, alternatif, orijinal metin veya iki dilli cevap yazma. TR tarafı erkek=anh, VI tarafı kadın=em. TR->VI'de erkek kendine anh, kadına em der. VI->TR'de anh erkek, em kadın kabul et. Tonu, samimiyeti, küfrü ve anlamı sansürlemeden koru.`;
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
