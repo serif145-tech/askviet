@@ -615,7 +615,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-simple-gemini-model-routing-1';
+const APP_VERSION = '2026-06-24-translation-prompt-only-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -3614,8 +3614,12 @@ function queueOutgoingMessage(msg) {
     if (orig && !orig.textContent.trim() && item.msg.text) setMessageContent(orig, item.msg);
   }
   scrollToBottom(true);
+  queueMicrotask(() => ensureLocalOutgoingVisible(key, item));
   (window.requestAnimationFrame || setTimeout)(() => scrollToBottom(true), 0);
+  (window.requestAnimationFrame || setTimeout)(() => ensureLocalOutgoingVisible(key, item), 0);
+  setTimeout(() => ensureLocalOutgoingVisible(key, item), 60);
   setTimeout(() => ensureLocalOutgoingVisible(key, item), 120);
+  setTimeout(() => ensureLocalOutgoingVisible(key, item), 300);
   setTimeout(() => ensureLocalOutgoingVisible(key, item), 900);
   flushOutgoingQueue();
   return key;
@@ -3764,7 +3768,8 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
         const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
-        const translation = validateTranslationOutput(text, rawTranslation, fromRole);
+        const translation = cleanModelTranslationOutput(rawTranslation);
+        if (!translation) throw new Error('Model boş çeviri döndürdü');
         if (stillCurrent()) {
           updateLocalTranslationDisplay(key, translation);
           await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
@@ -4086,7 +4091,7 @@ function isRetryableGeminiError(e) {
 async function translateText(text, from, modelOverride) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Yanıtın tamamı yalnızca ${toName} olmalı. Kaynak metni tekrarlama, kaynak ve hedef dili birlikte yazma, açıklama veya dil etiketi ekleme. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür.`;
+  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Yanıtın tamamı yalnızca ${toName} olmalı. Kaynak metni asla aynen geri yazma. Kaynak dilden tek kelime bile açıklama amaçlı ekleme. Kaynak ve hedef dili birlikte yazma. İki dilli cevap, karşılaştırma, alternatif çeviri, parantez içinde orijinal metin, "Türkçe:", "Vietnamca:", "Çeviri:" gibi etiketler yasak. Sadece tek satır ya da doğal paragraf halinde hedef dilde çeviriyi döndür. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür.`;
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
