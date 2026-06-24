@@ -610,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-push-badge-count-1';
+const APP_VERSION = '2026-06-24-stable-scroll-enter-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1402,6 +1402,7 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   if (!entries.length) return;
   const keep = new Set(entries.map(([k]) => k));
   const wasNearBottom = isNearBottom();
+  const scrollAnchor = !forceBottom && !wasNearBottom ? captureScrollAnchor() : null;
   document.querySelectorAll('.msg').forEach(el => {
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
     if (!keep.has(key) && !pendingMessageQueue.has(key)) {
@@ -1414,12 +1415,13 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
   if (forceBottom || wasNearBottom) scrollToBottom(true);
-  else updateJumpBottomButton();
+  else restoreScrollAnchor(scrollAnchor);
 }
 
 function applyMessagesPatch(data) {
   if (!data || typeof data !== 'object') return;
   const wasNearBottom = isNearBottom();
+  const scrollAnchor = !wasNearBottom ? captureScrollAnchor() : null;
   let incomingWhileAway = 0;
   for (const [key, msg] of Object.entries(data)) {
     if (!key) continue;
@@ -1438,7 +1440,7 @@ function applyMessagesPatch(data) {
   if (wasNearBottom) scrollToBottom(true);
   else {
     if (incomingWhileAway) unseenIncomingCount = Math.min(99, unseenIncomingCount + incomingWhileAway);
-    updateJumpBottomButton();
+    restoreScrollAnchor(scrollAnchor);
   }
 }
 
@@ -1500,7 +1502,42 @@ function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
 function isNearBottom() {
   const m = document.getElementById('messages');
   if (!m) return true;
-  return m.scrollHeight - m.scrollTop - m.clientHeight <= Math.max(260, m.clientHeight * 0.35);
+  return m.scrollHeight - m.scrollTop - m.clientHeight <= Math.max(80, Math.min(140, m.clientHeight * 0.18));
+}
+
+function captureScrollAnchor() {
+  const m = document.getElementById('messages');
+  if (!m) return null;
+  const top = m.getBoundingClientRect().top;
+  const nodes = Array.from(m.querySelectorAll('.msg'));
+  for (const el of nodes) {
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom >= top + 10) {
+      return {
+        key: el.dataset.key || el.id.replace(/^msg-/, ''),
+        offset: rect.top - top,
+        scrollTop: m.scrollTop
+      };
+    }
+  }
+  return { key: '', offset: 0, scrollTop: m.scrollTop };
+}
+
+function restoreScrollAnchor(anchor) {
+  const m = document.getElementById('messages');
+  if (!m || !anchor) return;
+  if (anchor.key) {
+    const el = document.getElementById('msg-' + anchor.key);
+    if (el) {
+      const top = m.getBoundingClientRect().top;
+      const rect = el.getBoundingClientRect();
+      m.scrollTop += rect.top - top - anchor.offset;
+      updateJumpBottomButton();
+      return;
+    }
+  }
+  m.scrollTop = anchor.scrollTop || 0;
+  updateJumpBottomButton();
 }
 
 function scrollAfterMessageUpdate(msg) {
@@ -4024,7 +4061,10 @@ if(msgInputEl){
   });
   msgInputEl.addEventListener('keydown', e => {
     markChatUserActivity();
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      sendMessage();
+    }
   });
   msgInputEl.addEventListener('paste', handleMediaTransferEvent);
   msgInputEl.addEventListener('beforeinput', handleMediaTransferEvent);
