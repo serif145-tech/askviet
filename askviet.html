@@ -610,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-stable-scroll-enter-1';
+const APP_VERSION = '2026-06-24-pinned-scroll-actions-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -678,6 +678,8 @@ let modelPollTimer = null;
 let lastPageHiddenAt = 0;
 let unreadCount = 0;
 let unseenIncomingCount = 0;
+let chatPinnedToBottom = true;
+let chatAutoScrollUntil = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
 let autoSpeakRunning = false;
@@ -1228,17 +1230,19 @@ function initChat() {
       if (parts.length === 1 && typeof event.data === 'object') {
         if (shouldRenderMessage(key, event.data)) {
           const isNewRender = !renderedKeys.has(key);
-          const wasNearBottom = isNearBottom();
+          const followBottom = shouldFollowChatBottom();
+          const scrollAnchor = followBottom ? null : captureScrollAnchor();
           updateOrRender(key, event.data);
           pruneRenderedMessages();
-          if (wasNearBottom || event.data.role === myRole) scrollToBottom(true);
+          if (followBottom) scrollToBottom(true);
           else {
             if (isNewRender) noteIncomingWhileAway(event.data);
-            else updateJumpBottomButton();
+            restoreScrollAnchor(scrollAnchor);
           }
         }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
-        const wasNearBottom = isNearBottom();
+        const followBottom = shouldFollowChatBottom();
+        const scrollAnchor = followBottom ? null : captureScrollAnchor();
         const box = document.getElementById('msg-' + key);
         if (box) box.dataset.translation = event.data;
         const el = document.getElementById('trans-' + key);
@@ -1246,8 +1250,8 @@ function initChat() {
         refreshMessageText(key);
         maybeAutoReadMessage(key);
         reorderRenderedMessages();
-        if (wasNearBottom) scrollToBottom(true);
-        else updateJumpBottomButton();
+        if (followBottom) scrollToBottom(true);
+        else restoreScrollAnchor(scrollAnchor);
       } else if (parts.length === 3 && parts[1] === 'read') {
         const box = document.getElementById('msg-' + key);
         if (box) {
@@ -1302,13 +1306,18 @@ function initChat() {
 function showRemoteTyping(show) {
   const ind = document.getElementById('typingIndicator');
   if (!ind) return;
-  const wasNearBottom = isNearBottom();
+  const followBottom = shouldFollowChatBottom();
+  const scrollAnchor = followBottom ? null : captureScrollAnchor();
   if (remoteTypingHideTimer) clearTimeout(remoteTypingHideTimer);
   remoteTypingHideTimer = null;
   ind.classList.toggle('show', !!show);
-  if (!show) return;
-  if (wasNearBottom) scrollToBottom(true);
-  else updateJumpBottomButton();
+  if (!show) {
+    if (followBottom) scrollToBottom(true);
+    else restoreScrollAnchor(scrollAnchor);
+    return;
+  }
+  if (followBottom) scrollToBottom(true);
+  else restoreScrollAnchor(scrollAnchor);
   remoteTypingHideTimer = setTimeout(() => {
     remoteTypingHideTimer = null;
     document.getElementById('typingIndicator')?.classList.remove('show');
@@ -1401,8 +1410,8 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   const entries = latestMessageEntries(data);
   if (!entries.length) return;
   const keep = new Set(entries.map(([k]) => k));
-  const wasNearBottom = isNearBottom();
-  const scrollAnchor = !forceBottom && !wasNearBottom ? captureScrollAnchor() : null;
+  const followBottom = forceBottom || shouldFollowChatBottom();
+  const scrollAnchor = followBottom ? null : captureScrollAnchor();
   document.querySelectorAll('.msg').forEach(el => {
     const key = el.dataset.key || el.id.replace(/^msg-/, '');
     if (!keep.has(key) && !pendingMessageQueue.has(key)) {
@@ -1414,14 +1423,14 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   entries.forEach(([k, v]) => updateOrRender(k, v));
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
-  if (forceBottom || wasNearBottom) scrollToBottom(true);
+  if (followBottom) scrollToBottom(true);
   else restoreScrollAnchor(scrollAnchor);
 }
 
 function applyMessagesPatch(data) {
   if (!data || typeof data !== 'object') return;
-  const wasNearBottom = isNearBottom();
-  const scrollAnchor = !wasNearBottom ? captureScrollAnchor() : null;
+  const followBottom = shouldFollowChatBottom();
+  const scrollAnchor = followBottom ? null : captureScrollAnchor();
   let incomingWhileAway = 0;
   for (const [key, msg] of Object.entries(data)) {
     if (!key) continue;
@@ -1433,11 +1442,11 @@ function applyMessagesPatch(data) {
     if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) {
       const isNewRender = !renderedKeys.has(key);
       updateOrRender(key, msg);
-      if (!wasNearBottom && isNewRender && msg.role && msg.role !== myRole) incomingWhileAway++;
+      if (!followBottom && isNewRender && msg.role && msg.role !== myRole) incomingWhileAway++;
     }
   }
   pruneRenderedMessages();
-  if (wasNearBottom) scrollToBottom(true);
+  if (followBottom) scrollToBottom(true);
   else {
     if (incomingWhileAway) unseenIncomingCount = Math.min(99, unseenIncomingCount + incomingWhileAway);
     restoreScrollAnchor(scrollAnchor);
@@ -1505,6 +1514,26 @@ function isNearBottom() {
   return m.scrollHeight - m.scrollTop - m.clientHeight <= Math.max(80, Math.min(140, m.clientHeight * 0.18));
 }
 
+function bottomGap() {
+  const m = document.getElementById('messages');
+  if (!m) return 0;
+  return m.scrollHeight - m.scrollTop - m.clientHeight;
+}
+
+function bottomPinTolerance() {
+  const m = document.getElementById('messages');
+  if (!m) return 120;
+  return Math.max(120, Math.min(220, m.clientHeight * 0.22));
+}
+
+function isAtChatBottom() {
+  return bottomGap() <= bottomPinTolerance();
+}
+
+function shouldFollowChatBottom() {
+  return chatPinnedToBottom || isAtChatBottom();
+}
+
 function captureScrollAnchor() {
   const m = document.getElementById('messages');
   if (!m) return null;
@@ -1526,6 +1555,7 @@ function captureScrollAnchor() {
 function restoreScrollAnchor(anchor) {
   const m = document.getElementById('messages');
   if (!m || !anchor) return;
+  chatPinnedToBottom = false;
   if (anchor.key) {
     const el = document.getElementById('msg-' + anchor.key);
     if (el) {
@@ -1541,7 +1571,7 @@ function restoreScrollAnchor(anchor) {
 }
 
 function scrollAfterMessageUpdate(msg) {
-  if (!msg || msg.role === myRole || isNearBottom()) scrollToBottom();
+  if (!msg || shouldFollowChatBottom()) scrollToBottom();
   else updateJumpBottomButton();
 }
 
@@ -3314,7 +3344,7 @@ function updateJumpBottomButton() {
   const m = document.getElementById('messages');
   const btn = document.getElementById('jumpBottomBtn');
   if (!m || !btn) return;
-  const away = m.scrollHeight - m.scrollTop - m.clientHeight > Math.max(360, m.clientHeight * 0.45);
+  const away = !isAtChatBottom();
   if (!away) unseenIncomingCount = 0;
   btn.classList.toggle('has-new', unseenIncomingCount > 0);
   btn.innerHTML = unseenIncomingCount > 0
@@ -3325,7 +3355,7 @@ function updateJumpBottomButton() {
 }
 
 function noteIncomingWhileAway(msg) {
-  if (!msg || msg.role === myRole || isNearBottom()) return;
+  if (!msg || msg.role === myRole || shouldFollowChatBottom()) return;
   unseenIncomingCount = Math.min(99, unseenIncomingCount + 1);
   updateJumpBottomButton();
 }
@@ -3334,13 +3364,42 @@ function setupJumpBottomButton() {
   const m = document.getElementById('messages');
   if (!m || m.dataset.jumpBound === '1') return;
   m.dataset.jumpBound = '1';
-  m.addEventListener('scroll', updateJumpBottomButton, { passive:true });
+  m.addEventListener('scroll', () => {
+    if (Date.now() < chatAutoScrollUntil) {
+      chatPinnedToBottom = true;
+    } else {
+      chatPinnedToBottom = isAtChatBottom();
+    }
+    updateJumpBottomButton();
+  }, { passive:true });
+  chatPinnedToBottom = isAtChatBottom();
   updateJumpBottomButton();
 }
 
 function scrollToBottom(force=false) {
   const m = document.getElementById('messages');
-  if (m) setTimeout(() => { unseenIncomingCount = 0; m.scrollTop = m.scrollHeight; updateJumpBottomButton(); }, force ? 0 : 50);
+  if (m) setTimeout(() => {
+    chatPinnedToBottom = true;
+    chatAutoScrollUntil = Date.now() + 900;
+    unseenIncomingCount = 0;
+    m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
+    updateJumpBottomButton();
+    requestAnimationFrame(() => {
+      if (!chatPinnedToBottom) return;
+      m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
+      updateJumpBottomButton();
+    });
+    setTimeout(() => {
+      if (!chatPinnedToBottom) return;
+      m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
+      updateJumpBottomButton();
+    }, 180);
+    setTimeout(() => {
+      if (!chatPinnedToBottom) return;
+      m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
+      updateJumpBottomButton();
+    }, 520);
+  }, force ? 0 : 50);
 }
 
 function openGallery(){document.getElementById('galleryInput')?.click()}
