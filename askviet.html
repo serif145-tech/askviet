@@ -610,7 +610,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-no-scroll-jitter-1';
+const APP_VERSION = '2026-06-24-input-translation-stability-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1244,10 +1244,7 @@ function initChat() {
         const followBottom = shouldFollowChatBottom();
         const scrollAnchor = followBottom ? null : captureScrollAnchor();
         const box = document.getElementById('msg-' + key);
-        if (box) box.dataset.translation = event.data;
-        const el = document.getElementById('trans-' + key);
-        if (el) { appendLinkedText(el, displayTranslationText(event.data)); el.style.color = ''; el.style.fontStyle = 'italic'; }
-        refreshMessageText(key);
+        updateLocalTranslationDisplay(key, event.data);
         maybeAutoReadMessage(key);
         reorderRenderedMessages();
         if (followBottom) scrollToBottom(true);
@@ -3713,7 +3710,7 @@ function sendMessage() {
   if (!text) return;
   if (!canQueueOutgoingMessage()) return;
   input.value = '';
-  input.style.height = '';
+  resizeMessageInput(input, true);
   if (sendBtn) sendBtn.disabled = false;
   setMyTyping(false);
   const msg = { role: myRole, text, ts: Date.now(), translation: null };
@@ -3739,7 +3736,10 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
         const translation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
-        if (stillCurrent()) await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
+        if (stillCurrent()) {
+          updateLocalTranslationDisplay(key, translation);
+          await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
+        }
         return;
       } catch (e) {
         if (!stillCurrent()) return;
@@ -3751,7 +3751,9 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
           await sleep(waitMs);
           continue;
         }
-        await fbSet(MSGS_PATH + '/' + key + '/translation', errorText(targetRole, msg));
+        const errValue = errorText(targetRole, msg);
+        updateLocalTranslationDisplay(key, errValue);
+        await fbSet(MSGS_PATH + '/' + key + '/translation', errValue);
         console.error(e);
         return;
       }
@@ -3907,6 +3909,11 @@ function finalTranslationText(text) {
 }
 
 async function setTranslationStatus(key, value) {
+  updateLocalTranslationDisplay(key, value);
+  await fbSet(MSGS_PATH + '/' + key + '/translation', value, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(console.error);
+}
+
+function updateLocalTranslationDisplay(key, value) {
   const box = document.getElementById('msg-' + key);
   if (box) box.dataset.translation = value || '';
   const trans = document.getElementById('trans-' + key);
@@ -3916,7 +3923,6 @@ async function setTranslationStatus(key, value) {
     trans.style.fontStyle = 'italic';
   }
   refreshMessageText(key);
-  await fbSet(MSGS_PATH + '/' + key + '/translation', value, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(console.error);
 }
 
 function tryingText(model='') {
@@ -4142,12 +4148,22 @@ function clearMyTypingOnExit() {
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────
+function resizeMessageInput(el, force=false) {
+  if (!el) return;
+  const current = Math.round(parseFloat(el.style.height) || el.getBoundingClientRect().height || 0);
+  const previousValue = el.dataset.prevValue || '';
+  const shrinking = force || el.value.length < previousValue.length || el.value.split('\n').length < previousValue.split('\n').length;
+  if (shrinking) el.style.height = '';
+  const next = Math.min(el.scrollHeight, 120);
+  if (force || Math.abs(next - current) > 1) el.style.height = next + 'px';
+  el.dataset.prevValue = el.value;
+}
+
 const msgInputEl = document.getElementById('msgInput');
 if(msgInputEl){
   msgInputEl.addEventListener('input', function() {
     markChatUserActivity();
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    resizeMessageInput(this);
     setMyTyping(true);
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => setMyTyping(false), 2000);
