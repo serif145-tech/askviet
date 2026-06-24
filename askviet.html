@@ -618,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-deleted-message-tombstones-2';
+const APP_VERSION = '2026-06-24-model-request-payload-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -4285,6 +4285,8 @@ async function translateText(text, from, modelOverride) {
     if (!key) throw new Error('Gemini API key gerekli');
     const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
     const geminiPrompt = sysPrompt + '\n\nÇevrilecek metin:\n' + text;
+    const generationConfig = { maxOutputTokens: 1200 };
+    if (!/gemini-3\.5-flash/i.test(model)) generationConfig.temperature = 0;
     let r;
     try {
       r = await fetch(endpoint, {
@@ -4292,7 +4294,7 @@ async function translateText(text, from, modelOverride) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: geminiPrompt }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 1200 }
+          generationConfig
         })
       });
     } catch (e) {
@@ -4309,6 +4311,13 @@ async function translateText(text, from, modelOverride) {
     const key = extractApiKey(claudeApiKey || localStorage.getItem('askviet_claude_key') || '', 'claude');
     if (!key) throw new Error('Claude API key gerekli');
     const endpoint = 'https://api.anthropic.com/v1/messages';
+    const claudePayload = {
+      model,
+      max_tokens: 1200,
+      system: sysPrompt,
+      messages: [{ role: 'user', content: text }]
+    };
+    if (!/claude-opus/i.test(model)) claudePayload.temperature = 0;
     let r;
     try {
       r = await fetch(endpoint, {
@@ -4319,13 +4328,7 @@ async function translateText(text, from, modelOverride) {
           'anthropic-version': '2023-06-01',
           'anthropic-dangerous-direct-browser-access': 'true'
         },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1200,
-          temperature: 0,
-          system: sysPrompt,
-          messages: [{ role: 'user', content: text }]
-        })
+        body: JSON.stringify(claudePayload)
       });
     } catch (e) {
       throw new Error('Claude adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
@@ -4540,7 +4543,7 @@ function appendPttLog(text) {
 }
 async function pttTranslate(text, from) {
   const target = from === 'tr' ? 'vi' : 'tr';
-  const modelsToTry = fastTranslationModelQueue(selectedModel);
+  const modelsToTry = translationModelQueue(selectedModel);
   let lastErr = null;
   for (let i = 0; i < modelsToTry.length; i++) {
     const attemptModel = modelsToTry[i];
@@ -4554,7 +4557,7 @@ async function pttTranslate(text, from) {
     } catch (e) {
       lastErr = e;
       if (isFatalTranslationError(e) || i >= modelsToTry.length - 1) throw e;
-      await sleep(250 + (i * 200));
+      await sleep(700 + (i * 600));
     }
   }
   throw lastErr || new Error('Bas-konuş çevirisi tamamlanamadı');
