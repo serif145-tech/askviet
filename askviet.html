@@ -615,7 +615,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-model-routing-language-validation-2';
+const APP_VERSION = '2026-06-24-simple-gemini-model-routing-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -834,47 +834,6 @@ function normalizeChatModel(model) {
   return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || model || 'openai:gpt-5.5';
 }
 
-let geminiModelListCache = { key: '', ts: 0, ids: [] };
-async function getAvailableGeminiModelIds(key) {
-  const now = Date.now();
-  if (geminiModelListCache.key === key && now - geminiModelListCache.ts < 10 * 60 * 1000) return geminiModelListCache.ids;
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key), { cache:'no-store' });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error?.message || r.statusText || ('HTTP ' + r.status));
-  const ids = (data.models || [])
-    .map(m => String(m.name || '').replace(/^models\//, ''))
-    .filter(Boolean);
-  geminiModelListCache = { key, ts: now, ids };
-  return ids;
-}
-
-async function geminiChatModelCandidates(model, key) {
-  const raw = String(model || '').trim();
-  const isPro = raw.includes('3.1-pro') || raw.includes('3-pro');
-  const isFlash35 = raw === 'gemini-3.5-flash' || raw.includes('3.5-flash');
-  const aliases = isPro
-    ? ['gemini-3.1-pro-preview', 'gemini-3.1-pro', 'gemini-3.1-pro-preview-02-19', 'gemini-3-pro-preview']
-    : isFlash35
-      ? ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3-flash-preview', 'gemini-2.5-flash']
-      : [raw];
-  let listed = [];
-  try {
-    const ids = await getAvailableGeminiModelIds(key);
-    if (isPro) {
-      listed = ids.filter(id => /gemini-3(\.1)?-pro/i.test(id) && !/image|live|audio/i.test(id));
-    } else if (isFlash35) {
-      listed = ids.filter(id => (
-        aliases.includes(id) ||
-        (/gemini-(3\.5|3|2\.5)-flash/i.test(id) && !/lite|image|live|audio|tts/i.test(id))
-      ));
-    } else {
-      listed = ids.filter(id => id === raw);
-    }
-  } catch (e) {
-    console.warn('Gemini model listesi okunamadi:', e);
-  }
-  return [...new Set([raw, ...listed, ...aliases].filter(Boolean))];
-}
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
   if (!panel) return;
@@ -4133,41 +4092,26 @@ async function translateText(text, from, modelOverride) {
   if (provider === 'gemini') {
     const key = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
     if (!key) throw new Error('Gemini API key gerekli');
-    const candidates = await geminiChatModelCandidates(model, key);
-    let lastErr = null;
-    for (const candidate of candidates) {
-      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(candidate) + ':generateContent?key=' + encodeURIComponent(key);
-      let r;
-      try {
-        r = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: sysPrompt }] },
-            contents: [{ role: 'user', parts: [{ text }] }],
-            generationConfig: { temperature: 0, maxOutputTokens: 1200 }
-          })
-        });
-      } catch (e) {
-        lastErr = new Error('Gemini adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
-        continue;
-      }
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        lastErr = new Error((data.error?.message || r.statusText || ('HTTP ' + r.status)) + ' [model: ' + candidate + ']');
-        const s = String(lastErr.message).toLowerCase();
-        if (/api key|api_key|unauthenticated|unauthorized|permission|denied|401|403/.test(s)) throw lastErr;
-        if (/not found|not supported|unsupported|invalid model|404/.test(s)) continue;
-        throw lastErr;
-      }
-      const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
-      if (!out) {
-        lastErr = new Error('Gemini boş cevap döndü [model: ' + candidate + ']');
-        continue;
-      }
-      return out;
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
+    const geminiPrompt = sysPrompt + '\n\nÇevrilecek metin:\n' + text;
+    let r;
+    try {
+      r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: geminiPrompt }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 1200 }
+        })
+      });
+    } catch (e) {
+      throw new Error('Gemini adresine ulasilamadi. Internet/CORS engeli olabilir. ' + (e.message || e));
     }
-    throw lastErr || new Error('Gemini modeli bu API key ile bulunamadı veya generateContent desteklemiyor.');
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((data.error?.message || r.statusText || ('HTTP ' + r.status)) + ' [model: ' + model + ']');
+    const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
+    if (!out) throw new Error('Gemini boş cevap döndü [model: ' + model + ']');
+    return out;
   }
 
   if (provider === 'claude') {
