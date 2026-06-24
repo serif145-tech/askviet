@@ -131,6 +131,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 @keyframes translationTick{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1.18)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82)}}
 .msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 .msg-media-video{min-width:min(240px,68vw)}
+.msg-video-wrap{position:relative;display:inline-block;line-height:0;background:#111;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.14);cursor:pointer}
+.msg-video-wrap .msg-media-video{box-shadow:none;border-radius:12px}
+.msg-video-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.56);border:1px solid rgba(255,255,255,.7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;line-height:1;box-shadow:0 5px 18px rgba(0,0,0,.35);pointer-events:none}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
 .msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
@@ -159,7 +162,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 @keyframes reactionCountPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.22)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}43%{transform:translate(-50%,-50%) scale(.94)}72%{opacity:1;transform:translate(-50%,-54%) scale(1.04)}100%{opacity:0;transform:translate(-50%,-82%) scale(1.18)}}
 .media-lightbox{position:fixed;inset:0;z-index:100000;background:#000;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 10px env(safe-area-inset-bottom)}
 .media-lightbox.show{display:flex}
+.media-lightbox-body{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}
 .media-lightbox img,.media-lightbox video{max-width:100%;max-height:100%;object-fit:contain}
+.media-lightbox img.zoomable{touch-action:none;user-select:none;-webkit-user-select:none;will-change:transform;transition:transform .08s linear}
 .media-lightbox-close{position:fixed;top:max(env(safe-area-inset-top),14px);right:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,20,.75);color:#fff;font-size:24px;font-weight:900;z-index:100001}
 
 .msg-time{font-size:10px;color:#999;padding:2px 14px 4px}
@@ -169,8 +174,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-delivery-retry{display:none;width:28px;height:25px;border-radius:8px;border:1px solid #f87171;background:#fee2e2;color:#b91c1c;font-size:16px;font-weight:900;line-height:1;align-items:center;justify-content:center;cursor:pointer}
 .msg.delivery-failed .msg-delivery-retry{display:inline-flex}
 
-.typing-indicator{display:none;width:max-content;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px}
-.typing-indicator.show{display:flex;gap:4px;align-items:center}
+.typing-indicator{display:flex;visibility:hidden;opacity:0;width:max-content;min-height:26px;box-sizing:border-box;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px;gap:4px;align-items:center;pointer-events:none}
+.typing-indicator.show{visibility:visible;opacity:1}
 .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:typingBounce 1.2s infinite}
 .typing-dot:nth-child(2){animation-delay:.2s}
 .typing-dot:nth-child(3){animation-delay:.4s}
@@ -610,7 +615,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-input-translation-stability-1';
+const APP_VERSION = '2026-06-24-model-routing-language-validation-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2136,14 +2141,21 @@ function setMessageContent(el, msg) {
     img.onclick = () => openMediaPreview(mediaUrl, 'image');
     el.appendChild(img);
   } else if (msg.type === 'video' && mediaUrl) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-video-wrap';
     const video = document.createElement('video');
     video.className = 'msg-media-video';
     video.src = mediaUrl;
     video.muted = true;
     video.playsInline = true;
-    video.preload = 'metadata';
-    video.onclick = () => openMediaPreview(mediaUrl, 'video');
-    el.appendChild(video);
+    video.preload = 'auto';
+    const play = document.createElement('div');
+    play.className = 'msg-video-play';
+    play.textContent = '▶';
+    wrap.onclick = () => openMediaPreview(mediaUrl, 'video');
+    wrap.appendChild(video);
+    wrap.appendChild(play);
+    el.appendChild(wrap);
   } else {
     const content = document.createElement('div');
     content.className = 'msg-main-content';
@@ -2636,7 +2648,7 @@ function openMediaPreview(src, type='image') {
     box = document.createElement('div');
     box.id = 'mediaLightbox';
     box.className = 'media-lightbox';
-    box.innerHTML = '<button class="media-lightbox-close" onclick="closeMediaPreview()">×</button><div id="mediaLightboxBody"></div>';
+    box.innerHTML = '<button class="media-lightbox-close" onclick="closeMediaPreview()">×</button><div id="mediaLightboxBody" class="media-lightbox-body"></div>';
     document.body.appendChild(box);
   }
   const body = document.getElementById('mediaLightboxBody');
@@ -2652,9 +2664,65 @@ function openMediaPreview(src, type='image') {
   } else {
     const img = document.createElement('img');
     img.src = src;
+    img.className = 'zoomable';
+    bindImageZoom(img);
     body.appendChild(img);
   }
   box.classList.add('show');
+}
+
+function bindImageZoom(img) {
+  const pointers = new Map();
+  let scale = 1, x = 0, y = 0, startScale = 1, startX = 0, startY = 0, startDist = 0, startMid = null, lastTap = 0;
+  const apply = () => { img.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + scale + ')'; };
+  const midPoint = () => {
+    const pts = Array.from(pointers.values());
+    return { x:(pts[0].x + pts[1].x) / 2, y:(pts[0].y + pts[1].y) / 2 };
+  };
+  const distance = () => {
+    const pts = Array.from(pointers.values());
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  };
+  img.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    img.setPointerCapture?.(e.pointerId);
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    const now = Date.now();
+    if (now - lastTap < 260 && pointers.size === 1) {
+      scale = scale > 1 ? 1 : 2.25;
+      x = scale === 1 ? 0 : x;
+      y = scale === 1 ? 0 : y;
+      apply();
+    }
+    lastTap = now;
+    startScale = scale; startX = x; startY = y;
+    if (pointers.size === 2) { startDist = distance(); startMid = midPoint(); }
+    else startMid = { x:e.clientX, y:e.clientY };
+  }, { passive:false });
+  img.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    e.preventDefault();
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    if (pointers.size === 2 && startDist) {
+      const nextMid = midPoint();
+      scale = Math.max(1, Math.min(5, startScale * (distance() / startDist)));
+      x = startX + nextMid.x - startMid.x;
+      y = startY + nextMid.y - startMid.y;
+    } else if (pointers.size === 1 && scale > 1 && startMid) {
+      const pt = Array.from(pointers.values())[0];
+      x = startX + pt.x - startMid.x;
+      y = startY + pt.y - startMid.y;
+    }
+    if (scale === 1) { x = 0; y = 0; }
+    apply();
+  }, { passive:false });
+  const end = e => {
+    pointers.delete(e.pointerId);
+    startScale = scale; startX = x; startY = y;
+    if (scale <= 1.02) { scale = 1; x = 0; y = 0; apply(); }
+  };
+  img.addEventListener('pointerup', end);
+  img.addEventListener('pointercancel', end);
 }
 
 function closeMediaPreview() {
@@ -3567,10 +3635,11 @@ function queueOutgoingMessage(msg) {
   if (!canQueueOutgoingMessage()) return null;
   markChatUserActivity();
   const key = createMessageKey();
+  const messageModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
   const item = {
     key,
-    msg: Object.assign({}, msg),
-    model: selectedModel,
+    msg: Object.assign({}, msg, { translationModel: messageModel }),
+    model: messageModel,
     createdAt: Date.now(),
     attempts: 0,
     state: 'pending',
@@ -3735,7 +3804,8 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       const provider = String(attemptModel || '').split(':')[0] || 'openai';
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
-        const translation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
+        const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
+        const translation = validateTranslationOutput(text, rawTranslation, fromRole);
         if (stillCurrent()) {
           updateLocalTranslationDisplay(key, translation);
           await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
@@ -3793,9 +3863,9 @@ function translationModelQueue(baseModel) {
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
-      return providerHasKey(provider);
+      return model === base || providerHasKey(provider);
     });
-  return filtered.length ? filtered : [base, base];
+  return filtered.length ? filtered : [base];
 }
 
 function fastTranslationModelQueue(baseModel) {
@@ -3813,7 +3883,7 @@ function fastTranslationModelQueue(baseModel) {
   return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
-      return providerHasKey(provider);
+      return model === base || providerHasKey(provider);
     })
     .slice(0, 4);
 }
@@ -3947,7 +4017,7 @@ function maybeRetryMissingTranslation(key, msg) {
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
-  setTimeout(() => translateAndUpdate(key, msg.text, msg.role, selectedModel), 400);
+  setTimeout(() => translateAndUpdate(key, msg.text, msg.role, msg.translationModel || selectedModel), 400);
 }
 
 function normalizeApiError(msg, role) {
@@ -3972,6 +4042,61 @@ function cleanVisibleText(text) {
   return cleaned;
 }
 
+function translationLanguageSignals(text) {
+  const value = String(text || '');
+  const words = value.toLocaleLowerCase('vi').match(/\p{L}+/gu) || [];
+  const viWords = new Set('anh em không có nhưng cũng chưa bao giờ thử tìm xem chắc đó rồi thật thì là và của một được này cho với quá rất sẽ đang đã còn đâu sao vì nếu khi yêu nhé nha thôi mà'.split(' '));
+  const trWords = new Set('ben sen biz siz onlar bir bu şu ve ama da de değil var yok ne neden nasıl için gibi çok daha bunu hiç şimdi sonra önce evet hayır olur olmaz kadar yine zaten sadece diye mı mi mu mü'.split(' '));
+  let vi = 0;
+  let tr = 0;
+  for (const word of words) {
+    if (viWords.has(word)) vi++;
+    if (trWords.has(word)) tr++;
+  }
+  vi += (value.match(/[ăđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ]/gi) || []).length;
+  tr += (value.match(/[çğıöşü]/gi) || []).length * 2;
+  return { vi, tr, words: words.length };
+}
+
+function comparableTranslationText(text) {
+  return String(text || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('vi')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function cleanModelTranslationOutput(text) {
+  return String(text || '')
+    .trim()
+    .replace(/^```(?:text|turkish|türkçe|vietnamese|vietnamca)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/^(?:çeviri|translation|bản dịch|dịch)\s*:\s*/i, '')
+    .trim();
+}
+
+function validateTranslationOutput(source, output, fromRole) {
+  const clean = cleanModelTranslationOutput(output);
+  if (!clean) throw new Error('Model boş çeviri döndürdü');
+  const sourceComparable = comparableTranslationText(source);
+  const outputComparable = comparableTranslationText(clean);
+  if (sourceComparable.length >= 4 && sourceComparable === outputComparable) {
+    throw new Error('Model kaynak metni çevirmeden geri döndürdü');
+  }
+  const signal = translationLanguageSignals(clean);
+  if (signal.words >= 3 && fromRole === 'vi' && signal.vi >= 3 && signal.vi > signal.tr * 1.35) {
+    throw new Error('Model Türkçe yerine Vietnamca döndürdü');
+  }
+  if (signal.words >= 3 && fromRole === 'tr' && signal.tr >= 3 && signal.tr > signal.vi * 1.35) {
+    throw new Error('Model Vietnamca yerine Türkçe döndürdü');
+  }
+  if (/\s(?:---|\|)\s/.test(clean) && signal.vi >= 2 && signal.tr >= 2) {
+    throw new Error('Model iki dili birlikte döndürdü');
+  }
+  return clean;
+}
+
 function shortRetryReason(msg, role) {
   const s = String(msg || '').toLowerCase();
   const vi = role === 'vi';
@@ -3979,6 +4104,7 @@ function shortRetryReason(msg, role) {
   if (/zaman aşımı|zaman asimi|timeout|timed out/.test(s)) return vi ? 'hết 18 giây' : '18 sn doldu';
   if (/api[\s_-]?key|x-api-key|authentication|unauthorized|401|403|permission|denied/.test(s)) return vi ? 'API key' : 'API key';
   if (/not found|not_found|not supported|unsupported|invalid model|model.*not|404|400/.test(s)) return vi ? 'model bị từ chối' : 'model reddetti';
+  if (/yanlış|yanlis|wrong language|iki dili|kaynak metni|çevirmeden|cevirmeden/.test(s)) return vi ? 'sai ngôn ngữ' : 'yanlış dil';
   if (/rate|429|resource exhausted|quota|limit/.test(s)) return vi ? 'giới hạn' : 'limit';
   if (/temporar|unavailable|busy|overload|503/.test(s)) return vi ? 'bận' : 'yoğun';
   if (/network|failed to fetch|adresine ulasilamadi|abort|cors/.test(s)) return vi ? 'kết nối' : 'bağlantı';
@@ -4001,7 +4127,7 @@ function isRetryableGeminiError(e) {
 async function translateText(text, from, modelOverride) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür, başka hiçbir şey yazma.`;
+  const sysPrompt = `Sen sadece çeviri motorusun. Kaynak dil: ${fromName}. Hedef dil: ${toName}. Yanıtın tamamı yalnızca ${toName} olmalı. Kaynak metni tekrarlama, kaynak ve hedef dili birlikte yazma, açıklama veya dil etiketi ekleme. İki kişi sabittir: Türkçe taraf erkektir/anh, Vietnamca taraf kadındır/em. TR->VI çevirirken Türk erkek Vietnamlı kadına konuşur: kadına her zaman "em" diye hitap et; erkek kendinden söz ederse "anh" kullan. "Aşkım/sevgilim" gibi hitapları kadına söyleniyorsa "em yêu", "em yêu của anh" gibi çevir; "anh yêu" kullanma. VI->TR çevirirken Vietnamlı kadın Türk erkeğe konuşur: erkeğe "anh", kendine "em" kullanıldığını varsay. Metnin tonunu, üslubunu ve duygusunu birebir yansıt; samimi yazılmışsa samimi, kaba yazılmışsa kaba, küfürlü yazılmışsa küfürlü çevir. Hiçbir şeyi sansürleme veya değiştirme. Sadece çeviriyi döndür.`;
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
@@ -4018,7 +4144,8 @@ async function translateText(text, from, modelOverride) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: sysPrompt }] },
-            contents: [{ role: 'user', parts: [{ text }] }]
+            contents: [{ role: 'user', parts: [{ text }] }],
+            generationConfig: { temperature: 0, maxOutputTokens: 1200 }
           })
         });
       } catch (e) {
@@ -4029,20 +4156,14 @@ async function translateText(text, from, modelOverride) {
       if (!r.ok) {
         lastErr = new Error((data.error?.message || r.statusText || ('HTTP ' + r.status)) + ' [model: ' + candidate + ']');
         const s = String(lastErr.message).toLowerCase();
-        if (/not found|not supported|permission|denied|403|404|400/.test(s)) continue;
+        if (/api key|api_key|unauthenticated|unauthorized|permission|denied|401|403/.test(s)) throw lastErr;
+        if (/not found|not supported|unsupported|invalid model|404/.test(s)) continue;
         throw lastErr;
       }
       const out = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
       if (!out) {
         lastErr = new Error('Gemini boş cevap döndü [model: ' + candidate + ']');
         continue;
-      }
-      if (candidate !== model && (model || '').includes('pro')) {
-        const normalized = 'gemini:' + candidate;
-        selectedModel = normalized;
-        localStorage.setItem('askviet_model', normalized);
-        if (myRole === 'tr') syncMyModel(normalized);
-        setSelectedModel(normalized, true);
       }
       return out;
     }
@@ -4066,6 +4187,7 @@ async function translateText(text, from, modelOverride) {
         body: JSON.stringify({
           model,
           max_tokens: 1200,
+          temperature: 0,
           system: sysPrompt,
           messages: [{ role: 'user', content: text }]
         })
@@ -4083,9 +4205,6 @@ async function translateText(text, from, modelOverride) {
   if (provider !== 'openai') {
     provider = 'openai';
     model = 'gpt-5.5';
-    selectedModel = 'openai:gpt-5.5';
-    localStorage.setItem('askviet_model', selectedModel);
-    if (myRole === 'tr') syncMyModel(selectedModel);
   }
   const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
