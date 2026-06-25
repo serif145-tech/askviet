@@ -618,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-25-translation-read-guard-1';
+const APP_VERSION = '2026-06-25-stable-message-ptt-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1451,20 +1451,12 @@ function latestMessageEntries(data, limit = CHAT_RENDER_LIMIT) {
 function applyMessagesSnapshot(data, forceBottom = false) {
   const entries = latestMessageEntries(data);
   if (!entries.length) return;
-  const keep = new Set(entries.map(([k]) => k));
   const followBottom = forceBottom || shouldFollowChatBottom();
   const scrollAnchor = followBottom ? null : captureScrollAnchor();
-  document.querySelectorAll('.msg').forEach(el => {
-    const key = el.dataset.key || el.id.replace(/^msg-/, '');
-    if (!keep.has(key) && !pendingMessageQueue.has(key) && !deletedMessageKeys.has(key)) {
-      el.remove();
-      renderedKeys.delete(key);
-      autoReadDone.delete(key);
-    }
-  });
   entries.forEach(([k, v]) => updateOrRender(k, v));
   for (const key of deletedMessageKeys) markRepliesToDeleted(key);
   reorderRenderedMessages();
+  if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
   refreshVisibleMessageWindow();
   if (followBottom) scrollToBottom(true);
   else restoreScrollAnchor(scrollAnchor);
@@ -6247,12 +6239,7 @@ async function transcribeVoice(blob, sourceOverride) {
   const geminiVoiceKey = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
 
   if (openAiVoiceKey) {
-    try {
-      return await transcribeVoiceOpenAI(blob, voiceRole, openAiVoiceKey);
-    } catch (e) {
-      if (!geminiVoiceKey) throw e;
-      console.warn('OpenAI Whisper basarisiz, Gemini ses metne cevirme deneniyor:', e);
-    }
+    return await transcribeVoiceOpenAI(blob, voiceRole, openAiVoiceKey);
   }
 
   if (geminiVoiceKey) {
@@ -6261,26 +6248,37 @@ async function transcribeVoice(blob, sourceOverride) {
       r.onload = () => res(String(r.result || '').split(',')[1] || '');
       r.readAsDataURL(blob);
     });
+    return await transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, geminiVoiceKey);
+  }
+
+  throw new Error('Ses metne çevirme için OpenAI veya Gemini API key gerekli');
+}
+
+async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
+  const models = ['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'];
+  let lastErr = null;
+  for (const model of models) {
     try {
-      const resp = await withTimeout(fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' + encodeURIComponent(geminiVoiceKey), {
+      const resp = await withTimeout(fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           contents: [{parts: [
             {inline_data: {mime_type: blob.type || 'audio/webm', data: base64}},
-            {text: voiceRole === 'tr' ? 'Bu ses, iki kişi arasındaki gündelik Türkçe-Vietnamca sohbetin Türkçe tarafıdır. Sadece duyduğun Türkçe konuşmayı yaz. Açıklama, tahmin, YouTube/video/anlatım bağlamı ekleme. Ses belirsiz veya boşsa boş cevap ver.' : 'Đây là phần tiếng Việt trong cuộc trò chuyện hằng ngày giữa hai người nói tiếng Việt và tiếng Thổ Nhĩ Kỳ. Chỉ chép lại lời tiếng Việt nghe được. Không giải thích, không đoán bối cảnh, không thêm nội dung kiểu YouTube/video. Nếu âm thanh không rõ hoặc trống, trả về rỗng.'}
+            {text: voiceRole === 'tr' ? 'Bu ses Türkçe-Vietnamca özel sohbetin Türkçe tarafı. Sadece duyduğun Türkçe konuşmayı yaz. Belirsiz/boşsa boş cevap ver.' : 'Đây là phần tiếng Việt trong cuộc trò chuyện riêng Việt-Thổ. Chỉ chép lại tiếng Việt nghe được. Nếu không rõ/trống thì trả về rỗng.'}
           ]}]
         })
       }), 10000, 'Gemini ses-metne çevirme');
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data.error?.message || resp.statusText || ('HTTP ' + resp.status));
+      if (!resp.ok) throw new Error(model + ': ' + (data.error?.message || resp.statusText || ('HTTP ' + resp.status)));
       const out = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
-      if (!out) throw new Error('Ses metne çevrilemedi');
+      if (!out) throw new Error(model + ': Ses metne çevrilemedi');
       return out;
-    } catch (e) { throw e; }
+    } catch (e) {
+      lastErr = e;
+    }
   }
-
-  throw new Error('Ses metne çevirme için OpenAI veya Gemini API key gerekli');
+  throw lastErr || new Error('Gemini ses metne çevirme başarısız');
 }
 
 async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
