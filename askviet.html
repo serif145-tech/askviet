@@ -618,7 +618,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-24-short-translate-prompt-1';
+const APP_VERSION = '2026-06-25-translation-read-guard-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -655,6 +655,7 @@ let deletedMessageKeys = new Set();
 let deletedMessageSnapshots = new Map();
 let translationRunSeq = 0;
 let translationRunTokens = new Map();
+let completedTranslationCache = new Map();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
@@ -1265,6 +1266,12 @@ function initChat() {
           scheduleMessageSnapshotReconcile('message-put');
         }
       } else if (parts.length === 2 && parts[1] === 'translation' && event.data) {
+        const status = parseTranslationStatus(event.data);
+        const cached = completedTranslationCache.get(String(key));
+        if (status && cached && cached.value) return;
+        if (!status && !isPendingTranslationText(event.data)) {
+          completedTranslationCache.set(String(key), { value: String(event.data), ts: Date.now() });
+        }
         const followBottom = shouldFollowChatBottom();
         const scrollAnchor = followBottom ? null : captureScrollAnchor();
         const box = document.getElementById('msg-' + key);
@@ -1893,8 +1900,18 @@ function updateOrRender(key, msg) {
   box.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || box.dataset.mediaUrl || '');
   box.dataset.mime = msg.deleted ? '' : (msg.mime || box.dataset.mime || '');
   box.dataset.deleted = msg.deleted ? '1' : '';
-  if (msg.deleted) box.dataset.translation = '';
-  else if (msg.translation) box.dataset.translation = msg.translation;
+    if (msg.deleted) box.dataset.translation = '';
+    else if (msg.translation) {
+      const cached = completedTranslationCache.get(String(key));
+      if (parseTranslationStatus(msg.translation) && cached && cached.value) {
+        box.dataset.translation = cached.value;
+      } else {
+        box.dataset.translation = msg.translation;
+        if (!isPendingTranslationText(msg.translation)) {
+          completedTranslationCache.set(String(key), { value: msg.translation, ts: Date.now() });
+        }
+      }
+    }
   if (msg.ts) box.dataset.ts = msg.ts;
   if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
   if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
@@ -2895,6 +2912,7 @@ function scheduleReadReceiptFlush(delay=0) {
 }
 
 async function flushPendingReadReceipts() {
+  if (!canWriteReadReceipt()) return;
   if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
   readReceiptFlushRunning = true;
   try {
@@ -2929,6 +2947,7 @@ async function flushPendingReadReceipts() {
 
 function markMessageRead(key, msg) {
   if (!myRole || !msg || msg.role === myRole) return;
+  if (!canWriteReadReceipt()) return;
   const box = document.getElementById('msg-' + key);
   const locallyRecorded = myRole === 'tr' ? box?.dataset.readTr : box?.dataset.readVi;
   const already = (msg.read && msg.read[myRole]) || locallyRecorded;
@@ -2940,6 +2959,14 @@ function markMessageRead(key, msg) {
   pendingReadReceipts.add(key);
   persistPendingReads();
   scheduleReadReceiptFlush(0);
+}
+
+function canWriteReadReceipt() {
+  if (!myRole) return false;
+  if (document.visibilityState !== 'visible') return false;
+  if (typeof getCurrentUiMode === 'function' && getCurrentUiMode() !== 'chat') return false;
+  updateMyPresence(true);
+  return true;
 }
 
 function updateReadStatus(key) {
@@ -3880,6 +3907,7 @@ function sendMessage() {
 
 async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel, options={}) {
   if (translationRunTokens.has(key) && !options.force) return;
+  if (options.force) completedTranslationCache.delete(String(key));
   const runId = ++translationRunSeq;
   translationRunTokens.set(key, runId);
   const stillCurrent = () => translationRunTokens.get(key) === runId;
@@ -3897,6 +3925,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         const translation = cleanModelTranslationOutput(rawTranslation);
         if (!translation) throw new Error('Model boş çeviri döndürdü');
         if (stillCurrent()) {
+          completedTranslationCache.set(String(key), { value: translation, ts: Date.now() });
           updateLocalTranslationDisplay(key, translation);
           await fbSet(MSGS_PATH + '/' + key + '/translation', translation);
         }
@@ -4069,11 +4098,16 @@ function finalTranslationText(text) {
 }
 
 async function setTranslationStatus(key, value) {
+  const cached = completedTranslationCache.get(String(key));
+  if (parseTranslationStatus(value) && cached && cached.value) return;
   updateLocalTranslationDisplay(key, value);
   await fbSet(MSGS_PATH + '/' + key + '/translation', value, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(console.error);
 }
 
 function updateLocalTranslationDisplay(key, value) {
+  const status = parseTranslationStatus(value);
+  const cached = completedTranslationCache.get(String(key));
+  if (status && cached && cached.value) return;
   const box = document.getElementById('msg-' + key);
   if (box) box.dataset.translation = value || '';
   const trans = document.getElementById('trans-' + key);
@@ -4104,6 +4138,13 @@ function isPendingTranslationText(text) {
 function maybeRetryMissingTranslation(key, msg) {
   if (!msg || !msg.role || !msg.text) return;
   if (msg.role !== myRole) return;
+  const cached = completedTranslationCache.get(String(key));
+  if (cached && cached.value) {
+    const remotePending = isPendingTranslationText(msg.translation);
+    if (remotePending) fbSet(MSGS_PATH + '/' + key + '/translation', cached.value).catch(()=>{});
+    return;
+  }
+  if (translationRunTokens.has(key)) return;
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
