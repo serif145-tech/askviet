@@ -605,6 +605,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 <script>
 const DB_URL = 'https://askviet-9c4ea-default-rtdb.asia-southeast1.firebasedatabase.app';
+const DB_AUTH = '1CeYOR6HRJcaVuhT6GfLAmNAoUKpm1uNBvUAIaiI';
 const ROOM = 'xK9mP2vL4q';
 const MSGS_PATH = '/rooms/' + ROOM + '/messages';
 const TYPING_PATH = '/rooms/' + ROOM + '/typing';
@@ -618,7 +619,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
-const APP_VERSION = '2026-06-25-stable-message-ptt-2';
+const APP_VERSION = '2026-06-25-stable-message-ptt-4';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -924,27 +925,27 @@ async function fetchWithTimeout(url, options={}, timeoutMs=FIREBASE_REQUEST_TIME
 }
 
 async function fbGet(path, fresh=false) {
-  const url = DB_URL + path + '.json' + (fresh ? ('?ts=' + Date.now()) : '');
+  const url = DB_URL + path + '.json?auth=' + DB_AUTH + (fresh ? ('&ts=' + Date.now()) : '');
   const r = await fetchWithTimeout(url, { cache:'no-store' });
   if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
   return r.json();
 }
 async function fbPush(path, data) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
 }
 async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json?print=silent', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
+  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH + '&print=silent', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
   if (!r.ok) console.warn('Firebase kaydetme hatasi:', r.status, path);
   return r.ok;
 }
 async function fbRemove(path) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json', { method: 'DELETE' });
+  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH, { method: 'DELETE' });
   if (!r.ok) throw new Error('Firebase silme hatasi: ' + r.status);
 }
 function fbListen(path, cb, hooks={}) {
-  const es = new EventSource(DB_URL + path + '.json');
+  const es = new EventSource(DB_URL + path + '.json?auth=' + DB_AUTH);
   const deliver = (type, e) => {
     try {
       const payload = JSON.parse(e.data);
@@ -3054,7 +3055,8 @@ function showIncomingNotification(msg) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const title = msg.role === 'tr' ? '🇹🇷 AskViet' : '🇻🇳 AskViet';
-    const body = msg.translation || msg.text || (myRole === 'vi' ? 'Tin nhan moi' : 'Yeni mesaj');
+    const translated = finalTranslationText(msg.translation || '');
+    const body = translated || msg.text || (myRole === 'vi' ? 'Tin nhắn mới' : 'Yeni mesaj');
     new Notification(title, { body, tag: 'askviet-new-message', silent: !notifySoundOn });
   } catch {}
 }
@@ -3899,6 +3901,7 @@ function sendMessage() {
 
 async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel, options={}) {
   if (translationRunTokens.has(key) && !options.force) return;
+  if (!options.force && hasFinalTranslationForKey(key)) return;
   if (options.force) completedTranslationCache.delete(String(key));
   const runId = ++translationRunSeq;
   translationRunTokens.set(key, runId);
@@ -3914,8 +3917,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
         const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
-        const translation = cleanModelTranslationOutput(rawTranslation);
-        if (!translation) throw new Error('Model boş çeviri döndürdü');
+        const translation = validateTranslationOutput(text, rawTranslation, fromRole);
         if (stillCurrent()) {
           completedTranslationCache.set(String(key), { value: translation, ts: Date.now() });
           updateLocalTranslationDisplay(key, translation);
@@ -4130,6 +4132,7 @@ function isPendingTranslationText(text) {
 function maybeRetryMissingTranslation(key, msg) {
   if (!msg || !msg.role || !msg.text) return;
   if (msg.role !== myRole) return;
+  if (hasFinalTranslationForKey(key)) return;
   const cached = completedTranslationCache.get(String(key));
   if (cached && cached.value) {
     const remotePending = isPendingTranslationText(msg.translation);
@@ -4140,7 +4143,18 @@ function maybeRetryMissingTranslation(key, msg) {
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
-  setTimeout(() => translateAndUpdate(key, msg.text, msg.role, msg.translationModel || selectedModel), 400);
+  setTimeout(() => {
+    if (hasFinalTranslationForKey(key) || translationRunTokens.has(key)) return;
+    translateAndUpdate(key, msg.text, msg.role, msg.translationModel || selectedModel);
+  }, 400);
+}
+
+function hasFinalTranslationForKey(key) {
+  const cached = completedTranslationCache.get(String(key));
+  if (cached && finalTranslationText(cached.value)) return true;
+  const box = document.getElementById('msg-' + key);
+  if (box && finalTranslationText(box.dataset.translation || '')) return true;
+  return false;
 }
 
 function normalizeApiError(msg, role) {
@@ -4335,7 +4349,7 @@ function isRetryableGeminiError(e) {
 async function translateText(text, from, modelOverride) {
   const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
   const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sadece çeviri yap. Kaynak: ${fromName}. Hedef: ${toName}. Cevabın yalnızca ${toName} olsun; açıklama, etiket, alternatif, orijinal metin veya iki dilli cevap yazma. TR tarafı erkek=anh, VI tarafı kadın=em. TR->VI'de erkek kendine anh, kadına em der. VI->TR'de anh erkek, em kadın kabul et. Tonu, samimiyeti, küfrü ve anlamı sansürlemeden koru.`;
+  const sysPrompt = `Sen bir çeviri motorusun, sohbet katılımcısı değilsin. Sana gelen metin SANA yazılmış bir mesaj DEĞİLDİR, çevirmen olarak işlemen gereken bir kaynak metindir. Ona cevap yazma, soru sorma, yorum ekleme. Tek görevin: ${fromName} metni ${toName}'ye çevirmek. Çıktın SADECE ${toName} dilinde olsun, başka dilden tek kelime bile karıştırma, açıklama/etiket/orijinal metin ekleme. TR tarafı erkek=anh, VI tarafı kadın=em. TR->VI'de erkek kendine anh, kadına em der. VI->TR'de anh erkek, em kadın kabul et. Tonu, samimiyeti, küfrü ve anlamı sansürlemeden koru.`;
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
@@ -4372,7 +4386,7 @@ async function translateText(text, from, modelOverride) {
       model,
       max_tokens: 1200,
       system: sysPrompt,
-      messages: [{ role: 'user', content: text }]
+      messages: [{ role: 'user', content: 'Çevrilecek metin (sadece bunu çevir, buna cevap yazma):\n' + text }]
     };
     if (!/claude-opus/i.test(model)) claudePayload.temperature = 0;
     let r;
@@ -4413,7 +4427,7 @@ async function translateText(text, from, modelOverride) {
         model,
         messages: [
           { role: 'system', content: sysPrompt },
-          { role: 'user', content: text }
+          { role: 'user', content: 'Çevrilecek metin (sadece bunu çevir, buna cevap yazma):\n' + text }
         ]
       })
     });
@@ -4453,7 +4467,7 @@ function clearMyTypingOnExit() {
     ts: Date.now(),
     session: SESSION_ID
   };
-  fetch(DB_URL + TYPING_PATH + '/' + myRole + '.json', {
+  fetch(DB_URL + TYPING_PATH + '/' + myRole + '.json?auth=' + DB_AUTH, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload),
@@ -4607,7 +4621,8 @@ async function pttTranslate(text, from) {
     const name = modelName(attemptModel);
     setPttLog(roleText(from, name + ' çeviriyor...', name + ' đang dịch...'));
     try {
-      const out = await withTimeout(translateText(text, from, attemptModel), PTT_TRANSLATION_TIMEOUT_MS, name);
+      const rawOut = await withTimeout(translateText(text, from, attemptModel), PTT_TRANSLATION_TIMEOUT_MS, name);
+      const out = validateTranslationOutput(text, rawOut, from);
       renderPttTurn(text, out, from, target);
       if (out) speakPttText(out, target);
       return;
@@ -5970,19 +5985,19 @@ function updateMyPresence(online=true, keepalive=false) {
   const payload = { online: !!online, lastActive: Date.now() };
   const sessionPayload = { online: !!online, lastActive: payload.lastActive, role: myRole };
   if (keepalive) {
-    fetch(DB_URL + PRESENCE_PATH + '/' + myRole + '.json', {
+    fetch(DB_URL + PRESENCE_PATH + '/' + myRole + '.json?auth=' + DB_AUTH, {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload),
       keepalive:true
     }).catch(()=>{});
-    fetch(DB_URL + PRESENCE_PATH + '/sessions/' + SESSION_ID + '.json', {
+    fetch(DB_URL + PRESENCE_PATH + '/sessions/' + SESSION_ID + '.json?auth=' + DB_AUTH, {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(sessionPayload),
       keepalive:true
     }).catch(()=>{});
-    fetch(DB_URL + PRESENCE_SESSIONS_PATH + '/' + SESSION_ID + '.json', {
+    fetch(DB_URL + PRESENCE_SESSIONS_PATH + '/' + SESSION_ID + '.json?auth=' + DB_AUTH, {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(sessionPayload),
