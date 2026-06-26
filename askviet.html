@@ -646,6 +646,7 @@ let unsubModel = null;
 let unsubAutoRead = null;
 let unsubPresence = null;
 let presenceTimer = null;
+let lastReadReceiptPresenceAt = 0;
 let chatPollTimer = null;
 let autoReadPollTimer = null;
 let presencePollTimer = null;
@@ -2958,7 +2959,11 @@ function canWriteReadReceipt() {
   if (!myRole) return false;
   if (document.visibilityState !== 'visible') return false;
   if (typeof getCurrentUiMode === 'function' && getCurrentUiMode() !== 'chat') return false;
-  updateMyPresence(true);
+  const now = Date.now();
+  if (now - lastReadReceiptPresenceAt > 10000) {
+    lastReadReceiptPresenceAt = now;
+    updateMyPresence(true);
+  }
   return true;
 }
 
