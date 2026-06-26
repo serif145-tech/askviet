@@ -344,8 +344,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="witch-sub">Cô gái mũi tẹt dễ thương 🥰😘💜</div>
   <div class="witch-sub" style="font-size:12px;margin-top:2px">Anh muốn nói chuyện với em thôi~ 🫠💋</div>
   <div class="hearts">💜 💋 🥰 💋 💜</div>
+  <div class="pw-role-row" style="display:flex;gap:8px;justify-content:center;margin:8px 0 10px">
+    <button class="pw-btn" id="loginRoleTr" onclick="selectLoginRole('tr')" style="min-width:96px">🇹🇷 TR</button>
+    <button class="pw-btn" id="loginRoleVi" onclick="selectLoginRole('vi')" style="min-width:96px">🇻🇳 VI</button>
+  </div>
   <div class="pw-box">
-    <input class="pw-input" type="password" id="pwInput" placeholder="••••••••" maxlength="80">
+    <input class="pw-input" type="password" id="pwInput" placeholder="Önce taraf seç" maxlength="80">
     <button class="pw-btn" onclick="checkPw()">✨ Gir</button>
   </div>
   <div class="pw-err" id="pwErr">Giriş yapılamadı</div>
@@ -615,7 +619,6 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const PW = 'ask2026';
 const APP_VERSION = '2026-06-25-stable-message-ptt-4';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
@@ -624,6 +627,7 @@ let myRole = null;
 let firebaseAuth = null;
 let firebaseAuthRefreshTimer = null;
 let pendingAuthPassword = '';
+let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi' : 'tr';
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
@@ -921,7 +925,23 @@ const TTS_DEFAULTS = {
 };
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
-function checkPw() {
+function updateLoginRoleUI() {
+  const tr = document.getElementById('loginRoleTr');
+  const vi = document.getElementById('loginRoleVi');
+  const input = document.getElementById('pwInput');
+  if (tr) tr.style.filter = selectedLoginRole === 'tr' ? 'brightness(1.25)' : 'brightness(.7)';
+  if (vi) vi.style.filter = selectedLoginRole === 'vi' ? 'brightness(1.25)' : 'brightness(.7)';
+  if (input) input.placeholder = selectedLoginRole === 'vi' ? 'VI şifresi' : 'TR şifresi';
+}
+
+function selectLoginRole(role) {
+  selectedLoginRole = role === 'vi' ? 'vi' : 'tr';
+  localStorage.setItem('askviet_last_role', selectedLoginRole);
+  updateLoginRoleUI();
+  document.getElementById('pwInput')?.focus();
+}
+
+async function checkPw() {
   const val = document.getElementById('pwInput').value;
   if (!val || val.length < 6) {
     const err = document.getElementById('pwErr');
@@ -931,11 +951,19 @@ function checkPw() {
     return;
   }
   pendingAuthPassword = val;
-  document.getElementById('pwscreen').style.display = 'none';
-  document.getElementById('setup').style.display = 'flex';
-  const card = document.querySelector('.setup-card');
-  if (card) card.style.display = 'flex';
-  loadSaved();
+  try {
+    await signInFirebaseRole(selectedLoginRole, val);
+    document.getElementById('pwscreen').style.display = 'none';
+    document.getElementById('setup').style.display = 'flex';
+    loadSaved();
+    await start(selectedLoginRole);
+  } catch (e) {
+    clearFirebaseAuth();
+    const err = document.getElementById('pwErr');
+    err.textContent = selectedLoginRole === 'vi' ? 'Sai mật khẩu' : 'Şifre hatalı';
+    err.style.display = 'block';
+    setTimeout(() => err.style.display = 'none', 2500);
+  }
 }
 // Daha once giris yapildiysa sifreyi atla
 if (loadStoredFirebaseAuth()) {
@@ -947,6 +975,7 @@ if (loadStoredFirebaseAuth()) {
   loadSaved();
 }
 document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+updateLoginRoleUI();
 
 // ── Model değişince label güncelle ────────────────────────────────────────
 // model change - artık ayrı alanlar var, listener gerekmez
