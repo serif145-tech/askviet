@@ -616,6 +616,7 @@ const PRESENCE_PATH = CONFIG_PATH + '/presence';
 const PRESENCE_SESSIONS_PATH = CONFIG_PATH + '/presenceSessions';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
 const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
+const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
 const PW = 'ask2026';
@@ -699,6 +700,7 @@ window.clearDebugLog = function() {
 };
 let translationRunTokens = new Map();
 let completedTranslationCache = new Map();
+let serverTranslationRequestCache = new Map();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
 let handledAudioRequests = new Set();
@@ -976,6 +978,21 @@ async function fbPush(path, data) {
   const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
+}
+async function requestServerTranslation(key, force=false, source='manual') {
+  if (!key) return false;
+  const cacheKey = String(key) + ':' + (force ? '1' : '0') + ':' + source;
+  const lastAt = Number(serverTranslationRequestCache.get(cacheKey) || 0);
+  if (!force && Date.now() - lastAt < 15000) return false;
+  serverTranslationRequestCache.set(cacheKey, Date.now());
+  await fbPush(TRANSLATION_REQUESTS_PATH, {
+    messageId: String(key),
+    requestedBy: myRole || '',
+    force: !!force,
+    source,
+    createdAt: Date.now()
+  });
+  return true;
 }
 async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
   const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH + '&print=silent', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
@@ -2862,10 +2879,10 @@ async function retryMessageTranslation(key, btn) {
   }
   try {
     debugLog('manual_retry_button_clicked', { key });
-    await Promise.race([
-      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole, selectedModel, { force: true, userTriggered: true }),
-      sleep(25000).then(() => { throw new Error('timeout'); })
-    ]);
+    completedTranslationCache.delete(String(key));
+    updateLocalTranslationDisplay(key, tryingText(selectedModel));
+    await fbSet(MSGS_PATH + '/' + key + '/translation', tryingText(selectedModel), Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(()=>{});
+    await requestServerTranslation(key, true, 'manual_retry');
     const latest = await fbGet(MSGS_PATH + '/' + key).catch(() => null);
     if (latest) updateOrRender(key, latest);
     if (btn) {
@@ -3917,8 +3934,8 @@ function confirmOutgoingMessage(key, remoteMsg=null) {
   refreshMessageText(key);
   const isMedia = item.msg.type === 'image' || item.msg.type === 'video';
   if (!isMedia && !remoteMsg?.translation) {
-    debugLog('send_confirm_fired', { key, role: item.msg.role });
-    translateAndUpdate(key, item.msg.text || '', item.msg.role, item.model || selectedModel);
+    debugLog('send_confirm_waiting_server_translation', { key, role: item.msg.role });
+    updateLocalTranslationDisplay(key, tryingText(item.model || selectedModel));
   }
 }
 
@@ -4200,12 +4217,12 @@ function maybeRetryMissingTranslation(key, msg) {
   if (translationRunTokens.has(key)) return;
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
-  if (age < 1200) return;
+  if (age < 10000) return;
   debugLog('render_retry_scheduled', { key, role: msg.role, age });
   setTimeout(() => {
     if (hasFinalTranslationForKey(key) || translationRunTokens.has(key)) { debugLog('render_retry_cancelled', { key }); return; }
     debugLog('render_retry_fired', { key });
-    translateAndUpdate(key, msg.text, msg.role, msg.translationModel || selectedModel);
+    requestServerTranslation(key, false, 'render_retry').catch(e => debugLog('server_translation_request_failed', { key, message: e && e.message }));
   }, 400);
 }
 
