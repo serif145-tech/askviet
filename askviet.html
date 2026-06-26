@@ -90,6 +90,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;-webkit-overflow-scrolling:touch;background:#f0ece8;overscroll-behavior:contain;overflow-anchor:none}
+.load-older-btn{display:block;margin:2px auto 12px;padding:7px 12px;border:1px solid #d8c8f5;border-radius:999px;background:#fff;color:#6d28d9;font-size:12px;font-weight:800;box-shadow:0 2px 8px #00000014}
 #chat.mode-panel-open .jump-bottom{display:none!important}
 .jump-bottom{position:absolute;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translate(-50%,18px) scale(.92);z-index:70;min-width:46px;height:46px;padding:0 14px;border-radius:999px;border:1px solid #60a5fa;background:#2563eb;color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 8px 24px rgba(37,99,235,.45);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease,background .16s ease}
 .jump-bottom.show{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
@@ -344,10 +345,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="witch-sub" style="font-size:12px;margin-top:2px">Anh muốn nói chuyện với em thôi~ 🫠💋</div>
   <div class="hearts">💜 💋 🥰 💋 💜</div>
   <div class="pw-box">
-    <input class="pw-input" type="password" id="pwInput" placeholder="••••••••" maxlength="20">
+    <input class="pw-input" type="password" id="pwInput" placeholder="••••••••" maxlength="80">
     <button class="pw-btn" onclick="checkPw()">✨ Gir</button>
   </div>
-  <div class="pw-err" id="pwErr">Hatali sifre</div>
+  <div class="pw-err" id="pwErr">Giriş yapılamadı</div>
 </div>
 
 <!-- SETUP -->
@@ -377,24 +378,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="claude:claude-haiku-4-5">Haiku 4.5</option>
         </optgroup>
       </select>
-    </div>
-
-    <div class="setup-label">OpenAI API Key</div>
-    <div class="paste-row">
-      <input class="setup-input" type="password" id="apiKeyInput" placeholder="sk-...">
-      <button class="paste-btn" onclick="pasteKey()">📋 Yapıştır</button>
-    </div>
-
-    <div class="setup-label">Gemini API Key</div>
-    <div class="paste-row">
-      <input class="setup-input" type="password" id="geminiKeyInput" placeholder="AIza...">
-      <button class="paste-btn" onclick="pasteGeminiKey()">Yapıştır</button>
-    </div>
-
-    <div class="setup-label">Claude API Key</div>
-    <div class="paste-row">
-      <input class="setup-input" type="password" id="claudeKeyInput" placeholder="sk-ant-...">
-      <button class="paste-btn" onclick="pasteClaudeKey()">Yapıştır</button>
     </div>
 
   </div>
@@ -572,6 +555,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="messages" id="messages">
+    <button class="load-older-btn" id="loadOlderBtn" onclick="loadOlderMessages()" style="display:none">Daha eski mesajları göster</button>
     <div class="empty-state" id="emptyState">
       <div class="empty-emoji">💬</div>
       <div class="empty-text" id="emptyText">Henüz mesaj yok.<br>İlk mesajı gönder!</div>
@@ -605,7 +589,19 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 <script>
 const DB_URL = 'https://askviet-9c4ea-default-rtdb.asia-southeast1.firebasedatabase.app';
-const DB_AUTH = '1CeYOR6HRJcaVuhT6GfLAmNAoUKpm1uNBvUAIaiI';
+const FIREBASE_WEB_API_KEY = 'AIzaSyAB3bpvACQhlX6taqT0C0veJP_PrKR1WqQ';
+const FIREBASE_AUTH_URL = 'https://identitytoolkit.googleapis.com/v1';
+const FIREBASE_REFRESH_URL = 'https://securetoken.googleapis.com/v1/token';
+const ASKVIET_API_URL = 'https://asia-southeast1-askviet-9c4ea.cloudfunctions.net/askVietApi';
+const ROLE_EMAILS = {
+  tr: 'tr@askviet.local',
+  vi: 'vi@askviet.local'
+};
+const ROLE_UIDS = {
+  tr: 'y1xpNyGr1AXePmNJBUvk7DQQVsl2',
+  vi: 'iYwAPJhAdcYRroiW158lwJ2AjKb2'
+};
+const AUTH_STORAGE_KEY = 'askviet_firebase_auth_v1';
 const ROOM = 'xK9mP2vL4q';
 const MSGS_PATH = '/rooms/' + ROOM + '/messages';
 const TYPING_PATH = '/rooms/' + ROOM + '/typing';
@@ -625,6 +621,9 @@ const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
 let myRole = null;
+let firebaseAuth = null;
+let firebaseAuthRefreshTimer = null;
+let pendingAuthPassword = '';
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
@@ -663,11 +662,13 @@ const DEBUG_LOG_MAX = 500;
 function debugLog(event, data) {
   try {
     const entry = { t: new Date().toISOString(), role: myRole || '?', event, data: data || {} };
-    fetch(DB_URL + DEBUG_LOG_PATH + '.json?auth=' + DB_AUTH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry)
-    }).catch(() => {});
+    if (firebaseAuth?.idToken) {
+      fetch(dbUrlSync(DEBUG_LOG_PATH), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      }).catch(() => {});
+    }
     let arr = [];
     try { arr = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]'); } catch {}
     arr.push(entry);
@@ -695,7 +696,7 @@ window.exportDebugLog = function() {
 };
 window.clearDebugLog = function() {
   localStorage.removeItem(DEBUG_LOG_KEY);
-  fetch(DB_URL + DEBUG_LOG_PATH + '.json?auth=' + DB_AUTH, { method: 'DELETE' }).catch(() => {});
+  if (firebaseAuth?.idToken) fetch(dbUrlSync(DEBUG_LOG_PATH), { method: 'DELETE' }).catch(() => {});
   console.log('Debug log cleared.');
 };
 let translationRunTokens = new Map();
@@ -709,7 +710,10 @@ let chatListenStartedAt = 0;
 let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
-const CHAT_RENDER_LIMIT = 80;
+const CHAT_RENDER_LIMIT = 50;
+const CHAT_PAGE_SIZE = 50;
+const CHAT_POLL_LIMIT = 10;
+let currentMessageLimit = CHAT_RENDER_LIMIT;
 const MESSAGE_RECONCILE_DELAY_MS = 900;
 const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
 const MAX_PERSISTED_DELETED_MESSAGES = 120;
@@ -763,6 +767,152 @@ const MAX_PERSISTED_READ_RECEIPTS = 120;
 const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SILENT_AUDIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
+function loadStoredFirebaseAuth() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session || !session.refreshToken || !session.role || !session.localId) return null;
+    firebaseAuth = session;
+    return firebaseAuth;
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return null;
+  }
+}
+
+function saveFirebaseAuth(session) {
+  firebaseAuth = session;
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  localStorage.setItem('askviet_auth', '1');
+  if (session.role) localStorage.setItem('askviet_last_role', session.role);
+  startFirebaseAuthRefreshTimer();
+}
+
+function clearFirebaseAuth() {
+  firebaseAuth = null;
+  pendingAuthPassword = '';
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem('askviet_auth');
+  if (firebaseAuthRefreshTimer) {
+    clearInterval(firebaseAuthRefreshTimer);
+    firebaseAuthRefreshTimer = null;
+  }
+}
+
+function startFirebaseAuthRefreshTimer() {
+  if (firebaseAuthRefreshTimer) clearInterval(firebaseAuthRefreshTimer);
+  firebaseAuthRefreshTimer = setInterval(() => refreshFirebaseAuth(true).catch(() => {}), 45 * 60 * 1000);
+}
+
+async function firebaseAuthPost(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = data?.error?.message || r.statusText || ('HTTP ' + r.status);
+    throw new Error(msg);
+  }
+  return data;
+}
+
+async function signInFirebaseRole(role, password) {
+  const email = ROLE_EMAILS[role];
+  const expectedUid = ROLE_UIDS[role];
+  if (!email || !expectedUid) throw new Error('Rol tanımsız');
+  if (!password) throw new Error(role === 'vi' ? 'Mật khẩu cần thiết' : 'Şifre gerekli');
+  const data = await firebaseAuthPost(FIREBASE_AUTH_URL + '/accounts:signInWithPassword?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
+    email,
+    password,
+    returnSecureToken: true
+  });
+  if (data.localId !== expectedUid) throw new Error('Kullanıcı rolü eşleşmedi');
+  const now = Date.now();
+  const session = {
+    role,
+    email,
+    localId: data.localId,
+    idToken: data.idToken,
+    refreshToken: data.refreshToken,
+    expiresAt: now + (Number(data.expiresIn || 3600) * 1000)
+  };
+  saveFirebaseAuth(session);
+  return session;
+}
+
+async function refreshFirebaseAuth(force=false) {
+  if (!firebaseAuth) loadStoredFirebaseAuth();
+  if (!firebaseAuth || !firebaseAuth.refreshToken) throw new Error('Firebase girişi yok');
+  if (!force && firebaseAuth.idToken && firebaseAuth.expiresAt && firebaseAuth.expiresAt - Date.now() > 5 * 60 * 1000) {
+    return firebaseAuth;
+  }
+  const r = await fetch(FIREBASE_REFRESH_URL + '?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: firebaseAuth.refreshToken
+    })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    clearFirebaseAuth();
+    throw new Error(data?.error?.message || r.statusText || ('HTTP ' + r.status));
+  }
+  const session = Object.assign({}, firebaseAuth, {
+    idToken: data.id_token,
+    refreshToken: data.refresh_token || firebaseAuth.refreshToken,
+    localId: data.user_id || firebaseAuth.localId,
+    expiresAt: Date.now() + (Number(data.expires_in || 3600) * 1000)
+  });
+  saveFirebaseAuth(session);
+  return session;
+}
+
+async function ensureFirebaseAuth(role) {
+  const stored = loadStoredFirebaseAuth();
+  if (stored && stored.role === role && stored.localId === ROLE_UIDS[role]) {
+    return refreshFirebaseAuth();
+  }
+  return signInFirebaseRole(role, pendingAuthPassword || document.getElementById('pwInput')?.value || '');
+}
+
+async function getFirebaseIdToken() {
+  const session = await refreshFirebaseAuth();
+  return session.idToken;
+}
+
+function dbUrlWithToken(path, token, extra='') {
+  return DB_URL + path + '.json?auth=' + encodeURIComponent(token) + extra;
+}
+
+function dbUrlSync(path, extra='') {
+  if (!firebaseAuth || !firebaseAuth.idToken) throw new Error('Firebase girişi yok');
+  return dbUrlWithToken(path, firebaseAuth.idToken, extra);
+}
+
+async function dbUrl(path, extra='') {
+  return dbUrlWithToken(path, await getFirebaseIdToken(), extra);
+}
+
+async function askVietServer(action, payload={}) {
+  const token = await getFirebaseIdToken();
+  const r = await fetch(ASKVIET_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify(Object.assign({ action }, payload))
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.ok === false) throw new Error(data.error || r.statusText || ('HTTP ' + r.status));
+  return data;
+}
+
 const TTS_DEFAULTS = {
   model: 'gpt-4o-mini-tts',
   voiceTr: 'nova',
@@ -773,21 +923,23 @@ const TTS_DEFAULTS = {
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function checkPw() {
   const val = document.getElementById('pwInput').value;
-  if (val === PW) {
-    localStorage.setItem('askviet_auth', '1');
-    document.getElementById('pwscreen').style.display = 'none';
-    document.getElementById('setup').style.display = 'flex';
-    const card = document.querySelector('.setup-card');
-    if (card) card.style.display = 'flex';
-    loadSaved();
-  } else {
+  if (!val || val.length < 6) {
     const err = document.getElementById('pwErr');
+    err.textContent = 'Şifre en az 6 karakter olmalı';
     err.style.display = 'block';
     setTimeout(() => err.style.display = 'none', 2000);
+    return;
   }
+  pendingAuthPassword = val;
+  document.getElementById('pwscreen').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+  const card = document.querySelector('.setup-card');
+  if (card) card.style.display = 'flex';
+  loadSaved();
 }
 // Daha once giris yapildiysa sifreyi atla
-if (localStorage.getItem('askviet_auth') === '1') {
+if (loadStoredFirebaseAuth()) {
+  startFirebaseAuthRefreshTimer();
   document.getElementById('pwscreen').style.display = 'none';
   document.getElementById('setup').style.display = 'flex';
   const card = document.querySelector('.setup-card');
@@ -899,16 +1051,10 @@ function toggleTtsSettings(force) {
 
 function loadSaved() {
   ensureFreshAppVersion();
-  const savedKey = localStorage.getItem('askviet_key');
   let savedModel = normalizeChatModel(localStorage.getItem('askviet_model'));
   if (savedModel) {
     localStorage.setItem('askviet_model', savedModel);
   }
-  if (savedKey) document.getElementById('apiKeyInput').value = extractApiKey(savedKey, 'openai');
-  const savedGeminiKey = localStorage.getItem('askviet_gemini_key');
-  if (savedGeminiKey) { const g=document.getElementById('geminiKeyInput'); if(g) g.value=extractApiKey(savedGeminiKey, 'gemini'); }
-  const savedClaudeKey = localStorage.getItem('askviet_claude_key');
-  if (savedClaudeKey) { const c=document.getElementById('claudeKeyInput'); if(c) c.value=extractApiKey(savedClaudeKey, 'claude'); }
   syncTtsSettingsUI();
   if (savedModel) {
     document.getElementById('modelSelect').value = savedModel;
@@ -927,9 +1073,9 @@ function resumeSavedSession() {
   if (role !== 'tr' && role !== 'vi') return;
   localStorage.removeItem('askviet_resume_role');
   localStorage.removeItem('askviet_resume_mode');
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
-      start(role);
+      await start(role);
       setTimeout(() => {
         if (role === 'tr' && mode === 'ptt') togglePttMode(true);
         else { togglePttMode(false); toggleRealLive(false); }
@@ -955,6 +1101,13 @@ function ensureFreshAppVersion() {
 }
 
 // ── Firebase REST ──────────────────────────────────────────────────────────
+function firebaseQueryString(query={}) {
+  return Object.entries(query || {})
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => '&' + encodeURIComponent(key) + '=' + encodeURIComponent(JSON.stringify(value)))
+    .join('');
+}
+
 async function fetchWithTimeout(url, options={}, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -969,13 +1122,20 @@ async function fetchWithTimeout(url, options={}, timeoutMs=FIREBASE_REQUEST_TIME
 }
 
 async function fbGet(path, fresh=false) {
-  const url = DB_URL + path + '.json?auth=' + DB_AUTH + (fresh ? ('&ts=' + Date.now()) : '');
+  const url = await dbUrl(path, fresh ? ('&ts=' + Date.now()) : '');
+  const r = await fetchWithTimeout(url, { cache:'no-store' });
+  if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
+  return r.json();
+}
+async function fbGetQuery(path, query={}, fresh=false) {
+  const extra = firebaseQueryString(query) + (fresh ? ('&ts=' + Date.now()) : '');
+  const url = await dbUrl(path, extra);
   const r = await fetchWithTimeout(url, { cache:'no-store' });
   if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
   return r.json();
 }
 async function fbPush(path, data) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const r = await fetchWithTimeout(await dbUrl(path), { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
 }
@@ -995,16 +1155,16 @@ async function requestServerTranslation(key, force=false, source='manual') {
   return true;
 }
 async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH + '&print=silent', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
+  const r = await fetchWithTimeout(await dbUrl(path, '&print=silent'), { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
   if (!r.ok) console.warn('Firebase kaydetme hatasi:', r.status, path);
   return r.ok;
 }
 async function fbRemove(path) {
-  const r = await fetchWithTimeout(DB_URL + path + '.json?auth=' + DB_AUTH, { method: 'DELETE' });
+  const r = await fetchWithTimeout(await dbUrl(path), { method: 'DELETE' });
   if (!r.ok) throw new Error('Firebase silme hatasi: ' + r.status);
 }
-function fbListen(path, cb, hooks={}) {
-  const es = new EventSource(DB_URL + path + '.json?auth=' + DB_AUTH);
+function fbListen(path, cb, hooks={}, query={}) {
+  const es = new EventSource(dbUrlSync(path, firebaseQueryString(query)));
   const deliver = (type, e) => {
     try {
       const payload = JSON.parse(e.data);
@@ -1129,25 +1289,23 @@ function recordConnectionEvent(type, detail='') {
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────
-function start(role) {
+async function start(role) {
   try { unlockAudio(); } catch(e) {}
-  if (role === 'tr' && localStorage.getItem('askviet_tr_side_auth') !== '1') {
-    const pass = prompt('Türkçe tarafı şifresi');
-    if (pass !== '1453') { alert('Hatalı şifre'); return; }
-    localStorage.setItem('askviet_tr_side_auth', '1');
+  try {
+    await ensureFirebaseAuth(role);
+  } catch (e) {
+    clearFirebaseAuth();
+    const err = document.getElementById('pwErr');
+    if (err) {
+      err.textContent = role === 'vi' ? 'Sai mật khẩu hoặc tài khoản' : 'Şifre veya hesap hatalı';
+      err.style.display = 'block';
+      setTimeout(() => err.style.display = 'none', 2500);
+    }
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('pwscreen').style.display = 'flex';
+    return;
   }
   selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5');
-  const openaiKey = extractApiKey(document.getElementById('apiKeyInput')?.value || localStorage.getItem('askviet_key') || '', 'openai');
-  const geminiKey = extractApiKey(document.getElementById('geminiKeyInput')?.value || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
-  const claudeKey = extractApiKey(document.getElementById('claudeKeyInput')?.value || localStorage.getItem('askviet_claude_key') || '', 'claude');
-  const hasAnyTranslateKey = !!(openaiKey || geminiKey || claudeKey);
-  if (!hasAnyTranslateKey) { alert(role === 'vi' ? 'Cần API key!' : 'API key gerekli!'); const c = document.querySelector('.setup-card'); if(c) c.style.display = 'flex'; return; }
-  apiKey = openaiKey;
-  geminiApiKey = geminiKey;
-  claudeApiKey = claudeKey;
-  if (openaiKey) localStorage.setItem('askviet_key', openaiKey);
-  if (geminiKey) localStorage.setItem('askviet_gemini_key', geminiKey);
-  if (claudeKey) localStorage.setItem('askviet_claude_key', claudeKey);
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
@@ -1225,6 +1383,7 @@ function goBack() {
   deletedMessageKeys.clear();
   deletedMessageSnapshots.clear();
   oldestVisibleMessage = null;
+  currentMessageLimit = CHAT_RENDER_LIMIT;
   autoReadDone.clear();
   pendingReadReceipts.clear();
   pendingMessageQueue.clear();
@@ -1243,6 +1402,7 @@ function goBack() {
 function initChat() {
   chatListenStartedAt = Date.now();
   lastMessageStreamActivityAt = Date.now();
+  currentMessageLimit = Math.max(currentMessageLimit || CHAT_RENDER_LIMIT, CHAT_RENDER_LIMIT);
   setupJumpBottomButton();
   restoreDeletedMessageTombstones();
   if (unsubMessages) { unsubMessages(); unsubMessages = null; }
@@ -1250,7 +1410,7 @@ function initChat() {
   if (chatPollTimer) clearInterval(chatPollTimer);
   chatPollTimer = setInterval(pollMessagesSnapshot, 15000);
 
-  fbGet(MSGS_PATH).then(data => {
+  fetchLatestMessages(CHAT_PAGE_SIZE).then(data => {
     applyMessagesSnapshot(data, true);
     scheduleChatWatchdog();
   }).catch(e => {
@@ -1317,7 +1477,7 @@ function initChat() {
           const followBottom = shouldFollowChatBottom();
           const scrollAnchor = followBottom ? null : captureScrollAnchor();
           updateOrRender(key, event.data);
-          pruneRenderedMessages();
+          pruneRenderedMessages(currentMessageLimit);
           if (followBottom) scrollToBottom(true);
           else {
             if (isNewRender) noteIncomingWhileAway(event.data);
@@ -1369,7 +1529,7 @@ function initChat() {
     onactivity: () => { lastMessageStreamActivityAt = Date.now(); },
     onerror: () => recordConnectionEvent('message-stream-error'),
     onopen: () => recordConnectionEvent('message-stream-open')
-  });
+  }, messageQuery(CHAT_PAGE_SIZE));
 
   unsubTyping = fbListen(TYPING_PATH, event => {
     if (!event) return;
@@ -1415,7 +1575,7 @@ function showRemoteTyping(show) {
 
 async function pollMessagesSnapshot(fresh=false) {
   try {
-    const data = await fbGet(MSGS_PATH, true);
+    const data = await fetchLatestMessages(CHAT_POLL_LIMIT);
     if (data) applyMessagesSnapshot(data, false);
     setConnected(true);
     return true;
@@ -1475,7 +1635,7 @@ async function recoverEmptyChatIfNeeded() {
   if (!empty || renderedKeys.size > 0) return;
   chatReloading = true;
   try {
-    const data = await fbGet(MSGS_PATH, true).catch(() => null);
+    const data = await fetchLatestMessages(CHAT_PAGE_SIZE).catch(() => null);
     const entries = latestMessageEntries(data);
     if (entries.length) {
       applyMessagesSnapshot(data, true);
@@ -1485,6 +1645,62 @@ async function recoverEmptyChatIfNeeded() {
   } finally {
     chatReloading = false;
   }
+}
+
+function messageQuery(limit) {
+  return {
+    orderBy: 'ts',
+    limitToLast: Math.max(1, Number(limit || CHAT_PAGE_SIZE) || CHAT_PAGE_SIZE)
+  };
+}
+
+async function fetchLatestMessages(limit=CHAT_PAGE_SIZE) {
+  return fbGetQuery(MSGS_PATH, messageQuery(limit), true);
+}
+
+async function loadOlderMessages() {
+  if (!oldestVisibleMessage || !oldestVisibleMessage.ts) return;
+  const btn = document.getElementById('loadOlderBtn');
+  const oldText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = viMode() ? 'Đang tải...' : 'Yükleniyor...';
+  }
+  try {
+    const data = await fbGetQuery(MSGS_PATH, {
+      orderBy: 'ts',
+      endAt: Number(oldestVisibleMessage.ts) - 1,
+      limitToLast: CHAT_PAGE_SIZE
+    }, true);
+    const entries = latestMessageEntries(data, CHAT_PAGE_SIZE);
+    if (!entries.length) {
+      if (btn) btn.style.display = 'none';
+      return;
+    }
+    const box = document.getElementById('messages');
+    const beforeHeight = box ? box.scrollHeight : 0;
+    const beforeTop = box ? box.scrollTop : 0;
+    currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + entries.length);
+    entries.forEach(([k, v]) => updateOrRender(k, v));
+    reorderRenderedMessages();
+    refreshVisibleMessageWindow();
+    if (box) box.scrollTop = beforeTop + Math.max(0, box.scrollHeight - beforeHeight);
+    updateLoadOlderButton(entries.length >= CHAT_PAGE_SIZE);
+  } catch (e) {
+    console.warn('Eski mesajlar yüklenemedi:', e);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || (viMode() ? 'Tải tin nhắn cũ hơn' : 'Daha eski mesajları göster');
+    }
+  }
+}
+
+function updateLoadOlderButton(show=true) {
+  const btn = document.getElementById('loadOlderBtn');
+  if (!btn) return;
+  btn.textContent = viMode() ? 'Tải tin nhắn cũ hơn' : 'Daha eski mesajları göster';
+  btn.style.display = show && renderedKeys.size >= CHAT_RENDER_LIMIT ? 'block' : 'none';
 }
 
 function messageTime(key, msg) {
@@ -1516,10 +1732,11 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   entries.forEach(([k, v]) => updateOrRender(k, v));
   for (const key of deletedMessageKeys) markRepliesToDeleted(key);
   reorderRenderedMessages();
-  if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
+  if (renderedKeys.size > currentMessageLimit) pruneRenderedMessages(currentMessageLimit);
   refreshVisibleMessageWindow();
   if (followBottom) scrollToBottom(true);
   else restoreScrollAnchor(scrollAnchor);
+  updateLoadOlderButton(true);
 }
 
 function applyMessagesPatch(data) {
@@ -1541,7 +1758,7 @@ function applyMessagesPatch(data) {
     }
   }
   for (const key of deletedMessageKeys) markRepliesToDeleted(key);
-  pruneRenderedMessages();
+  pruneRenderedMessages(currentMessageLimit);
   if (followBottom) scrollToBottom(true);
   else {
     if (incomingWhileAway) unseenIncomingCount = Math.min(99, unseenIncomingCount + incomingWhileAway);
@@ -1585,7 +1802,7 @@ function refreshVisibleMessageWindow() {
 function shouldRenderMessage(key, msg) {
   if (deletedMessageKeys.has(key)) return false;
   if (renderedKeys.has(key)) return true;
-  if (!oldestVisibleMessage || renderedKeys.size < CHAT_RENDER_LIMIT) return true;
+  if (!oldestVisibleMessage || renderedKeys.size < currentMessageLimit) return true;
   const ts = messageTime(key, msg);
   if (ts && oldestVisibleMessage.ts) return ts >= oldestVisibleMessage.ts;
   return String(key).localeCompare(String(oldestVisibleMessage.key || '')) >= 0;
@@ -1605,6 +1822,7 @@ function pruneRenderedMessages(limit = CHAT_RENDER_LIMIT) {
   }
   reorderRenderedMessages();
   refreshVisibleMessageWindow();
+  updateLoadOlderButton(true);
 }
 
 function isNearBottom() {
@@ -1916,7 +2134,7 @@ function renderMessage(key, msg) {
     maybeNotifyIncoming(key, msg);
   }
   if (!isMedia && !msg.localPending && !msg.deleted) maybeRetryMissingTranslation(key, msg);
-  if (renderedKeys.size > CHAT_RENDER_LIMIT) pruneRenderedMessages();
+  if (renderedKeys.size > currentMessageLimit) pruneRenderedMessages(currentMessageLimit);
   else {
     reorderRenderedMessages();
     refreshVisibleMessageWindow();
@@ -4544,12 +4762,14 @@ function clearMyTypingOnExit() {
     ts: Date.now(),
     session: SESSION_ID
   };
-  fetch(DB_URL + TYPING_PATH + '/' + myRole + '.json?auth=' + DB_AUTH, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(payload),
-    keepalive: true
-  }).catch(()=>{});
+  if (firebaseAuth?.idToken) {
+    fetch(dbUrlSync(TYPING_PATH + '/' + myRole), {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(()=>{});
+  }
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────
@@ -4691,25 +4911,16 @@ function appendPttLog(text) {
 }
 async function pttTranslate(text, from) {
   const target = from === 'tr' ? 'vi' : 'tr';
-  const modelsToTry = translationModelQueue(selectedModel);
-  let lastErr = null;
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const attemptModel = modelsToTry[i];
-    const name = modelName(attemptModel);
-    setPttLog(roleText(from, name + ' çeviriyor...', name + ' đang dịch...'));
-    try {
-      const rawOut = await withTimeout(translateText(text, from, attemptModel), PTT_TRANSLATION_TIMEOUT_MS, name);
-      const out = validateTranslationOutput(text, rawOut, from);
-      renderPttTurn(text, out, from, target);
-      if (out) speakPttText(out, target);
-      return;
-    } catch (e) {
-      lastErr = e;
-      if (isFatalTranslationError(e) || i >= modelsToTry.length - 1) throw e;
-      await sleep(700 + (i * 600));
-    }
-  }
-  throw lastErr || new Error('Bas-konuş çevirisi tamamlanamadı');
+  const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
+  setPttLog(roleText(from, modelName(baseModel) + ' çeviriyor...', modelName(baseModel) + ' đang dịch...'));
+  const data = await askVietServer('translate', {
+    text,
+    fromRole: from,
+    model: baseModel
+  });
+  const out = String(data.translation || '').trim();
+  renderPttTurn(text, out, from, target);
+  if (out) speakPttText(out, target);
 }
 
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
@@ -5640,8 +5851,6 @@ async function speakOpenAI(text, target, btn, silent=false) {
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
   const settings = getTtsSettings();
-  const key = localStorage.getItem('askviet_key') || '';
-  if (!key) { console.warn('OpenAI key yok'); return false; }
   const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
   const speed = target === 'vi' ? 0.95 : settings.speed;
   const model = settings.model;
@@ -5654,7 +5863,17 @@ async function speakOpenAI(text, target, btn, silent=false) {
   setSpeakBtn(btn, true);
   try {
     ttsAbort = new AbortController();
-    const blob = await getCachedOpenAiTtsBlob({ text, target, model, voice, instructions, speed, key, signal:ttsAbort.signal });
+    let blob = ttsCache.get(primaryKey);
+    if (!blob) {
+      const data = await askVietServer('speak', {
+        text,
+        targetRole: target,
+        settings: { model, voiceTr: settings.voiceTr, voiceVi: settings.voiceVi, speed: settings.speed }
+      });
+      blob = new Blob([base64ToBytes(data.audioBase64 || '')], { type: data.mime || 'audio/mpeg' });
+      ttsCache.set(primaryKey, blob);
+      if (ttsCache.size > 40) ttsCache.delete(ttsCache.keys().next().value);
+    }
     if (token !== ttsToken) return false;
     return await playBlob(blob, token, btn, text, { target, cacheKey:primaryKey });
   } catch(e) {
@@ -6062,24 +6281,26 @@ function updateMyPresence(online=true, keepalive=false) {
   const payload = { online: !!online, lastActive: Date.now() };
   const sessionPayload = { online: !!online, lastActive: payload.lastActive, role: myRole };
   if (keepalive) {
-    fetch(DB_URL + PRESENCE_PATH + '/' + myRole + '.json?auth=' + DB_AUTH, {
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload),
-      keepalive:true
-    }).catch(()=>{});
-    fetch(DB_URL + PRESENCE_PATH + '/sessions/' + SESSION_ID + '.json?auth=' + DB_AUTH, {
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(sessionPayload),
-      keepalive:true
-    }).catch(()=>{});
-    fetch(DB_URL + PRESENCE_SESSIONS_PATH + '/' + SESSION_ID + '.json?auth=' + DB_AUTH, {
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(sessionPayload),
-      keepalive:true
-    }).catch(()=>{});
+    if (firebaseAuth?.idToken) {
+      fetch(dbUrlSync(PRESENCE_PATH + '/' + myRole), {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+      }).catch(()=>{});
+      fetch(dbUrlSync(PRESENCE_PATH + '/sessions/' + SESSION_ID), {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(sessionPayload),
+        keepalive:true
+      }).catch(()=>{});
+      fetch(dbUrlSync(PRESENCE_SESSIONS_PATH + '/' + SESSION_ID), {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(sessionPayload),
+        keepalive:true
+      }).catch(()=>{});
+    }
     return;
   }
   fbSet(PRESENCE_PATH + '/' + myRole, payload);
@@ -6327,23 +6548,20 @@ async function startVoice() {
 async function transcribeVoice(blob, sourceOverride) {
   if (!blob || blob.size < MIN_AUDIO_BLOB_SIZE) throw new Error('Ses algılanmadı');
   const voiceRole = sourceOverride || myRole || 'tr';
-  const openAiVoiceKey = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
-  const geminiVoiceKey = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
-
-  if (openAiVoiceKey) {
-    return await transcribeVoiceOpenAI(blob, voiceRole, openAiVoiceKey);
-  }
-
-  if (geminiVoiceKey) {
-    const base64 = await new Promise(res => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result || '').split(',')[1] || '');
-      r.readAsDataURL(blob);
-    });
-    return await transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, geminiVoiceKey);
-  }
-
-  throw new Error('Ses metne çevirme için OpenAI veya Gemini API key gerekli');
+  const base64 = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || '').split(',')[1] || '');
+    r.onerror = () => reject(new Error('Ses okunamadı'));
+    r.readAsDataURL(blob);
+  });
+  const data = await askVietServer('transcribe', {
+    audioBase64: base64,
+    mime: blob.type || 'audio/webm',
+    sourceRole: voiceRole
+  });
+  const text = String(data.text || '').trim();
+  if (!text) throw new Error('Ses metne çevrilemedi');
+  return text;
 }
 
 async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
