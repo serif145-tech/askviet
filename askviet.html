@@ -656,6 +656,47 @@ let visibleMessageKeys = new Set();
 let deletedMessageKeys = new Set();
 let deletedMessageSnapshots = new Map();
 let translationRunSeq = 0;
+const DEBUG_LOG_PATH = '/rooms/' + ROOM + '/debugLogs';
+const DEBUG_LOG_KEY = 'askviet_debug_translation_log_v1';
+const DEBUG_LOG_MAX = 500;
+function debugLog(event, data) {
+  try {
+    const entry = { t: new Date().toISOString(), role: myRole || '?', event, data: data || {} };
+    fetch(DB_URL + DEBUG_LOG_PATH + '.json?auth=' + DB_AUTH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    }).catch(() => {});
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]'); } catch {}
+    arr.push(entry);
+    if (arr.length > DEBUG_LOG_MAX) arr = arr.slice(arr.length - DEBUG_LOG_MAX);
+    localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(arr));
+  } catch {}
+}
+window.exportDebugLog = function() {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]'); } catch {}
+  console.log('--- ASKVIET DEBUG LOG (' + arr.length + ' entries) ---');
+  console.log(JSON.stringify(arr, null, 2));
+  try {
+    const blob = new Blob([JSON.stringify(arr, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'askviet-debug-log.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) { console.error('download failed', e); }
+  return arr;
+};
+window.clearDebugLog = function() {
+  localStorage.removeItem(DEBUG_LOG_KEY);
+  fetch(DB_URL + DEBUG_LOG_PATH + '.json?auth=' + DB_AUTH, { method: 'DELETE' }).catch(() => {});
+  console.log('Debug log cleared.');
+};
 let translationRunTokens = new Map();
 let completedTranslationCache = new Map();
 let oldestVisibleMessage = null;
@@ -2820,8 +2861,9 @@ async function retryMessageTranslation(key, btn) {
     btn.textContent = '...';
   }
   try {
+    debugLog('manual_retry_button_clicked', { key });
     await Promise.race([
-      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole, selectedModel, { force: true }),
+      translateAndUpdate(key, box.dataset.text || '', box.dataset.role || myRole, selectedModel, { force: true, userTriggered: true }),
       sleep(25000).then(() => { throw new Error('timeout'); })
     ]);
     const latest = await fbGet(MSGS_PATH + '/' + key).catch(() => null);
@@ -2906,7 +2948,7 @@ function scheduleReadReceiptFlush(delay=0) {
 }
 
 async function flushPendingReadReceipts() {
-  if (!canWriteReadReceipt()) return;
+  if (!canWriteReadReceipt()) { debugLog('read_flush_blocked', { visible: document.visibilityState, pending: pendingReadReceipts.size }); return; }
   if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
   readReceiptFlushRunning = true;
   try {
@@ -2919,8 +2961,10 @@ async function flushPendingReadReceipts() {
           continue;
         }
         const stamp = Date.now();
+        const msgAge = stamp - Number(box.dataset.ts || stamp);
         const ok = await fbSet(MSGS_PATH + '/' + key + '/read/' + myRole, { '.sv':'timestamp' });
-        if (!ok) continue;
+        if (!ok) { debugLog('read_write_failed', { key, msgAgeMs: msgAge }); continue; }
+        debugLog('read_write_success', { key, msgAgeMs: msgAge, writeMs: Date.now() - stamp });
         pendingReadReceipts.delete(key);
         persistPendingReads();
         if (box) {
@@ -2928,6 +2972,7 @@ async function flushPendingReadReceipts() {
           if (myRole === 'vi') box.dataset.readVi = stamp;
         }
       } catch (e) {
+        debugLog('read_write_error', { key, err: String(e && e.message || e).slice(0, 200) });
         setConnected(false);
         recordConnectionEvent('read-receipt-error', e?.message || e);
         break;
@@ -2941,7 +2986,7 @@ async function flushPendingReadReceipts() {
 
 function markMessageRead(key, msg) {
   if (!myRole || !msg || msg.role === myRole) return;
-  if (!canWriteReadReceipt()) return;
+  if (!canWriteReadReceipt()) { debugLog('mark_read_blocked_visibility', { key, visible: document.visibilityState }); return; }
   const box = document.getElementById('msg-' + key);
   const locallyRecorded = myRole === 'tr' ? box?.dataset.readTr : box?.dataset.readVi;
   const already = (msg.read && msg.read[myRole]) || locallyRecorded;
@@ -2950,6 +2995,7 @@ function markMessageRead(key, msg) {
     persistPendingReads();
     return;
   }
+  debugLog('mark_read_queued', { key });
   pendingReadReceipts.add(key);
   persistPendingReads();
   scheduleReadReceiptFlush(0);
@@ -3871,6 +3917,7 @@ function confirmOutgoingMessage(key, remoteMsg=null) {
   refreshMessageText(key);
   const isMedia = item.msg.type === 'image' || item.msg.type === 'video';
   if (!isMedia && !remoteMsg?.translation) {
+    debugLog('send_confirm_fired', { key, role: item.msg.role });
     translateAndUpdate(key, item.msg.text || '', item.msg.role, item.model || selectedModel);
   }
 }
@@ -3905,8 +3952,8 @@ function sendMessage() {
 }
 
 async function translateAndUpdate(key, text, fromRole, modelForTranslation=selectedModel, options={}) {
-  if (translationRunTokens.has(key) && !options.force) return;
-  if (!options.force && hasFinalTranslationForKey(key)) return;
+  if (translationRunTokens.has(key) && !options.force) { debugLog('skip_already_running', { key, fromRole }); return; }
+  if (!options.force && hasFinalTranslationForKey(key)) { debugLog('skip_has_final', { key, fromRole }); return; }
   if (options.force) completedTranslationCache.delete(String(key));
   const runId = ++translationRunSeq;
   translationRunTokens.set(key, runId);
@@ -3914,15 +3961,19 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
   const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.5');
   const modelsToTry = translationModelQueue(baseModel);
+  const startedAt = Date.now();
+  debugLog('start', { key, fromRole, runId, queue: modelsToTry, force: !!options.force, userTriggered: !!options.userTriggered });
   try {
     for (let i = 0; i < modelsToTry.length; i++) {
-      if (!stillCurrent()) return;
+      if (!stillCurrent()) { debugLog('superseded', { key, runId, atAttempt: i }); return; }
       const attemptModel = modelsToTry[i];
       const provider = String(attemptModel || '').split(':')[0] || 'openai';
+      const attemptStart = Date.now();
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
         const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
         const translation = validateTranslationOutput(text, rawTranslation, fromRole);
+        debugLog('attempt_success', { key, runId, attemptIndex: i, model: attemptModel, ms: Date.now() - attemptStart, totalMs: Date.now() - startedAt });
         if (stillCurrent()) {
           completedTranslationCache.set(String(key), { value: translation, ts: Date.now() });
           updateLocalTranslationDisplay(key, translation);
@@ -3930,15 +3981,17 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         }
         return;
       } catch (e) {
-        if (!stillCurrent()) return;
+        if (!stillCurrent()) { debugLog('superseded_in_catch', { key, runId, atAttempt: i }); return; }
         const msg = normalizeApiError(e && e.message ? e.message : String(e)).slice(0, 140);
         const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
+        debugLog('attempt_failed', { key, runId, attemptIndex: i, model: attemptModel, ms: Date.now() - attemptStart, errRaw: String(e && e.message || e).slice(0, 200), willRetry: retry });
         if (retry) {
           const waitMs = 700 + (i * 600);
           await setTranslationStatus(key, retryText(targetRole, attemptModel, modelsToTry[i + 1], msg));
           await sleep(waitMs);
           continue;
         }
+        debugLog('all_attempts_exhausted', { key, runId, totalMs: Date.now() - startedAt });
         const errValue = errorText(targetRole, msg);
         updateLocalTranslationDisplay(key, errValue);
         await fbSet(MSGS_PATH + '/' + key + '/translation', errValue);
@@ -4141,15 +4194,17 @@ function maybeRetryMissingTranslation(key, msg) {
   const cached = completedTranslationCache.get(String(key));
   if (cached && cached.value) {
     const remotePending = isPendingTranslationText(msg.translation);
-    if (remotePending) fbSet(MSGS_PATH + '/' + key + '/translation', cached.value).catch(()=>{});
+    if (remotePending) { debugLog('render_repush_cached', { key }); fbSet(MSGS_PATH + '/' + key + '/translation', cached.value).catch(()=>{}); }
     return;
   }
   if (translationRunTokens.has(key)) return;
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 1200) return;
+  debugLog('render_retry_scheduled', { key, role: msg.role, age });
   setTimeout(() => {
-    if (hasFinalTranslationForKey(key) || translationRunTokens.has(key)) return;
+    if (hasFinalTranslationForKey(key) || translationRunTokens.has(key)) { debugLog('render_retry_cancelled', { key }); return; }
+    debugLog('render_retry_fired', { key });
     translateAndUpdate(key, msg.text, msg.role, msg.translationModel || selectedModel);
   }, 400);
 }
