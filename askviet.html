@@ -837,16 +837,26 @@ async function reportLoginDevice(role) {
   }
 }
 
-function loadStoredFirebaseAuth() {
+function authStorageKey(role) {
+  return AUTH_STORAGE_KEY + '_' + (role === 'vi' ? 'vi' : 'tr');
+}
+
+function loadStoredFirebaseAuth(role) {
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    const targetRole = role === 'vi' ? 'vi' : role === 'tr' ? 'tr' : '';
+    if (targetRole && firebaseAuth && firebaseAuth.role !== targetRole) firebaseAuth = null;
+    const raw = targetRole
+      ? (localStorage.getItem(authStorageKey(targetRole)) || localStorage.getItem(AUTH_STORAGE_KEY))
+      : localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw);
     if (!session || !session.refreshToken || !session.role || !session.localId) return null;
+    if (targetRole && session.role !== targetRole) return null;
     firebaseAuth = session;
     return firebaseAuth;
   } catch {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    if (role === 'tr' || role === 'vi') localStorage.removeItem(authStorageKey(role));
+    else localStorage.removeItem(AUTH_STORAGE_KEY);
     return null;
   }
 }
@@ -854,6 +864,9 @@ function loadStoredFirebaseAuth() {
 function saveFirebaseAuth(session) {
   const oldToken = firebaseAuth && firebaseAuth.idToken;
   firebaseAuth = session;
+  if (session.role === 'tr' || session.role === 'vi') {
+    localStorage.setItem(authStorageKey(session.role), JSON.stringify(session));
+  }
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
   localStorage.setItem('askviet_auth', '1');
   if (session.role) localStorage.setItem('askviet_last_role', session.role);
@@ -864,8 +877,10 @@ function saveFirebaseAuth(session) {
 }
 
 function clearFirebaseAuth() {
+  const role = firebaseAuth && (firebaseAuth.role === 'tr' || firebaseAuth.role === 'vi') ? firebaseAuth.role : '';
   firebaseAuth = null;
   pendingAuthPassword = '';
+  if (role) localStorage.removeItem(authStorageKey(role));
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem('askviet_auth');
   if (firebaseAuthRefreshTimer) {
@@ -932,7 +947,9 @@ async function signInFirebaseRole(role, password) {
 }
 
 async function refreshFirebaseAuth(force=false) {
-  if (!firebaseAuth) loadStoredFirebaseAuth();
+  const expectedRole = myRole || selectedLoginRole || localStorage.getItem('askviet_last_role');
+  if (expectedRole && firebaseAuth && firebaseAuth.role !== expectedRole) firebaseAuth = null;
+  if (!firebaseAuth) loadStoredFirebaseAuth(expectedRole);
   if (!firebaseAuth || !firebaseAuth.refreshToken) throw new Error('Firebase girişi yok');
   if (!force && firebaseAuth.idToken && firebaseAuth.expiresAt && firebaseAuth.expiresAt - Date.now() > 5 * 60 * 1000) {
     return firebaseAuth;
@@ -961,7 +978,7 @@ async function refreshFirebaseAuth(force=false) {
 }
 
 async function ensureFirebaseAuth(role) {
-  const stored = loadStoredFirebaseAuth();
+  const stored = loadStoredFirebaseAuth(role);
   if (stored && stored.role === role && stored.localId === ROLE_UIDS[role]) {
     return refreshFirebaseAuth();
   }
