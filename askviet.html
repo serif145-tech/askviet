@@ -640,7 +640,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-27-scroll-keyboard-1';
+const APP_VERSION = '2026-06-27-viewport-manualretry-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1287,19 +1287,22 @@ async function fbPush(path, data) {
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
 }
-async function requestServerTranslation(key, force=false, source='manual') {
+async function requestServerTranslation(key, force=false, source='manual', modelOverride='') {
   if (!key) return false;
-  const cacheKey = String(key) + ':' + (force ? '1' : '0') + ':' + source;
+  const requestedModel = modelOverride ? normalizeChatModel(modelOverride) : '';
+  const cacheKey = String(key) + ':' + (force ? '1' : '0') + ':' + source + ':' + requestedModel;
   const lastAt = Number(serverTranslationRequestCache.get(cacheKey) || 0);
   if (!force && Date.now() - lastAt < 15000) return false;
   serverTranslationRequestCache.set(cacheKey, Date.now());
-  await fbPush(TRANSLATION_REQUESTS_PATH, {
+  const payload = {
     messageId: String(key),
     requestedBy: myRole || '',
     force: !!force,
     source,
     createdAt: Date.now()
-  });
+  };
+  if (requestedModel) payload.model = requestedModel;
+  await fbPush(TRANSLATION_REQUESTS_PATH, payload);
   return true;
 }
 async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
@@ -2516,11 +2519,24 @@ function updateReplyComposer() {
   if (close) close.title = uiText('Yanıtı iptal et', 'Hủy trả lời');
 }
 
+function isChatTextInputFocused() {
+  const el = document.activeElement;
+  if (!el || !el.matches) return false;
+  return el.matches('#msgInput, textarea, input, select, [contenteditable="true"]');
+}
+
 function syncChatVisualViewport() {
   const chat = document.getElementById('chat');
   const viewport = window.visualViewport;
-  if (!chat || !viewport) return;
-  chat.style.height = Math.max(1, Math.round(viewport.height)) + 'px';
+  if (!chat) return;
+  const fullHeight = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || viewport?.height || 1));
+  if (!viewport || !isChatTextInputFocused()) {
+    chat.style.height = fullHeight + 'px';
+    chat.style.top = '0px';
+    chat.style.bottom = 'auto';
+    return;
+  }
+  chat.style.height = Math.max(1, Math.round(viewport.height || fullHeight)) + 'px';
   chat.style.top = Math.max(0, Math.round(viewport.offsetTop || 0)) + 'px';
   chat.style.bottom = 'auto';
 }
@@ -3286,11 +3302,12 @@ async function retryMessageTranslation(key, btn) {
     btn.textContent = '...';
   }
   try {
-    debugLog('manual_retry_button_clicked', { key });
+    const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
+    debugLog('manual_retry_button_clicked', { key, model: manualModel });
     completedTranslationCache.delete(String(key));
-    updateLocalTranslationDisplay(key, tryingText(selectedModel));
-    await fbSet(MSGS_PATH + '/' + key + '/translation', tryingText(selectedModel), Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(()=>{});
-    await requestServerTranslation(key, true, 'manual_retry');
+    updateLocalTranslationDisplay(key, tryingText(manualModel));
+    await fbSet(MSGS_PATH + '/' + key + '/translation', tryingText(manualModel), Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(()=>{});
+    await requestServerTranslation(key, true, 'manual_retry', manualModel);
     const latest = await fbGet(MSGS_PATH + '/' + key).catch(() => null);
     if (latest) updateOrRender(key, latest);
     if (btn) {
@@ -5018,11 +5035,13 @@ if(msgInputEl){
 }
 document.addEventListener('pointerdown', e => {
   const input = document.getElementById('msgInput');
-  if (!input || document.activeElement !== input) return;
   if (e.target.closest('.input-bar,.reply-composer,.media-lightbox,.confirm-modal,.reaction-picker')) return;
-  input.blur();
-  setMyTyping(false);
+  if (input && document.activeElement === input) {
+    input.blur();
+    setMyTyping(false);
+  }
   setTimeout(syncChatVisualViewport, 60);
+  setTimeout(syncChatVisualViewport, 260);
 }, { capture:true, passive:true });
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', syncChatVisualViewport, { passive:true });
@@ -6847,9 +6866,11 @@ window.addEventListener('pagehide', () => {
 function resumeChatTransport() {
   if (!myRole) return;
   try { saveChatScrollState(); } catch {}
+  settleChatVisualViewport();
   if (resumeSyncTimer) clearTimeout(resumeSyncTimer);
   resumeSyncTimer = setTimeout(async () => {
     resumeSyncTimer = null;
+    settleChatVisualViewport();
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) sendBtn.disabled = false;
     startPresence();
@@ -6876,6 +6897,7 @@ function resumeChatTransport() {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     clearUnreadCount();
+    settleChatVisualViewport();
     if (myRole) resumeChatTransport();
     if (rec || geminiLiveStream) tryRequestWakeLock();
     if (myRole && !autoRefreshTimer) startAutoRefreshTimer();
@@ -6887,9 +6909,13 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pageshow', e => {
   clearUnreadCount();
+  settleChatVisualViewport();
   if (myRole && (e.persisted || lastPageHiddenAt)) resumeChatTransport();
 });
-window.addEventListener('focus', clearUnreadCount);
+window.addEventListener('focus', () => {
+  clearUnreadCount();
+  settleChatVisualViewport();
+});
 window.addEventListener('online', () => {
   setConnected(true);
   if (myRole) resumeChatTransport();
