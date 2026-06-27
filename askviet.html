@@ -618,14 +618,15 @@ const FIREBASE_AUTH_URL = 'https://identitytoolkit.googleapis.com/v1';
 const FIREBASE_REFRESH_URL = 'https://securetoken.googleapis.com/v1/token';
 const ASKVIET_API_URL = 'https://asia-southeast1-askviet-9c4ea.cloudfunctions.net/askVietApi';
 const ROLE_EMAILS = {
-  tr: 'tr@askviet.local',
-  vi: 'vi@askviet.local'
+  tr: 'serif145+tr@gmail.com',
+  vi: 'serif145+vi@gmail.com'
 };
 const ROLE_UIDS = {
-  tr: 'y1xpNyGr1AXePmNJBUvk7DQQVsl2',
-  vi: 'iYwAPJhAdcYRroiW158lwJ2AjKb2'
+  tr: 'dYyzzujrhOVTfglqGL8O5KLl1F03',
+  vi: 'EiKEPMnNd6fdIaiOUQwvgMYQHKu2'
 };
 const AUTH_STORAGE_KEY = 'askviet_firebase_auth_v1';
+const DEVICE_ID_KEY = 'askviet_device_id_v1';
 const ROOM = 'xK9mP2vL4q';
 const MSGS_PATH = '/rooms/' + ROOM + '/messages';
 const TYPING_PATH = '/rooms/' + ROOM + '/typing';
@@ -791,6 +792,51 @@ const MAX_PERSISTED_READ_RECEIPTS = 120;
 const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SILENT_AUDIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
+function getAskVietDeviceId() {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (id && /^d_[a-z0-9_]{12,}$/i.test(id)) return id;
+  const randomPart = (() => {
+    try {
+      const buf = new Uint8Array(12);
+      crypto.getRandomValues(buf);
+      return Array.from(buf).map(b => b.toString(36).padStart(2, '0')).join('');
+    } catch {
+      return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
+  })();
+  id = 'd_' + Date.now().toString(36) + '_' + randomPart.slice(0, 28);
+  localStorage.setItem(DEVICE_ID_KEY, id);
+  return id;
+}
+
+function askVietDeviceLabel(role) {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const standalone = isStandalonePwa() ? 'PWA' : 'Browser';
+  const side = role === 'vi' ? 'VI' : 'TR';
+  let device = 'Bilinmeyen cihaz';
+  if (/iPhone/i.test(ua)) device = 'iPhone';
+  else if (/iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) device = 'iPad';
+  else if (/Android/i.test(ua)) device = 'Android';
+  else if (/Windows/i.test(ua)) device = 'Windows';
+  else if (/Macintosh|Mac OS/i.test(ua)) device = 'Mac';
+  return `${side} ${device} ${standalone}` + (platform ? ` (${platform})` : '');
+}
+
+async function reportLoginDevice(role) {
+  try {
+    await askVietServer('loginAlert', {
+      role,
+      deviceId: getAskVietDeviceId(),
+      label: askVietDeviceLabel(role),
+      userAgent: (navigator.userAgent || '').slice(0, 220),
+      standalone: isStandalonePwa()
+    });
+  } catch (e) {
+    console.warn('Giriş alarmı gönderilemedi:', e && e.message || e);
+  }
+}
+
 function loadStoredFirebaseAuth() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -848,15 +894,28 @@ async function firebaseAuthPost(url, body) {
 }
 
 async function signInFirebaseRole(role, password) {
-  const email = ROLE_EMAILS[role];
+  const primaryEmail = ROLE_EMAILS[role];
   const expectedUid = ROLE_UIDS[role];
-  if (!email || !expectedUid) throw new Error('Rol tanımsız');
+  if (!primaryEmail || !expectedUid) throw new Error('Rol tanımsız');
   if (!password) throw new Error(role === 'vi' ? 'Mật khẩu cần thiết' : 'Şifre gerekli');
-  const data = await firebaseAuthPost(FIREBASE_AUTH_URL + '/accounts:signInWithPassword?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
-    email,
-    password,
-    returnSecureToken: true
-  });
+  const emails = [...new Set([primaryEmail, role + '@askviet.local'])];
+  let data = null;
+  let email = primaryEmail;
+  let lastError = null;
+  for (const candidate of emails) {
+    try {
+      data = await firebaseAuthPost(FIREBASE_AUTH_URL + '/accounts:signInWithPassword?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
+        email: candidate,
+        password,
+        returnSecureToken: true
+      });
+      email = candidate;
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!data) throw lastError || new Error('Giriş başarısız');
   if (data.localId !== expectedUid) throw new Error('Kullanıcı rolü eşleşmedi');
   const now = Date.now();
   const session = {
@@ -868,6 +927,7 @@ async function signInFirebaseRole(role, password) {
     expiresAt: now + (Number(data.expiresIn || 3600) * 1000)
   };
   saveFirebaseAuth(session);
+  reportLoginDevice(role);
   return session;
 }
 
