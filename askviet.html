@@ -148,8 +148,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-video-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.56);border:1px solid rgba(255,255,255,.7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;line-height:1;box-shadow:0 5px 18px rgba(0,0,0,.35);pointer-events:none}
 .media-btn{background:var(--surface2)!important;border:1.5px solid var(--border)!important;color:#fff;font-size:18px}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:4;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-.msg.mine .msg-react-btn{left:-34px;right:auto}
+.msg-react-btn{position:absolute;right:-42px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:8;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.msg.mine .msg-react-btn{left:-42px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .msg-reactions{display:none;align-items:center;gap:6px;background:transparent;border:0;padding:0;margin:0 0 0 4px;font-size:12px;box-shadow:none;flex-wrap:wrap;flex:0 0 auto}
@@ -640,7 +640,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-25-stable-message-ptt-4';
+const APP_VERSION = '2026-06-27-scroll-keyboard-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -769,6 +769,7 @@ let unreadCount = 0;
 let unseenIncomingCount = 0;
 let chatPinnedToBottom = true;
 let chatAutoScrollUntil = 0;
+let chatManualScrollUntil = 0;
 let notifySoundOn = localStorage.getItem('askviet_notify_sound') !== '0';
 let autoSpeakQueue = [];
 let autoSpeakRunning = false;
@@ -1496,6 +1497,7 @@ async function start(role) {
   }).catch(() => updateWebPushButton());
   listenModelConfig();
   initChat();
+  setTimeout(restoreChatScrollState, 500);
   restorePendingMessages();
   flushOutgoingQueue(true);
   scheduleReadReceiptFlush(0);
@@ -1998,6 +2000,13 @@ function shouldFollowChatBottom() {
   return chatPinnedToBottom || isAtChatBottom();
 }
 
+function noteManualChatScroll() {
+  chatPinnedToBottom = false;
+  chatAutoScrollUntil = 0;
+  chatManualScrollUntil = Date.now() + 1400;
+  updateJumpBottomButton();
+}
+
 function captureScrollAnchor() {
   const m = document.getElementById('messages');
   if (!m) return null;
@@ -2032,6 +2041,39 @@ function restoreScrollAnchor(anchor) {
   }
   m.scrollTop = anchor.scrollTop || 0;
   updateJumpBottomButton();
+}
+
+function chatScrollStorageKey(role = myRole) {
+  return 'askviet_chat_scroll_' + (role === 'vi' ? 'vi' : 'tr');
+}
+
+function saveChatScrollState() {
+  if (myRole !== 'tr' && myRole !== 'vi') return;
+  const anchor = captureScrollAnchor();
+  const m = document.getElementById('messages');
+  if (!m || !anchor) return;
+  const state = Object.assign({}, anchor, {
+    atBottom: isAtChatBottom(),
+    savedAt: Date.now()
+  });
+  try { localStorage.setItem(chatScrollStorageKey(myRole), JSON.stringify(state)); } catch {}
+}
+
+function restoreChatScrollState() {
+  if (myRole !== 'tr' && myRole !== 'vi') return false;
+  let state = null;
+  try { state = JSON.parse(localStorage.getItem(chatScrollStorageKey(myRole)) || 'null'); } catch {}
+  if (!state || Date.now() - Number(state.savedAt || 0) > 6 * 60 * 60 * 1000) return false;
+  if (state.atBottom) {
+    scrollToBottom(true);
+    return true;
+  }
+  chatPinnedToBottom = false;
+  chatAutoScrollUntil = 0;
+  restoreScrollAnchor(state);
+  setTimeout(() => restoreScrollAnchor(state), 120);
+  setTimeout(() => restoreScrollAnchor(state), 420);
+  return true;
 }
 
 function scrollAfterMessageUpdate(msg) {
@@ -2075,6 +2117,7 @@ function isSafeToAutoRefresh() {
 function prepareResumeState() {
   const role = myRole || localStorage.getItem('askviet_last_role');
   if (role !== 'tr' && role !== 'vi') return false;
+  try { saveChatScrollState(); } catch {}
   localStorage.setItem('askviet_resume_role', role);
   localStorage.setItem('askviet_resume_mode', getCurrentUiMode());
   localStorage.setItem('askviet_last_role', role);
@@ -3330,7 +3373,7 @@ function scheduleReadReceiptFlush(delay=0) {
 }
 
 async function flushPendingReadReceipts() {
-  if (!canWriteReadReceipt()) { debugLog('read_flush_blocked', { visible: document.visibilityState, pending: pendingReadReceipts.size }); return; }
+  if (!canWriteReadReceipt()) return;
   if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
   readReceiptFlushRunning = true;
   try {
@@ -3368,7 +3411,6 @@ async function flushPendingReadReceipts() {
 
 function markMessageRead(key, msg) {
   if (!myRole || !msg || msg.role === myRole) return;
-  if (!canWriteReadReceipt()) { debugLog('mark_read_blocked_visibility', { key, visible: document.visibilityState }); return; }
   const box = document.getElementById('msg-' + key);
   const locallyRecorded = myRole === 'tr' ? box?.dataset.readTr : box?.dataset.readVi;
   const already = (msg.read && msg.read[myRole]) || locallyRecorded;
@@ -3377,9 +3419,10 @@ function markMessageRead(key, msg) {
     persistPendingReads();
     return;
   }
-  debugLog('mark_read_queued', { key });
   pendingReadReceipts.add(key);
   persistPendingReads();
+  if (!canWriteReadReceipt()) return;
+  debugLog('mark_read_queued', { key });
   scheduleReadReceiptFlush(0);
 }
 
@@ -4000,6 +4043,22 @@ function setupJumpBottomButton() {
   const m = document.getElementById('messages');
   if (!m || m.dataset.jumpBound === '1') return;
   m.dataset.jumpBound = '1';
+  let pointerScrollStart = null;
+  const interactiveScrollTarget = target => !!target?.closest?.('button,a,.msg-react-btn,.reaction-picker,.msg-media-img,.msg-media-video');
+  m.addEventListener('pointerdown', e => {
+    pointerScrollStart = interactiveScrollTarget(e.target) ? null : { id:e.pointerId, x:e.clientX, y:e.clientY };
+  }, { passive:true });
+  m.addEventListener('pointermove', e => {
+    if (!pointerScrollStart || pointerScrollStart.id !== e.pointerId) return;
+    if (Math.hypot(e.clientX - pointerScrollStart.x, e.clientY - pointerScrollStart.y) > 8) noteManualChatScroll();
+  }, { passive:true });
+  m.addEventListener('pointerup', () => { pointerScrollStart = null; }, { passive:true });
+  m.addEventListener('pointercancel', () => { pointerScrollStart = null; }, { passive:true });
+  m.addEventListener('touchmove', e => {
+    if (interactiveScrollTarget(e.target)) return;
+    noteManualChatScroll();
+  }, { passive:true });
+  m.addEventListener('wheel', () => noteManualChatScroll(), { passive:true });
   m.addEventListener('scroll', () => {
     if (Date.now() < chatAutoScrollUntil) {
       chatPinnedToBottom = true;
@@ -4015,22 +4074,26 @@ function setupJumpBottomButton() {
 function scrollToBottom(force=false) {
   const m = document.getElementById('messages');
   if (m) setTimeout(() => {
+    if (Date.now() < chatManualScrollUntil) return;
     chatPinnedToBottom = true;
     chatAutoScrollUntil = Date.now() + 900;
     unseenIncomingCount = 0;
     m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
     updateJumpBottomButton();
     requestAnimationFrame(() => {
+      if (Date.now() < chatManualScrollUntil) return;
       if (!chatPinnedToBottom) return;
       m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
       updateJumpBottomButton();
     });
     setTimeout(() => {
+      if (Date.now() < chatManualScrollUntil) return;
       if (!chatPinnedToBottom) return;
       m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
       updateJumpBottomButton();
     }, 180);
     setTimeout(() => {
+      if (Date.now() < chatManualScrollUntil) return;
       if (!chatPinnedToBottom) return;
       m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
       updateJumpBottomButton();
@@ -4953,6 +5016,14 @@ if(msgInputEl){
   msgInputEl.addEventListener('focus', settleChatVisualViewport);
   msgInputEl.addEventListener('blur', () => setTimeout(syncChatVisualViewport, 80));
 }
+document.addEventListener('pointerdown', e => {
+  const input = document.getElementById('msgInput');
+  if (!input || document.activeElement !== input) return;
+  if (e.target.closest('.input-bar,.reply-composer,.media-lightbox,.confirm-modal,.reaction-picker')) return;
+  input.blur();
+  setMyTyping(false);
+  setTimeout(syncChatVisualViewport, 60);
+}, { capture:true, passive:true });
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', syncChatVisualViewport, { passive:true });
   window.visualViewport.addEventListener('scroll', syncChatVisualViewport, { passive:true });
@@ -6775,6 +6846,7 @@ window.addEventListener('pagehide', () => {
 
 function resumeChatTransport() {
   if (!myRole) return;
+  try { saveChatScrollState(); } catch {}
   if (resumeSyncTimer) clearTimeout(resumeSyncTimer);
   resumeSyncTimer = setTimeout(async () => {
     resumeSyncTimer = null;
@@ -6782,7 +6854,9 @@ function resumeChatTransport() {
     if (sendBtn) sendBtn.disabled = false;
     startPresence();
     initChat();
+    setTimeout(restoreChatScrollState, 360);
     await pollMessagesSnapshot(true).catch(() => setConnected(false));
+    restoreChatScrollState();
     flushOutgoingQueue(true);
     document.querySelectorAll('.msg').forEach(el => {
       if (el.dataset.role && el.dataset.role !== myRole) {
