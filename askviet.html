@@ -640,7 +640,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-27-single-push-1';
+const APP_VERSION = '2026-06-28-audio-focus-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1441,7 +1441,6 @@ function recordConnectionEvent(type, detail='') {
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 async function start(role) {
-  try { unlockAudio(); } catch(e) {}
   try {
     await ensureFirebaseAuth(role);
   } catch (e) {
@@ -3523,7 +3522,6 @@ function maybeNotifyIncoming(key, msg) {
 
 async function playNotifySound(force=false) {
   if (!force && !notifySoundOn) return;
-  try { keepAudioAwake(5000); } catch {}
   try {
     if (navigator.vibrate) navigator.vibrate(60);
   } catch {}
@@ -3539,7 +3537,14 @@ async function playNotifySound(force=false) {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {} }, 220);
+    setTimeout(async () => {
+      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {}
+      // Release the web audio session immediately after the short alert. Keeping
+      // it active makes iOS treat the PWA as the primary media player.
+      if (!isSpeaking && !rec && !pttAudioActive && ctx.state === 'running') {
+        try { await ctx.suspend(); } catch {}
+      }
+    }, 220);
   } catch {}
 }
 
@@ -6701,7 +6706,7 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-document.addEventListener('pointerdown',e=>{markChatUserActivity();try{primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);const isSpeakTap=!!e.target.closest('.speakBtn');if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}catch{}const b=e.target.closest('button');if(b&&!b.closest('.msg-react-btn,.reaction-picker'))b.classList.add('pressed')},{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{markChatUserActivity();try{const isSpeakTap=!!e.target.closest('.speakBtn');const hasDeferredAudio=!!pendingBlockedAudio||autoSpeakQueue.length>0;if(hasDeferredAudio){primeAudioForGesture();unlockAudio(true);keepAudioAwake(90000);if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue()}}catch{}const b=e.target.closest('button');if(b&&!b.closest('.msg-react-btn,.reaction-picker'))b.classList.add('pressed')},{capture:true,passive:true});
 document.addEventListener('pointerup',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('pointercancel',e=>{const b=e.target.closest('button');if(b)b.classList.remove('pressed')},{capture:true,passive:true});
 document.addEventListener('click',e=>flashButton(e.target.closest('button')),{capture:true,passive:true});
