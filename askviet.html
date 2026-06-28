@@ -642,7 +642,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-28-remote-audio-timeout-1';
+const APP_VERSION = '2026-06-28-ptt-mic-recovery-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -5463,6 +5463,9 @@ async function startPttVoice(from) {
   const btn = document.getElementById(from === 'tr' ? 'pttTrBtn' : 'pttViBtn');
   if (!btn) return;
   if (rec) { stopRec(); return; }
+  resetMicrophoneAudioContext();
+  primeAudioForGesture();
+  unlockAudio(true).catch(()=>{});
   interruptAudioForRecording();
   recChunks=[]; recHadSpeech=false; recSilentSince=0; recVoiceMs=0; recConsecutiveVoiceMs=0;
   if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
@@ -5484,9 +5487,10 @@ async function startPttVoice(from) {
     rec.onstop = async () => {
       const chunks = recChunks.slice(), mt = rec?.mimeType || 'audio/webm';
       clearInterval(recTimer); recTimer=null;
-      if(recNode){try{recNode.disconnect()}catch{} recNode=null;}
-      if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
-      releaseWakeLock();
+       if(recNode){try{recNode.disconnect()}catch{} recNode=null;}
+       if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
+       resetMicrophoneAudioContext();
+       releaseWakeLock();
       btn.classList.remove('recording');
       if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
       delete btn.dataset.recRole;
@@ -5519,9 +5523,10 @@ async function startPttVoice(from) {
   } catch(e) {
     btn.classList.remove('recording');
     if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
-    delete btn.dataset.recRole;
-    if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
-    releaseWakeLock();
+     delete btn.dataset.recRole;
+     if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
+     resetMicrophoneAudioContext();
+     releaseWakeLock();
     setPttLog(roleText(from, 'Mikrofon izni gerekli: ', 'Cần quyền micro: ') + (e.message || e));
   }
 }
@@ -6812,6 +6817,18 @@ function floatRms(data){let sum=0;for(let i=0;i<data.length;i++){sum+=data[i]*da
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}else{document.querySelectorAll('.roundflag.recording').forEach(btn=>{btn.classList.remove('recording');if(btn.dataset.defaultHtml)btn.innerHTML=btn.dataset.defaultHtml;delete btn.dataset.recRole;});}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
+function resetMicrophoneAudioContext() {
+  stopAudioGuard();
+  const oldCtx = recAudioCtx;
+  recAudioCtx = null;
+  if (oldCtx && oldCtx.state !== 'closed') {
+    try {
+      const closing = oldCtx.close();
+      if (closing?.catch) closing.catch(()=>{});
+    } catch {}
+  }
+}
+
 async function ensureAudioCtx(){
   try{
     if(!recAudioCtx||recAudioCtx.state==='closed') recAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -6824,6 +6841,7 @@ async function startVoice() {
   markChatUserActivity();
   const btn = document.getElementById('micBtn');
   if(rec){stopRec();return;}
+  resetMicrophoneAudioContext();
   interruptAudioForRecording();
   recChunks=[];recHadSpeech=false;recSilentSince=0;recVoiceMs=0;recConsecutiveVoiceMs=0;
   btn.classList.add('mic-recording');
@@ -6842,9 +6860,10 @@ async function startVoice() {
     rec.onstop=async()=>{
       const chunks=recChunks.slice(),mt=rec?.mimeType||'audio/webm';
       clearInterval(recTimer);recTimer=null;
-      if(recNode){try{recNode.disconnect()}catch{}recNode=null}
-      if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
-      releaseWakeLock();
+       if(recNode){try{recNode.disconnect()}catch{}recNode=null}
+       if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
+       resetMicrophoneAudioContext();
+       releaseWakeLock();
       btn.classList.remove('mic-recording');
       rec=null;
       btn.textContent=uiText('Bekle', 'Đợi');
@@ -6875,9 +6894,10 @@ async function startVoice() {
     },120);
   }catch(e){
     btn.classList.remove('mic-recording');
-    btn.innerHTML=MIC_ICON;
-    if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
-    releaseWakeLock();
+     btn.innerHTML=MIC_ICON;
+     if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
+     resetMicrophoneAudioContext();
+     releaseWakeLock();
     alert(micPermissionMessage() + (e.message ? '\n' + e.message : ''));
   }
 }
