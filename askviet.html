@@ -83,6 +83,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .chat-subtitle{font-size:11px;color:var(--muted);margin-top:2px}
 .presence-status{font-size:13px;color:var(--muted);font-weight:900;display:flex;align-items:center;gap:12px}
 .presence-status.online{color:#22c55e}
+.transient-notice{position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),12px) + 68px);transform:translate(-50%,-12px);z-index:10000;width:max-content;max-width:min(88vw,430px);padding:11px 14px;border-radius:8px;background:#18181b;color:#fff;border:1px solid #3f3f46;box-shadow:0 10px 28px #0007;font-size:13px;font-weight:800;line-height:1.35;text-align:center;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
+.transient-notice.show{opacity:1;transform:translate(-50%,0)}
 .header-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;flex:0 0 auto}
 .witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88}
 .model-row{display:flex;gap:6px;align-items:center;min-width:0}
@@ -640,7 +642,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-28-audio-focus-1';
+const APP_VERSION = '2026-06-28-remote-audio-timeout-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -735,6 +737,9 @@ let chatListenStartedAt = 0;
 let activeSpeakBtn = null;
 let activeAudioRequestId = null;
 let remoteAudioButtons = new Map();
+let remoteAudioTimeouts = new Map();
+let transientNoticeTimer = null;
+const AUDIO_REQUEST_ACK_TIMEOUT_MS = 10000;
 const CHAT_RENDER_LIMIT = 50;
 const CHAT_PAGE_SIZE = 50;
 const CHAT_POLL_LIMIT = 10;
@@ -1540,6 +1545,9 @@ function goBack() {
   pendingMessageQueue.clear();
   outgoingInFlight.clear();
   handledAudioRequests.clear();
+  remoteAudioTimeouts.forEach(timer => clearTimeout(timer));
+  remoteAudioTimeouts.clear();
+  remoteAudioButtons.clear();
   stopAudio();
   releaseWakeLock();
   document.getElementById('setup').style.display = 'flex';
@@ -3799,6 +3807,81 @@ function getRecipientText(key) {
   return finalTranslationText(box.dataset.translation) || '';
 }
 
+function showTransientNotice(message, duration=3200) {
+  let notice = document.getElementById('transientNotice');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.id = 'transientNotice';
+    notice.className = 'transient-notice';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    document.body.appendChild(notice);
+  }
+  clearTimeout(transientNoticeTimer);
+  notice.textContent = String(message || '');
+  notice.classList.remove('show');
+  void notice.offsetWidth;
+  notice.classList.add('show');
+  transientNoticeTimer = setTimeout(() => notice.classList.remove('show'), duration);
+}
+
+function audioUnavailableText() {
+  return uiText(
+    'Karşı taraf şu an uygulamada değil, ses çalınamadı.',
+    'Đối phương hiện không có trong ứng dụng, không phát được âm thanh.'
+  );
+}
+
+async function isRoleActivelyOnline(role) {
+  const now = Date.now();
+  const [roleData, sessions] = await Promise.all([
+    fbGet(PRESENCE_PATH + '/' + role).catch(() => null),
+    fbGet(PRESENCE_SESSIONS_PATH).catch(() => null)
+  ]);
+  const directActive = !!(roleData && roleData.online && Number(roleData.lastActive || 0) && now - Number(roleData.lastActive || 0) <= PRESENCE_STALE_MS);
+  const sessionActive = Object.values(sessions && typeof sessions === 'object' ? sessions : {}).some(session =>
+    session && session.role === role && session.online && Number(session.lastActive || 0) && now - Number(session.lastActive || 0) <= PRESENCE_STALE_MS
+  );
+  return directActive || sessionActive;
+}
+
+function clearRemoteAudioTimeout(id) {
+  const timer = remoteAudioTimeouts.get(id);
+  if (timer) clearTimeout(timer);
+  remoteAudioTimeouts.delete(id);
+}
+
+function resetRemoteAudioButton(id) {
+  const rec = remoteAudioButtons.get(id);
+  if (rec?.btn) {
+    rec.btn.dataset.busy = '0';
+    delete rec.btn.dataset.remoteAudioId;
+    setSpeakBtn(rec.btn, false);
+  }
+  remoteAudioButtons.delete(id);
+}
+
+function startRemoteAudioTimeout(id) {
+  clearRemoteAudioTimeout(id);
+  remoteAudioTimeouts.set(id, setTimeout(async () => {
+    remoteAudioTimeouts.delete(id);
+    if (!remoteAudioButtons.has(id)) return;
+    const latest = await fbGet(AUDIO_PATH + '/' + id).catch(() => null);
+    if (latest?.status === 'playing') {
+      updateRemoteAudioStatus(id, 'playing');
+      return;
+    }
+    if (!latest || latest.status === 'done' || latest.status === 'cancelled') {
+      resetRemoteAudioButton(id);
+      return;
+    }
+    resetRemoteAudioButton(id);
+    showTransientNotice(audioUnavailableText());
+    await fbSet(AUDIO_PATH + '/' + id + '/status', 'timeout').catch(() => {});
+    setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(() => {}), 700);
+  }, AUDIO_REQUEST_ACK_TIMEOUT_MS));
+}
+
 async function requestSpeakForMessage(key, btn) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
@@ -3817,6 +3900,13 @@ async function requestSpeakForMessage(key, btn) {
     }
     return;
   }
+  const targetOnline = await isRoleActivelyOnline(targetRole).catch(() => false);
+  if (!targetOnline) {
+    btn.dataset.busy = '0';
+    setSpeakBtn(btn, false);
+    showTransientNotice(audioUnavailableText());
+    return;
+  }
   btn.dataset.busy = '1';
   setSpeakBtn(btn, true);
   const result = await fbPush(AUDIO_PATH, {
@@ -3832,6 +3922,7 @@ async function requestSpeakForMessage(key, btn) {
   if (id) {
     btn.dataset.remoteAudioId = id;
     remoteAudioButtons.set(id, { btn, key });
+    startRemoteAudioTimeout(id);
   } else {
     btn.dataset.busy = '0';
     setSpeakBtn(btn, false);
@@ -3840,6 +3931,7 @@ async function requestSpeakForMessage(key, btn) {
 
 async function cancelRemoteAudio(id, btn) {
   if (!id) return;
+  clearRemoteAudioTimeout(id);
   try { await fbSet(AUDIO_PATH + '/' + id + '/status', 'cancelled'); } catch {}
   if (btn) {
     btn.dataset.busy = '0';
@@ -3883,21 +3975,25 @@ function listenAudioRequests() {
 function updateRemoteAudioStatus(id, status) {
   const rec = remoteAudioButtons.get(id);
   if (!rec || !rec.btn) return;
-  if (status === 'playing' || status === 'requested') {
+  if (status === 'playing') {
+    clearRemoteAudioTimeout(id);
     rec.btn.dataset.busy = '1';
     rec.btn.dataset.remoteAudioId = id;
     setSpeakBtn(rec.btn, true);
-  } else if (status === 'done' || status === 'cancelled' || status === 'error') {
-    rec.btn.dataset.busy = '0';
-    delete rec.btn.dataset.remoteAudioId;
-    setSpeakBtn(rec.btn, false);
-    remoteAudioButtons.delete(id);
+  } else if (status === 'requested') {
+    rec.btn.dataset.busy = '1';
+    rec.btn.dataset.remoteAudioId = id;
+    setSpeakBtn(rec.btn, true);
+  } else if (status === 'done' || status === 'cancelled' || status === 'error' || status === 'timeout' || status === 'ptt-busy') {
+    clearRemoteAudioTimeout(id);
+    resetRemoteAudioButton(id);
+    if (status === 'error' || status === 'ptt-busy') showTransientNotice(audioUnavailableText());
   }
 }
 
 async function handleAudioRequest(id, req) {
   if (!req) return;
-  if (req.status === 'cancelled') {
+  if (req.status === 'cancelled' || req.status === 'timeout') {
     if (activeAudioRequestId === id) stopAudio();
     handledAudioRequests.add(id);
     setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(()=>{}), 500);
