@@ -693,6 +693,9 @@ const REMOTE_DEBUG_EVENTS = new Set([
   'message_send_unknown_still_missing',
   'message_send_unknown_waiting_remote',
   'message_send_unknown_paused',
+  'message_send_unknown_resend',
+  'message_send_keepalive',
+  'message_send_keepalive_failed',
   'read_batch_error',
   'server_translation_request_failed',
   'all_attempts_exhausted'
@@ -807,6 +810,7 @@ const OUTGOING_RETRY_TIMEOUT_MS = 8000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
 const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 15000;
+const OUTGOING_UNKNOWN_RESEND_GAP_MS = 15000;
 const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
 const CHAT_STREAM_STALE_MS = 50000;
@@ -1355,6 +1359,20 @@ async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
   const r = await firebaseFetch(path, { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '&print=silent', timeoutMs);
   if (!r.ok) console.warn('Firebase kaydetme hatasi:', r.status, path);
   return r.ok;
+}
+function fbPatchKeepalive(path, data) {
+  if (!firebaseAuth?.idToken) return false;
+  try {
+    fetch(dbUrlSync(path, '&print=silent'), {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data),
+      keepalive: true
+    }).catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
 }
 async function fbPatch(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
   const r = await firebaseFetch(path, { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '&print=silent', timeoutMs);
@@ -3370,6 +3388,11 @@ async function retryMessageTranslation(key, btn) {
   try {
     const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
     debugLog('manual_retry_button_clicked', { key, model: manualModel });
+    const exists = await ensureOutgoingMessageExistsForTranslation(key);
+    if (!exists) {
+      updateLocalTranslationDisplay(key, uiText('Mesaj sunucuya ulaşmadı. Bağlantı gelince tekrar dene.', 'Tin nhắn chưa lên máy chủ. Khi mạng ổn hãy thử lại.'));
+      return;
+    }
     completedTranslationCache.delete(String(key));
     updateLocalTranslationDisplay(key, tryingText(manualModel));
     await fbSet(MSGS_PATH + '/' + key + '/translation', tryingText(manualModel), Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 2500)).catch(()=>{});
@@ -4398,6 +4421,11 @@ function messagePayloadForServer(msg) {
     clientTs: Number(msg.ts || Date.now())
   });
 }
+function messagePayloadForKeepalive(msg) {
+  const payload = messagePayloadForServer(msg);
+  delete payload.translation;
+  return payload;
+}
 
 function ensureLocalOutgoingVisible(key, item) {
   if (!key || !item || !pendingMessageQueue.has(key)) return;
@@ -4513,6 +4541,54 @@ function flushOutgoingQueue(immediate=false) {
   if (changed) persistPendingMessages();
 }
 
+function flushOutgoingQueueBeforeSuspend(reason='hidden') {
+  if (!myRole || !pendingMessageQueue.size || !firebaseAuth?.idToken) return;
+  let sent = 0;
+  for (const item of pendingMessageQueue.values()) {
+    if (!item || item.state === 'failed' || item.state === 'unknown_paused') continue;
+    const age = Date.now() - Number(item.createdAt || item.msg?.ts || Date.now());
+    if (age > OUTGOING_AUTO_RETRY_MAX_AGE_MS) continue;
+    const ok = fbPatchKeepalive(MSGS_PATH + '/' + item.key, messagePayloadForKeepalive(item.msg));
+    if (ok) {
+      sent++;
+      item.lastKeepaliveAt = Date.now();
+    }
+  }
+  if (sent) {
+    persistPendingMessages();
+    debugLog('message_send_keepalive', { reason, count: sent });
+  }
+}
+
+async function ensureOutgoingMessageExistsForTranslation(key) {
+  const item = pendingMessageQueue.get(key);
+  if (!item) return true;
+  if (outgoingInFlight.has(key)) {
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }
+  const remote = await fbGet(MSGS_PATH + '/' + key, true).catch(() => null);
+  if (remote && typeof remote === 'object') {
+    confirmOutgoingMessage(key, remote);
+    scheduleMessageSnapshotReconcile('manual-retry-confirmed-message');
+    return true;
+  }
+  try {
+    item.lastManualResendAt = Date.now();
+    const ok = await fbSet(MSGS_PATH + '/' + key, messagePayloadForServer(item.msg), OUTGOING_RETRY_TIMEOUT_MS);
+    if (!ok) return false;
+    confirmOutgoingMessage(key);
+    scheduleMessageSnapshotReconcile('manual-retry-resend-message');
+    return true;
+  } catch (e) {
+    item.state = 'unknown';
+    item.nextRetryAt = 0;
+    persistPendingMessages();
+    debugLog('message_send_unknown_resend', { key, source:'manual_translation', err:String(e && e.message || e).slice(0, 160) });
+    scheduleUnknownOutgoingVerification(15000);
+    return false;
+  }
+}
+
 async function verifyUnknownOutgoingMessages() {
   if (!myRole || outgoingUnknownVerifying || !pendingMessageQueue.size) return;
   outgoingUnknownVerifying = true;
@@ -4538,10 +4614,24 @@ async function verifyUnknownOutgoingMessages() {
           scheduleMessageSnapshotReconcile('outgoing-unknown-confirmed');
           continue;
         }
-        if (age > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
+        const lastResendAt = Number(item.lastUnknownResendAt || 0);
+        if (age <= OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS && Date.now() - lastResendAt > OUTGOING_UNKNOWN_RESEND_GAP_MS) {
           item.state = 'unknown';
           item.nextRetryAt = 0;
+          item.lastUnknownResendAt = Date.now();
           updateDeliveryStatus(item.key, 'pending');
+          changed = true;
+          debugLog('message_send_unknown_resend', {
+            key: item.key,
+            attempt: Number(item.attempts || 0),
+            ageMs: age,
+            source: 'unknown_verify'
+          });
+          sendQueuedItem(item);
+          continue;
+        }
+        if (age > OUTGOING_AUTO_RETRY_MAX_AGE_MS && (!item.lastMissingLogAt || Date.now() - Number(item.lastMissingLogAt) > 60000)) {
+          item.lastMissingLogAt = Date.now();
           debugLog('message_send_unknown_still_missing', {
             key: item.key,
             attempt: Number(item.attempts || 0),
@@ -7130,12 +7220,14 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
 
 window.addEventListener('beforeunload', () => {
   try { prepareResumeState(); } catch {}
+  try { flushOutgoingQueueBeforeSuspend('beforeunload'); } catch {}
   try { releaseWakeLock(); } catch {}
   if (myRole) { clearMyTypingOnExit(); stopPresenceHeartbeat(true); }
 });
 window.addEventListener('pagehide', () => {
   lastPageHiddenAt = Date.now();
   try { prepareResumeState(); } catch {}
+  try { flushOutgoingQueueBeforeSuspend('pagehide'); } catch {}
   try { releaseWakeLock(); } catch {}
   if (myRole) { clearMyTypingOnExit(); stopPresenceHeartbeat(true); }
 });
@@ -7182,6 +7274,7 @@ document.addEventListener('visibilitychange', () => {
   } else if (myRole) {
     lastPageHiddenAt = Date.now();
     try { persistSessionState(); } catch {}
+    try { flushOutgoingQueueBeforeSuspend('hidden'); } catch {}
     stopPresenceHeartbeat(true);
   }
 });
