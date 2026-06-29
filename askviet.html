@@ -642,7 +642,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-28-stable-write-queue-2';
+const APP_VERSION = '2026-06-29-firebase-send-guard-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1286,21 +1286,45 @@ async function fetchWithTimeout(url, options={}, timeoutMs=FIREBASE_REQUEST_TIME
   }
 }
 
+function isFirebaseAuthStatus(status) {
+  return status === 401 || status === 403;
+}
+
+function isFirebaseTimeoutError(err) {
+  return String(err && err.message || err || '').includes('Firebase bağlantısı zaman aşımına uğradı');
+}
+
+async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS, retryOptions={}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const canRetryTimeout = retryOptions.retryTimeout === true || method === 'GET' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const buildUrl = async () => await dbUrl(path, extra);
+  try {
+    let r = await fetchWithTimeout(await buildUrl(), options, timeoutMs);
+    if (isFirebaseAuthStatus(r.status)) {
+      await refreshFirebaseAuth(true);
+      r = await fetchWithTimeout(await buildUrl(), options, timeoutMs);
+    }
+    return r;
+  } catch (e) {
+    if (!canRetryTimeout || !isFirebaseTimeoutError(e)) throw e;
+    await new Promise(resolve => setTimeout(resolve, 450));
+    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs, 6500), 10000));
+  }
+}
+
 async function fbGet(path, fresh=false) {
-  const url = await dbUrl(path, fresh ? ('&ts=' + Date.now()) : '');
-  const r = await fetchWithTimeout(url, { cache:'no-store' });
+  const r = await firebaseFetch(path, { cache:'no-store' }, fresh ? ('&ts=' + Date.now()) : '');
   if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
   return r.json();
 }
 async function fbGetQuery(path, query={}, fresh=false) {
   const extra = firebaseQueryString(query) + (fresh ? ('&ts=' + Date.now()) : '');
-  const url = await dbUrl(path, extra);
-  const r = await fetchWithTimeout(url, { cache:'no-store' });
+  const r = await firebaseFetch(path, { cache:'no-store' }, extra);
   if (!r.ok) throw new Error('Firebase okuma hatasi: ' + r.status);
   return r.json();
 }
 async function fbPush(path, data) {
-  const r = await fetchWithTimeout(await dbUrl(path), { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const r = await firebaseFetch(path, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '', FIREBASE_REQUEST_TIMEOUT_MS, { retryTimeout:false });
   if (!r.ok) throw new Error('Firebase yazma hatasi: ' + r.status);
   return r.json();
 }
@@ -1323,17 +1347,17 @@ async function requestServerTranslation(key, force=false, source='manual', model
   return true;
 }
 async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
-  const r = await fetchWithTimeout(await dbUrl(path, '&print=silent'), { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
+  const r = await firebaseFetch(path, { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '&print=silent', timeoutMs);
   if (!r.ok) console.warn('Firebase kaydetme hatasi:', r.status, path);
   return r.ok;
 }
 async function fbPatch(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
-  const r = await fetchWithTimeout(await dbUrl(path, '&print=silent'), { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, timeoutMs);
+  const r = await firebaseFetch(path, { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '&print=silent', timeoutMs);
   if (!r.ok) console.warn('Firebase toplu kaydetme hatasi:', r.status, path);
   return r.ok;
 }
 async function fbRemove(path) {
-  const r = await fetchWithTimeout(await dbUrl(path), { method: 'DELETE' });
+  const r = await firebaseFetch(path, { method: 'DELETE' });
   if (!r.ok) throw new Error('Firebase silme hatasi: ' + r.status);
 }
 function fbListen(path, cb, hooks={}, query={}) {
@@ -4559,13 +4583,15 @@ async function sendQueuedItem(item) {
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
         scheduleUnknownOutgoingVerification();
-      } else if (ageMs > OUTGOING_AUTO_RETRY_MAX_AGE_MS || item.attempts >= 2) {
+      } else if (ageMs > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
         item.state = 'failed';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'failed');
       } else {
-        item.nextRetryAt = Date.now() + OUTGOING_RETRY_DELAY_MS;
-        scheduleOutgoingFlush(OUTGOING_RETRY_DELAY_MS);
+        item.state = 'unknown';
+        item.nextRetryAt = 0;
+        updateDeliveryStatus(item.key, 'pending');
+        scheduleUnknownOutgoingVerification(Math.min(OUTGOING_UNKNOWN_VERIFY_DELAY_MS, 4000));
       }
       persistPendingMessages();
     }
