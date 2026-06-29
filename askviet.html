@@ -689,6 +689,10 @@ const DEBUG_LOG_MAX = 500;
 const REMOTE_DEBUG_EVENTS = new Set([
   'message_send_failed',
   'message_auto_retry_expired',
+  'message_auto_retry_paused_unknown',
+  'message_send_unknown_still_missing',
+  'message_send_unknown_waiting_remote',
+  'message_send_unknown_paused',
   'read_batch_error',
   'server_translation_request_failed',
   'all_attempts_exhausted'
@@ -802,7 +806,8 @@ const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
 const OUTGOING_RETRY_TIMEOUT_MS = 8000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
-const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 3500;
+const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 15000;
+const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
 const CHAT_STREAM_STALE_MS = 50000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
@@ -1440,7 +1445,7 @@ function loadPersistentQueues() {
       if (Date.now() - Number(item.createdAt || item.msg.ts || 0) > PENDING_ITEM_MAX_AGE_MS) continue;
       const restored = Object.assign({ attempts:0, state:'pending', nextRetryAt:0 }, item);
       if (Date.now() - Number(restored.createdAt || restored.msg.ts || 0) > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
-        restored.state = 'failed';
+        restored.state = 'unknown';
         restored.nextRetryAt = 0;
       }
       pendingMessageQueue.set(item.key, restored);
@@ -1885,14 +1890,12 @@ async function loadOlderMessages() {
       if (btn) btn.style.display = 'none';
       return;
     }
-    const box = document.getElementById('messages');
-    const beforeHeight = box ? box.scrollHeight : 0;
-    const beforeTop = box ? box.scrollTop : 0;
+    const anchor = captureScrollAnchor();
     currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + entries.length);
     entries.forEach(([k, v]) => updateOrRender(k, v));
     reorderRenderedMessages();
     refreshVisibleMessageWindow();
-    if (box) box.scrollTop = beforeTop + Math.max(0, box.scrollHeight - beforeHeight);
+    restoreOlderMessagesAnchor(anchor);
     updateLoadOlderButton(entries.length >= CHAT_PAGE_SIZE);
   } catch (e) {
     console.warn('Eski mesajlar yüklenemedi:', e);
@@ -2100,6 +2103,13 @@ function restoreScrollAnchor(anchor) {
   }
   m.scrollTop = anchor.scrollTop || 0;
   updateJumpBottomButton();
+}
+
+function restoreOlderMessagesAnchor(anchor) {
+  if (!anchor) return;
+  restoreScrollAnchor(anchor);
+  requestAnimationFrame(() => restoreScrollAnchor(anchor));
+  setTimeout(() => restoreScrollAnchor(anchor), 180);
 }
 
 function chatScrollStorageKey(role = myRole) {
@@ -4486,13 +4496,14 @@ function flushOutgoingQueue(immediate=false) {
   if (!myRole || !pendingMessageQueue.size) return;
   let changed = false;
   for (const item of pendingMessageQueue.values()) {
-    if (item.state === 'failed' || item.state === 'unknown' || outgoingInFlight.has(item.key)) continue;
+    if (item.state === 'failed' || item.state === 'unknown' || item.state === 'unknown_paused' || outgoingInFlight.has(item.key)) continue;
     const age = Date.now() - Number(item.createdAt || item.msg?.ts || Date.now());
     if (age > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
-      item.state = 'failed';
+      item.state = 'unknown';
       item.nextRetryAt = 0;
-      updateDeliveryStatus(item.key, 'failed');
-      debugLog('message_auto_retry_expired', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
+      updateDeliveryStatus(item.key, 'pending');
+      debugLog('message_auto_retry_paused_unknown', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
+      scheduleUnknownOutgoingVerification();
       changed = true;
       continue;
     }
@@ -4512,6 +4523,14 @@ async function verifyUnknownOutgoingMessages() {
       if (!pendingMessageQueue.has(item.key) || outgoingInFlight.has(item.key)) continue;
       const age = Date.now() - Number(item.createdAt || item.msg?.ts || Date.now());
       try {
+        if (age > OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS) {
+          item.state = 'unknown_paused';
+          item.nextRetryAt = 0;
+          updateDeliveryStatus(item.key, 'pending');
+          debugLog('message_send_unknown_paused', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
+          changed = true;
+          continue;
+        }
         const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
         setConnected(true);
         if (remote && typeof remote === 'object') {
@@ -4520,10 +4539,10 @@ async function verifyUnknownOutgoingMessages() {
           continue;
         }
         if (age > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
-          item.state = 'failed';
+          item.state = 'unknown';
           item.nextRetryAt = 0;
-          updateDeliveryStatus(item.key, 'failed');
-          debugLog('message_send_failed', {
+          updateDeliveryStatus(item.key, 'pending');
+          debugLog('message_send_unknown_still_missing', {
             key: item.key,
             attempt: Number(item.attempts || 0),
             ageMs: age,
@@ -4532,10 +4551,11 @@ async function verifyUnknownOutgoingMessages() {
           changed = true;
           continue;
         }
-        item.state = 'pending';
+        item.state = 'unknown';
         item.nextRetryAt = 0;
         changed = true;
-        await sendQueuedItem(item);
+        updateDeliveryStatus(item.key, 'pending');
+        debugLog('message_send_unknown_waiting_remote', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
       } catch (e) {
         setConnected(false);
         recordConnectionEvent('message-unknown-verify-error', e?.message || e);
@@ -4584,14 +4604,15 @@ async function sendQueuedItem(item) {
         updateDeliveryStatus(item.key, 'pending');
         scheduleUnknownOutgoingVerification();
       } else if (ageMs > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
-        item.state = 'failed';
+        item.state = 'unknown';
         item.nextRetryAt = 0;
-        updateDeliveryStatus(item.key, 'failed');
+        updateDeliveryStatus(item.key, 'pending');
+        scheduleUnknownOutgoingVerification();
       } else {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification(Math.min(OUTGOING_UNKNOWN_VERIFY_DELAY_MS, 4000));
+        scheduleUnknownOutgoingVerification(OUTGOING_UNKNOWN_VERIFY_DELAY_MS);
       }
       persistPendingMessages();
     }
@@ -4887,7 +4908,6 @@ function isPendingTranslationText(text) {
 
 function maybeRetryMissingTranslation(key, msg) {
   if (!msg || !msg.role || !msg.text) return;
-  if (msg.role !== myRole) return;
   if (hasFinalTranslationForKey(key)) return;
   const cached = completedTranslationCache.get(String(key));
   if (cached && cached.value) {
@@ -4899,11 +4919,12 @@ function maybeRetryMissingTranslation(key, msg) {
   if (!isPendingTranslationText(msg.translation)) return;
   const age = Date.now() - Number(msg.ts || 0);
   if (age < 10000) return;
-  debugLog('render_retry_scheduled', { key, role: msg.role, age });
+  const source = msg.role === myRole ? 'render_retry_own' : 'render_retry_incoming';
+  debugLog('render_retry_scheduled', { key, role: msg.role, age, source });
   setTimeout(() => {
     if (hasFinalTranslationForKey(key) || translationRunTokens.has(key)) { debugLog('render_retry_cancelled', { key }); return; }
-    debugLog('render_retry_fired', { key });
-    requestServerTranslation(key, false, 'render_retry').catch(e => debugLog('server_translation_request_failed', { key, message: e && e.message }));
+    debugLog('render_retry_fired', { key, source });
+    requestServerTranslation(key, false, source).catch(e => debugLog('server_translation_request_failed', { key, source, message: e && e.message }));
   }, 400);
 }
 
