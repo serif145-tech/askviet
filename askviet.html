@@ -250,6 +250,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .real-live-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
 .panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid #171717}
 .panel-title{font-size:16px;font-weight:950;color:#f3e8ff;letter-spacing:.1px}
+#pttStatusTitle{flex:1;min-width:0;color:#f8fafc;font-size:14px;line-height:1.3;white-space:normal}
 .panel-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
 .ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
@@ -289,8 +290,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
 .tool-btn{min-height:34px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850;font-size:12px;padding:0 10px}
-.tool-btn.primary{background:#2563eb;border-color:#60a5fa;color:#fff}
-.tool-btn.danger{background:#dc2626;border-color:#ef4444}
+.tool-btn.primary,.tool-btn.retry{background:rgba(249,115,22,.14);border-color:#fb923c;color:#fdba74}
+.tool-btn.warn{background:rgba(124,58,237,.15);border-color:#a78bfa;color:#c4b5fd}
+.tool-btn.copy{background:rgba(6,182,212,.13);border-color:#22d3ee;color:#67e8f9}
+.tool-btn.speak{background:rgba(99,102,241,.15);border-color:#818cf8;color:#c7d2fe}
+.tool-btn.block{background:rgba(220,38,38,.16);border-color:#ef4444;color:#fca5a5}
+.tool-btn.delete{background:rgba(236,72,153,.13);border-color:#f472b6;color:#f9a8d4}
+.tool-btn.danger{background:rgba(220,38,38,.16);border-color:#ef4444;color:#fca5a5}
 .tool-btn.confirm{background:#16a34a!important;border-color:#22c55e!important}
 .status-pill.live-on{border-color:#a78bfa;color:#fff}
 @media (max-width: 520px){
@@ -553,7 +559,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
   <div class="ptt-panel" id="pttPanel">
     <div class="panel-top">
-      <div class="panel-title">Bas-Konuş</div>
+      <div class="panel-title" id="pttStatusTitle">Hazır</div>
       <button class="status-pill ptt-voice-toggle on" id="pttAutoSpeakBtn" onclick="togglePttAutoSpeak()" title="Bas-konuş çevirisini seslendir">✓ PTT Ses</button>
     </div>
     <div class="ptt-log" id="pttLog"><div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div></div>
@@ -5614,19 +5620,12 @@ function updateModeVoiceControls() {
 }
 
 function setPttLog(text, beforeLastTurn=false) {
+  const title=document.getElementById('pttStatusTitle');
+  if (title) title.textContent=text || 'Hazır';
   const el = document.getElementById('pttLog');
   if (!el) return;
   el.querySelector('.empty')?.remove();
   el.querySelectorAll('.ptt-status').forEach(node => node.remove());
-  if (!text) return;
-  const status = document.createElement('div');
-  status.className = 'ptt-status';
-  status.textContent = text;
-  const turns=el.querySelectorAll('.ptt-turn');
-  const lastTurn=turns.length ? turns[turns.length-1] : null;
-  if (beforeLastTurn && lastTurn) el.insertBefore(status,lastTurn);
-  else el.appendChild(status);
-  el.scrollTop = el.scrollHeight;
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
 function appendPttLog(text) {
@@ -5671,20 +5670,22 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   tools.className = 'turn-tools';
 
   const retry = makeToolButton('↻ Tekrar', () => pttTranslate(sourceText, sourceRole));
-  retry.classList.add('primary');
+  retry.classList.add('retry');
 
   const mis = makeToolButton('⚠', () => {
     sendPttMisunderstood(sourceRole, mis);
     mis.textContent = '🥺';
   });
+  mis.classList.add('warn');
 
   const copy = makeToolButton('📋', async () => {
     const ok = await copyTextFallback(translatedText);
     if (ok) flashCopyButton(copy, '📋', 'tool-btn');
   });
+  copy.classList.add('copy');
 
   const speakBtn = makeToolButton('▶', () => {});
-  speakBtn.classList.add('speakBtn');
+  speakBtn.classList.add('speakBtn','speak');
   bindSpeakAction(speakBtn, () => speakPttText(translatedText, targetRole, speakBtn));
 
   const block = makeToolButton('Engelle', () => {
@@ -5698,10 +5699,10 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
     block.textContent = 'Emin?';
     block.classList.add('confirm');
   });
-  block.classList.add('danger');
+  block.classList.add('block');
 
   const del = makeToolButton('×', () => { stopAudio(); turn.remove(); if (!log.children.length) clearPttLog(); });
-  del.classList.add('danger');
+  del.classList.add('delete');
 
   tools.append(retry, mis, copy, speakBtn, block, del);
   turn.append(src, dst, tools);
@@ -5848,6 +5849,8 @@ function renderTextLists() {
 function clearPttLog() {
   const log = document.getElementById('pttLog');
   if (log) log.innerHTML = '<div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div>';
+  const title=document.getElementById('pttStatusTitle');
+  if (title) title.textContent='Hazır';
 }
 function pttManual(from) {
   const text = (document.getElementById('pttInput')?.value || '').trim();
@@ -5878,10 +5881,15 @@ async function startPttVoice(from) {
     recData = new Uint8Array(recAnalyser.fftSize);
     recNode.connect(recAnalyser);
     rec = new MediaRecorder(recStream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
-    rec.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+    recStarted=Date.now();
+    recButton=btn;
+    resetRecSpeechMetrics('ptt',listenText);
+    startRecPcmCapture(ctx);
+    rec.ondataavailable = ()=>{};
     rec.onstop = async () => {
-      const chunks = recChunks.slice(), mt = rec?.mimeType || 'audio/webm';
+      const pcmChunks=recPcmChunks.slice(),pcmRate=recPcmSampleRate;
       clearInterval(recTimer); recTimer=null;
+       cleanupRecPcmCapture();
        if(recNode){try{recNode.disconnect()}catch{} recNode=null;}
        if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
        resetMicrophoneAudioContext();
@@ -5891,9 +5899,8 @@ async function startPttVoice(from) {
       delete btn.dataset.recRole;
       rec=null;
       try {
-        const blob = new Blob(chunks,{type:mt});
-        const tooShort = Date.now() - recStarted < 700 || blob.size < MIN_AUDIO_BLOB_SIZE;
-        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || tooShort || chunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.'); return; }
+        const blob=makePseudoLiveWav(pcmChunks,pcmRate);
+        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || blob.size < 1200 || pcmChunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.'); return; }
         resetNoSpeechStops();
         const firstTranscribe=primaryTranscribeLabel(getTranscribeEngine());
         setPttLog(firstTranscribe + ' ile ses yazıya çevriliyor...');
@@ -5911,21 +5918,12 @@ async function startPttVoice(from) {
       }
     };
     rec.start(120);
-    recStarted = Date.now();
-    recTimer = setInterval(() => {
-      if(!recAnalyser || !recData) return;
-      const v = rms(recAnalyser, recData), now = Date.now();
-      if(v > MIC_VOICE_RMS_THRESHOLD){ recVoiceMs += 120; recConsecutiveVoiceMs += 120; recHadSpeech = recConsecutiveVoiceMs >= MIC_MIN_VOICE_MS || recVoiceMs >= MIC_MIN_VOICE_MS + 240; recSilentSince=0; clearRecCountdown(btn, 'ptt', listenText); return; }
-      recConsecutiveVoiceMs = 0;
-      if(recHadSpeech){ if(!recSilentSince) recSilentSince=now; showRecCountdown(btn, recSilentSince, now, 'ptt'); if(now-recSilentSince>PTT_SILENCE_MS) stopRec(); }
-      else if(now-recStarted>MIC_NO_SPEECH_MS) stopRec();
-      if(now-recStarted>30000) stopRec();
-    },120);
   } catch(e) {
     btn.classList.remove('recording');
     if (btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
      delete btn.dataset.recRole;
      if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
+     cleanupRecPcmCapture();
      resetMicrophoneAudioContext();
      releaseWakeLock();
     setPttLog('Mikrofon izni gerekli: ' + (e.message || e));
@@ -7094,6 +7092,8 @@ function listenPresence() {
 }
 
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
+let recPcmProcessor=null,recPcmGain=null,recPcmChunks=[],recPcmSampleRate=48000,recPcmLastAt=0;
+let recCurrentVoiceRunMs=0,recLongestVoiceRunMs=0,recStrongVoiceMs=0,recPeakLevel=0,recKind='mic',recListenText='';
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recVoiceMs=0,recConsecutiveVoiceMs=0;
 let lastLiveText='', lastLiveTarget='vi';
 let noSpeechStops = [];
@@ -7102,9 +7102,9 @@ const MIC_ICON = '&#127908;';
 const REC_SILENCE_MS = 2000;
 const VOICE_RMS_THRESHOLD = 0.018;
 const MIN_VOICE_MS = 750;
-const MIC_VOICE_RMS_THRESHOLD = 0.011;
-const MIC_MIN_VOICE_MS = 240;
-const MIC_NO_SPEECH_MS = 8000;
+const MIC_VOICE_PEAK_THRESHOLD = 900 / 32768;
+const MIC_MIN_VOICE_MS = 420;
+const MIC_NO_SPEECH_MS = 4500;
 const MIC_SILENCE_MS = 2000;
 const PTT_SILENCE_MS = 2000;
 const MIN_AUDIO_BLOB_SIZE = 700;
@@ -7219,6 +7219,61 @@ function floatRms(data){let sum=0;for(let i=0;i<data.length;i++){sum+=data[i]*da
 function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}else{document.querySelectorAll('.roundflag.recording').forEach(btn=>{btn.classList.remove('recording');if(btn.dataset.defaultHtml)btn.innerHTML=btn.dataset.defaultHtml;delete btn.dataset.recRole;});}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
+function resetRecSpeechMetrics(kind='mic',listenText='') {
+  recPcmChunks=[]; recPcmLastAt=Date.now(); recCurrentVoiceRunMs=0; recLongestVoiceRunMs=0;
+  recStrongVoiceMs=0; recPeakLevel=0; recVoiceMs=0; recConsecutiveVoiceMs=0; recHadSpeech=false;
+  recSilentSince=0; recKind=kind; recListenText=listenText;
+}
+
+function startRecPcmCapture(ctx) {
+  recPcmSampleRate=ctx?.sampleRate || 48000;
+  recPcmProcessor=ctx.createScriptProcessor(2048,1,1);
+  recPcmGain=ctx.createGain();
+  recPcmGain.gain.value=0;
+  recNode.connect(recPcmProcessor);
+  recPcmProcessor.connect(recPcmGain);
+  recPcmGain.connect(ctx.destination);
+  recPcmProcessor.onaudioprocess=event=>{
+    if (!rec) return;
+    const input=event?.inputBuffer?.getChannelData(0);
+    if (!input?.length) return;
+    const pcm=new Float32Array(input);
+    recPcmChunks.push(pcm);
+    const now=Date.now();
+    const elapsed=recPcmLastAt ? Math.max(1,Math.min(250,now-recPcmLastAt)) : 1;
+    recPcmLastAt=now;
+    const peak=livePcmSignalLevel(pcm).peak;
+    if (peak > MIC_VOICE_PEAK_THRESHOLD) {
+      recVoiceMs+=elapsed;
+      recCurrentVoiceRunMs+=elapsed;
+      recLongestVoiceRunMs=Math.max(recLongestVoiceRunMs,recCurrentVoiceRunMs);
+      recPeakLevel=Math.max(recPeakLevel,peak);
+      if (peak >= MIC_VOICE_PEAK_THRESHOLD * 1.5) recStrongVoiceMs+=elapsed;
+      const minRunMs=Math.max(180,Math.round(MIC_MIN_VOICE_MS*2/3));
+      const shaped=recStrongVoiceMs>=70 || recPeakLevel>=MIC_VOICE_PEAK_THRESHOLD*2 || recLongestVoiceRunMs>=MIC_MIN_VOICE_MS+140;
+      recHadSpeech=recVoiceMs>=MIC_MIN_VOICE_MS && recLongestVoiceRunMs>=minRunMs && shaped;
+      recSilentSince=0;
+      clearRecCountdown(recButton,recKind,recListenText);
+    } else if (recHadSpeech) {
+      recCurrentVoiceRunMs=0;
+      if (!recSilentSince) recSilentSince=now;
+      showRecCountdown(recButton,recSilentSince,now,recKind);
+      const limit=recKind==='ptt'?PTT_SILENCE_MS:MIC_SILENCE_MS;
+      if (now-recSilentSince>limit) stopRec();
+    } else {
+      recCurrentVoiceRunMs=0;
+      if (now-recStarted>MIC_NO_SPEECH_MS) stopRec();
+    }
+    if (now-recStarted>30000) stopRec();
+  };
+}
+
+function cleanupRecPcmCapture() {
+  try{if(recPcmProcessor){recPcmProcessor.onaudioprocess=null;recPcmProcessor.disconnect()}}catch{}
+  try{if(recPcmGain)recPcmGain.disconnect()}catch{}
+  recPcmProcessor=null;recPcmGain=null;
+}
+
 function resetMicrophoneAudioContext() {
   stopAudioGuard();
   const oldCtx = recAudioCtx;
@@ -7258,10 +7313,15 @@ async function startVoice() {
     recData=new Uint8Array(recAnalyser.fftSize);
     recNode.connect(recAnalyser);
     rec=new MediaRecorder(recStream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
-    rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
+    recStarted=Date.now();
+    recButton=btn;
+    resetRecSpeechMetrics('mic','');
+    startRecPcmCapture(ctx);
+    rec.ondataavailable=()=>{};
     rec.onstop=async()=>{
-      const chunks=recChunks.slice(),mt=rec?.mimeType||'audio/webm';
+      const pcmChunks=recPcmChunks.slice(),pcmRate=recPcmSampleRate;
       clearInterval(recTimer);recTimer=null;
+       cleanupRecPcmCapture();
        if(recNode){try{recNode.disconnect()}catch{}recNode=null}
        if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
        resetMicrophoneAudioContext();
@@ -7270,9 +7330,8 @@ async function startVoice() {
       rec=null;
       btn.textContent=uiText('Bekle', 'Đợi');
       try{
-        const blob=new Blob(chunks,{type:mt});
-        const tooShort=Date.now()-recStarted<700||blob.size<MIN_AUDIO_BLOB_SIZE;
-        if(!recHadSpeech||recVoiceMs<MIC_MIN_VOICE_MS||tooShort||chunks.length===0){btn.innerHTML=MIC_ICON;noteNoSpeechStop();return;}
+        const blob=makePseudoLiveWav(pcmChunks,pcmRate);
+        if(!recHadSpeech||recVoiceMs<MIC_MIN_VOICE_MS||blob.size<1200||pcmChunks.length===0){btn.innerHTML=MIC_ICON;noteNoSpeechStop();return;}
         resetNoSpeechStops();
         const text=await transcribeVoice(blob);
         if(text){document.getElementById('msgInput').value=text;sendMessage();}
@@ -7280,24 +7339,11 @@ async function startVoice() {
       btn.innerHTML=MIC_ICON;
     };
     rec.start(120);
-    recStarted=Date.now();
-    recButton=btn;
-    recTimer=setInterval(()=>{
-      if(!recAnalyser||!recData)return;
-      const v=rms(recAnalyser,recData),now=Date.now();
-      if(v>MIC_VOICE_RMS_THRESHOLD){recVoiceMs+=120;recConsecutiveVoiceMs+=120;recHadSpeech=recConsecutiveVoiceMs>=MIC_MIN_VOICE_MS||recVoiceMs>=MIC_MIN_VOICE_MS+240;recSilentSince=0;clearRecCountdown(btn,'mic');return;}
-      recConsecutiveVoiceMs=0;
-      if(recHadSpeech){
-        if(!recSilentSince)recSilentSince=now;
-        showRecCountdown(btn,recSilentSince,now,'mic');
-        if(now-recSilentSince>MIC_SILENCE_MS)stopRec();
-      }else if(now-recStarted>MIC_NO_SPEECH_MS)stopRec();
-      if(now-recStarted>30000)stopRec();
-    },120);
   }catch(e){
     btn.classList.remove('mic-recording');
      btn.innerHTML=MIC_ICON;
      if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null}
+     cleanupRecPcmCapture();
      resetMicrophoneAudioContext();
      releaseWakeLock();
     alert(micPermissionMessage() + (e.message ? '\n' + e.message : ''));
@@ -7390,6 +7436,8 @@ let pseudoLiveQueue=[];
 let pseudoLiveProcessing=false;
 let pseudoLiveLastText='';
 let pseudoLiveLastTarget='vi';
+let pseudoLiveLastSpokenText='';
+let pseudoLiveLastSpokenAt=0;
 
 function getLiveSettings() {
   return {
@@ -7657,22 +7705,40 @@ function pushPseudoLivePreRoll(pcm) {
 
 function makePseudoLiveWav(chunks,sampleRate) {
   const valid=chunks.filter(chunk=>chunk && chunk.length);
-  const total=valid.reduce((sum,chunk)=>sum+chunk.length,0);
+  const sourceTotal=valid.reduce((sum,chunk)=>sum+chunk.length,0);
+  const source=new Float32Array(sourceTotal);
+  let sourceOffset=0;
+  for(const chunk of valid){source.set(chunk,sourceOffset);sourceOffset+=chunk.length;}
+  const sourceRate=Math.round(sampleRate || 48000);
+  const targetRate=16000;
+  let samples=source;
+  if(sourceRate!==targetRate && source.length){
+    const ratio=sourceRate/targetRate;
+    const targetLength=Math.max(1,Math.floor(source.length/ratio));
+    const downsampled=new Float32Array(targetLength);
+    for(let i=0;i<targetLength;i++){
+      const start=Math.floor(i*ratio);
+      const end=Math.min(source.length,Math.max(start+1,Math.floor((i+1)*ratio)));
+      let sum=0;
+      for(let j=start;j<end;j++)sum+=source[j];
+      downsampled[i]=sum/Math.max(1,end-start);
+    }
+    samples=downsampled;
+  }
+  const total=samples.length;
   const buffer=new ArrayBuffer(44 + total * 2);
   const view=new DataView(buffer);
   const ascii=(offset,text)=>{for(let i=0;i<text.length;i++)view.setUint8(offset+i,text.charCodeAt(i));};
-  const rate=Math.round(sampleRate || 48000);
+  const rate=targetRate;
   ascii(0,'RIFF'); view.setUint32(4,36+total*2,true); ascii(8,'WAVE');
   ascii(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
   view.setUint32(24,rate,true); view.setUint32(28,rate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
   ascii(36,'data'); view.setUint32(40,total*2,true);
   let offset=44;
-  for(const chunk of valid){
-    for(let i=0;i<chunk.length;i++){
-      const sample=Math.max(-1,Math.min(1,chunk[i]));
-      view.setInt16(offset,sample<0?sample*0x8000:sample*0x7fff,true);
-      offset+=2;
-    }
+  for(let i=0;i<samples.length;i++){
+    const sample=Math.max(-1,Math.min(1,samples[i]));
+    view.setInt16(offset,sample<0?sample*0x8000:sample*0x7fff,true);
+    offset+=2;
   }
   return new Blob([buffer],{type:'audio/wav'});
 }
@@ -7773,6 +7839,10 @@ async function handlePseudoLiveBlob(blob) {
     setRealLiveStatus('Şüpheli transkript yok sayıldı');
     return;
   }
+  if (isLikelyPseudoLiveEcho(srcText)) {
+    setRealLiveStatus('Kendi sesimi duydum, dinlemeye devam ediyorum');
+    return;
+  }
   const guessed=guessLiveSourceRole(srcText);
   const from=guessed || 'tr';
   if (!guessed) setRealLiveStatus('Dil net değildi, Türkçe varsayıldı');
@@ -7789,6 +7859,8 @@ async function handlePseudoLiveBlob(blob) {
     pseudoLiveLastTarget=target;
     if (settings.response === 'TEXT_TTS' || settings.response === 'AUDIO') {
       setRealLiveStatus('Seslendiriliyor: ' + pttTtsLabel(target));
+      pseudoLiveLastSpokenText=translated;
+      pseudoLiveLastSpokenAt=Date.now();
       await speak(translated, target, null, true);
     }
   } catch (err) {
@@ -7824,6 +7896,24 @@ function isBadLiveTranscript(text) {
   if (/[\u0400-\u04ff\u0370-\u03ff\u0590-\u05ff\u0600-\u06ff\u3040-\u30ff\u3400-\u9fff]/i.test(clean)) return true;
   if (/thank you|thanks for watching|subscribe|subtitle|subtitles|caption|watching|video|channel|like and subscribe|izlediğiniz|izlediginiz|altyazı|altyazi|spasibo|privet|poka|merci beaucoup|gracias|hello everyone/i.test(clean)) return true;
   return false;
+}
+
+function normalizeLiveCompareText(text) {
+  return String(text || '').toLocaleLowerCase('tr-TR').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+}
+
+function isLikelyPseudoLiveEcho(text) {
+  if (!pseudoLiveLastSpokenText || Date.now()-pseudoLiveLastSpokenAt>30000) return false;
+  const a=normalizeLiveCompareText(text),b=normalizeLiveCompareText(pseudoLiveLastSpokenText);
+  if (a.length<6 || b.length<6) return false;
+  if (a.includes(b) || b.includes(a)) return true;
+  const as=new Set(a.split(' ').filter(word=>word.length>1));
+  const bs=new Set(b.split(' ').filter(word=>word.length>1));
+  if (!as.size || !bs.size) return false;
+  let hit=0;
+  as.forEach(word=>{if(bs.has(word))hit++;});
+  const min=Math.min(as.size,bs.size);
+  return hit>=Math.max(2,Math.ceil(min*.65));
 }
 
 function guessLiveSourceRole(text) {
