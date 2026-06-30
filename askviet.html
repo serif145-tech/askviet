@@ -6594,12 +6594,12 @@ const MIC_ICON = '&#127908;';
 const REC_SILENCE_MS = 2000;
 const VOICE_RMS_THRESHOLD = 0.018;
 const MIN_VOICE_MS = 750;
-const MIC_VOICE_RMS_THRESHOLD = 0.014;
-const MIC_MIN_VOICE_MS = 420;
-const MIC_NO_SPEECH_MS = 4500;
+const MIC_VOICE_RMS_THRESHOLD = 0.011;
+const MIC_MIN_VOICE_MS = 240;
+const MIC_NO_SPEECH_MS = 8000;
 const MIC_SILENCE_MS = 2000;
 const PTT_SILENCE_MS = 2000;
-const MIN_AUDIO_BLOB_SIZE = 2500;
+const MIN_AUDIO_BLOB_SIZE = 700;
 const PRESENCE_STALE_MS = 75000;
 function noteNoSpeechStop() {
   const now = Date.now();
@@ -6623,14 +6623,7 @@ function noteNoSpeechStop() {
     btn.classList.remove('mic-recording');
     btn.innerHTML = MIC_ICON;
   }
-  const role = myRole || localStorage.getItem('askviet_last_role') || 'tr';
-  if (role === 'tr' || role === 'vi') {
-    localStorage.setItem('askviet_resume_role', role);
-    localStorage.setItem('askviet_resume_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
-    localStorage.setItem('askviet_last_role', role);
-    localStorage.setItem('askviet_last_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
-  }
-  setTimeout(() => location.reload(), 120);
+  resetMicrophoneAudioContext();
 }
 function resetNoSpeechStops() { noSpeechStops = []; }
 
@@ -6953,4 +6946,3 @@ clearUnreadCount();
 </script>
 </body>
 </html>
-
