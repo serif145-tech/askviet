@@ -273,10 +273,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-settings select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none}
 .live-check{display:flex!important;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:12px;font-weight:900}
 .live-check input{width:16px;height:16px;accent-color:#7c3aed}
-.live-bar{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
+.live-bar{display:grid;grid-template-columns:1fr;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
 .live-listen{min-height:48px;border:1px solid #22c55e;border-radius:10px;background:#16a34a;color:#fff;font-weight:950;font-size:15px;padding:0 14px;box-shadow:0 4px 14px rgba(22,163,74,.20)}
 .live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;box-shadow:0 4px 14px rgba(220,38,38,.25);animation:pulse 1.2s infinite}
-.live-mini{min-height:48px;min-width:50px;padding:0 12px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:900;font-size:16px}
+.live-mini{min-height:40px;min-width:44px;padding:0 10px;border:1px solid rgba(168,85,247,.55);border-radius:10px;background:rgba(124,58,237,.12);color:#f3e8ff;font-weight:900;font-size:18px;box-shadow:0 0 12px rgba(124,58,237,.16)}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
 .ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
 .ptt-src{color:#f2f2f2;font-size:15px;font-weight:400;line-height:1.4;white-space:pre-wrap}
@@ -569,15 +569,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <select id="liveResponseSelect" onchange="saveLiveSettings()">
         <option value="TEXT">Sadece yazı</option>
         <option value="TEXT_TTS">Yazı + ses</option>
+        <option value="AUDIO">Sadece ses</option>
       </select>
       <label class="live-check"><input type="checkbox" id="liveSaverToggle" onchange="saveLiveSettings()" checked> Tasarruf</label>
     </div>
     <div class="real-live-log" id="realLiveLog"><div class="empty">Dinle'ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div></div>
     <div class="live-bar">
       <button class="live-listen" id="liveMainBtn" onclick="toggleGeminiLiveMain()">&#9654; Dinle</button>
-      <button class="live-mini" onclick="liveRepeatNotice()">&#8635;</button>
-      <button class="live-mini speakBtn" onclick="speakLastLive()">&#9654;</button>
-      <button class="live-mini" onclick="clearRealLiveLog()">&#129529;</button>
     </div>
   </div>
 
@@ -1514,7 +1512,7 @@ function restoreDeletedMessageTombstones() {
   const range = currentRenderedMessageRange();
   document.querySelectorAll('.msg[data-deleted="1"]').forEach(el => {
     const ts = Number(el.dataset.ts || 0);
-    if (!range || !ts || ts < range.min || ts > range.max) {
+    if (range && ts && (ts < range.min || ts > range.max)) {
       renderedKeys.delete(el.dataset.key || el.id.replace(/^msg-/, ''));
       el.remove();
     }
@@ -2037,7 +2035,7 @@ function compareMessageEntries(a, b) {
 function latestMessageEntries(data, limit = CHAT_RENDER_LIMIT) {
   if (!data || typeof data !== 'object') return [];
   return Object.entries(data)
-    .filter(([k, v]) => k && v && typeof v === 'object' && (v.role === 'tr' || v.role === 'vi') && !deletedMessageKeys.has(k))
+    .filter(([k, v]) => k && v && typeof v === 'object' && (v.role === 'tr' || v.role === 'vi') && (!deletedMessageKeys.has(k) || v.deleted))
     .sort(compareMessageEntries)
     .slice(-limit);
 }
@@ -4292,10 +4290,7 @@ async function speakPttText(text, target, btn=null) {
   if (!text || !target || !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
-    setPttLog(roleText(target,
-      pttTtsLabel(target) + ' ile seslendiriliyor...',
-      'Đang đọc bằng ' + pttTtsLabel(target) + '...'
-    ));
+    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...');
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
@@ -5606,12 +5601,14 @@ function updateModeVoiceControls() {
 function setPttLog(text) {
   const el = document.getElementById('pttLog');
   if (!el) return;
-  el.textContent = '';
+  el.querySelector('.empty')?.remove();
+  el.querySelectorAll('.ptt-status').forEach(node => node.remove());
   if (!text) return;
   const status = document.createElement('div');
   status.className = 'ptt-status';
   status.textContent = text;
   el.appendChild(status);
+  el.scrollTop = el.scrollHeight;
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
 function appendPttLog(text) {
@@ -5626,7 +5623,7 @@ function appendPttLog(text) {
 async function pttTranslate(text, from) {
   const target = from === 'tr' ? 'vi' : 'tr';
   const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
-  setPttLog(roleText(from, modelName(baseModel) + ' çeviriyor...', modelName(baseModel) + ' đang dịch...'));
+  setPttLog(modelName(baseModel) + ' çeviriyor...');
   const data = await askVietServer('translate', {
     text,
     fromRole: from,
@@ -5635,17 +5632,15 @@ async function pttTranslate(text, from) {
   const out = String(data.translation || '').trim();
   renderPttTurn(text, out, from, target);
   const usedModel = modelName(data.model || data.usedModel || baseModel);
-  setPttLog(roleText(from,
-    usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'),
-    usedModel + ' đã dịch xong. ' + (pttAutoSpeak ? 'Đang chuẩn bị ' + pttTtsLabel(target) + '...' : 'Âm thanh đang tắt.')
-  ));
+  setPttLog(usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'));
   if (out) speakPttText(out, target);
 }
 
 function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   const log = document.getElementById('pttLog');
   if (!log) return;
-  if (log.querySelector('.empty') || log.querySelector('.ptt-status') || /Çeviriliyor|Çeviriyor|Đang dịch|Ceviriliyor|Ceviriyor|Dang dich/i.test(log.textContent || '')) log.textContent = '';
+  log.querySelector('.empty')?.remove();
+  log.querySelectorAll('.ptt-status').forEach(node => node.remove());
   const turn = document.createElement('div');
   turn.className = 'ptt-turn';
   const src = document.createElement('div');
@@ -5838,8 +5833,8 @@ function clearPttLog() {
 }
 function pttManual(from) {
   const text = (document.getElementById('pttInput')?.value || '').trim();
-  if (!text) { setPttLog(roleText(from, 'Önce bir şey yaz ya da bayrağa basıp konuş.', 'Hãy viết trước hoặc bấm cờ để nói.')); return; }
-  pttTranslate(text, from).catch(e => setPttLog(roleText(from, 'Bas-konuş hatası: ', 'Lỗi bấm nói: ') + normalizeApiError(e && e.message ? e.message : String(e), from)));
+  if (!text) { setPttLog('Önce bir şey yaz ya da bayrağa basıp konuş.'); return; }
+  pttTranslate(text, from).catch(e => setPttLog('Bas-konuş hatası: ' + normalizeApiError(e && e.message ? e.message : String(e), from)));
 }
 async function startPttVoice(from) {
   const btn = document.getElementById(from === 'tr' ? 'pttTrBtn' : 'pttViBtn');
@@ -5853,7 +5848,7 @@ async function startPttVoice(from) {
   if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
   btn.dataset.recRole = from;
   btn.classList.add('recording');
-  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': ' + roleText(from, 'Dinliyorum...', 'Đang nghe...');
+  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': Dinliyorum...';
   setPttLog(listenText);
   try {
     await tryRequestWakeLock();
@@ -5880,18 +5875,15 @@ async function startPttVoice(from) {
       try {
         const blob = new Blob(chunks,{type:mt});
         const tooShort = Date.now() - recStarted < 700 || blob.size < MIN_AUDIO_BLOB_SIZE;
-        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || tooShort || chunks.length===0){ noteNoSpeechStop(); setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy tiếng. Thử lại.')); return; }
+        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || tooShort || chunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.'); return; }
         resetNoSpeechStops();
-        setPttLog(roleText(from,
-          transcribeEngineLabel() + ' ile ses yazıya çevriliyor...',
-          'Đang chuyển giọng nói thành chữ bằng ' + transcribeEngineLabel() + '...'
-        ));
+        setPttLog(transcribeEngineLabel() + ' ile ses yazıya çevriliyor...');
         const text = await transcribeVoice(blob, from);
-        if(!text){ setPttLog(roleText(from, 'Ses metne çevrilemedi.', 'Không chuyển được giọng nói thành chữ.')); return; }
+        if(!text){ setPttLog('Ses metne çevrilemedi.'); return; }
         const input = document.getElementById('pttInput'); if (input) input.value = text;
         await pttTranslate(text, from);
       } catch(e) {
-        setPttLog(roleText(from, 'Bas-konuş hatası: ', 'Lỗi bấm nói: ') + normalizeApiError(e && e.message ? e.message : String(e), from));
+        setPttLog('Bas-konuş hatası: ' + normalizeApiError(e && e.message ? e.message : String(e), from));
       }
     };
     rec.start(120);
@@ -5912,7 +5904,7 @@ async function startPttVoice(from) {
      if(recStream){recStream.getTracks().forEach(t=>t.stop()); recStream=null;}
      resetMicrophoneAudioContext();
      releaseWakeLock();
-    setPttLog(roleText(from, 'Mikrofon izni gerekli: ', 'Cần quyền micro: ') + (e.message || e));
+    setPttLog('Mikrofon izni gerekli: ' + (e.message || e));
   }
 }
 
@@ -7146,8 +7138,12 @@ async function requestMicrophoneStream(kind='mic') {
   const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
   stream.getAudioTracks().forEach(track => {
     track.onended = () => {
-      if (kind === 'ptt') setPttLog(roleText(document.querySelector('.roundflag.recording')?.dataset.recRole || myRole, 'Mikrofon kapandı. Tekrar dene.', 'Micro đã tắt. Thử lại.'));
-      else if (kind === 'live') { setRealLiveStatus(uiText('Mikrofon kapandı. Tekrar başlat.', 'Micro đã tắt. Hãy bật lại.')); stopGeminiLive(); }
+      if (kind === 'ptt') setPttLog('Mikrofon kapandı. Tekrar dene.');
+      else if (kind === 'live') {
+        setRealLiveStatus('Mikrofon kapandı. Tekrar başlat.');
+        if (typeof stopPseudoLive === 'function') stopPseudoLive(true);
+        else stopGeminiLive();
+      }
       else if (kind === 'mic') console.warn('Mikrofon OS tarafindan kapatildi.');
       stopRec();
     };
@@ -7166,7 +7162,7 @@ function showRecCountdown(btn, start, now, kind) {
   if (!left) return;
   if (kind === 'ptt') {
     const role = btn?.dataset.recRole || myRole;
-    if (btn) btn.innerHTML = '<span style="font-size:42px;font-weight:950">' + left + '</span><small>' + roleText(role, 'Kapanıyor', 'Sắp dừng') + '</small>';
+    if (btn) btn.innerHTML = '<span style="font-size:42px;font-weight:950">' + left + '</span><small>Kapanıyor</small>';
   } else if (btn) {
     btn.textContent = left;
   }
@@ -7365,7 +7361,7 @@ function getLiveSettings() {
 function saveLiveSettings() {
   const response = document.getElementById('liveResponseSelect')?.value || 'TEXT_TTS';
   const saver = document.getElementById('liveSaverToggle')?.checked !== false;
-  localStorage.setItem('askviet_live_response', response === 'TEXT' ? 'TEXT' : 'TEXT_TTS');
+  localStorage.setItem('askviet_live_response', response === 'TEXT' || response === 'AUDIO' ? response : 'TEXT_TTS');
   localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
   syncLiveSettingsUI();
 }
@@ -7451,6 +7447,23 @@ function liveRepeatNotice() {
   if (pseudoLiveLastText) speakLastLive();
 }
 
+function pickMediaRecorderMime() {
+  if (!window.MediaRecorder) return '';
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac',
+    'audio/ogg;codecs=opus'
+  ];
+  for (const type of types) {
+    try {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) return type;
+    } catch {}
+  }
+  return '';
+}
+
 function speakLastLive() {
   if (pseudoLiveLastText) speak(pseudoLiveLastText, pseudoLiveLastTarget || 'vi', null, true).catch(()=>{});
 }
@@ -7476,7 +7489,7 @@ async function startPseudoLive() {
   pseudoLiveProcessor.onaudioprocess=tickPseudoLive;
   updateLiveMainButton(true);
   document.getElementById('realLiveBtn')?.classList.add('live-on');
-  setRealLiveStatus('Dinliyorum | Đang nghe');
+  setRealLiveStatus('Dinliyorum');
   appendRealLiveLog('Live başladı. Transkript: ' + liveEngineName(getTranscribeEngine()), 'status');
 }
 
@@ -7499,7 +7512,7 @@ function stopPseudoLive(silent=false) {
   updateLiveMainButton(false);
   document.getElementById('realLiveBtn')?.classList.remove('live-on');
   releaseWakeLock();
-  if (!silent) setRealLiveStatus('Live durdu | Live đã dừng');
+  if (!silent) setRealLiveStatus('Live durdu');
 }
 
 function tickPseudoLive() {
@@ -7528,7 +7541,16 @@ function pseudoLiveSegmentAge() {
 function beginPseudoLiveSegment() {
   if (!pseudoLiveStream || pseudoLiveSegmentActive) return;
   pseudoLiveChunks=[];
-  const rec = new MediaRecorder(pseudoLiveStream, { mimeType: pickMediaRecorderMime() });
+  let rec;
+  try {
+    const mimeType = pickMediaRecorderMime();
+    rec = mimeType ? new MediaRecorder(pseudoLiveStream, { mimeType }) : new MediaRecorder(pseudoLiveStream);
+  } catch (err) {
+    setRealLiveStatus('Kayıt başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
+    appendRealLiveLog('Kayıt başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    stopPseudoLive(true);
+    return;
+  }
   rec._startedAt=Date.now();
   rec.ondataavailable=e=>{ if (e.data && e.data.size) pseudoLiveChunks.push(e.data); };
   rec.onstop=()=>{
@@ -7541,8 +7563,14 @@ function beginPseudoLiveSegment() {
   };
   pseudoLiveRecorder=rec;
   pseudoLiveSegmentActive=true;
-  setRealLiveStatus('Ses alınıyor | Đang nghe giọng nói');
-  rec.start();
+  setRealLiveStatus('Ses alınıyor');
+  try {
+    rec.start();
+  } catch (err) {
+    pseudoLiveSegmentActive=false;
+    setRealLiveStatus('Kayıt başlayamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
+    appendRealLiveLog('Kayıt başlayamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+  }
 }
 
 function finishPseudoLiveSegment() {
@@ -7564,7 +7592,7 @@ async function processPseudoLiveQueue() {
     }
   } finally {
     pseudoLiveProcessing=false;
-    if (pseudoLiveRunning) setRealLiveStatus('Dinliyorum | Đang nghe');
+    if (pseudoLiveRunning) setRealLiveStatus('Dinliyorum');
   }
 }
 
@@ -7586,20 +7614,31 @@ async function handlePseudoLiveBlob(blob) {
     return;
   }
   const srcText=String(data.text || '').trim();
-  if (!srcText || isBadLiveTranscript(srcText)) return;
-  const from=guessLiveSourceRole(srcText);
-  if (!from) return;
+  if (!srcText) {
+    setRealLiveStatus('Ses algılanmadı');
+    return;
+  }
+  if (isBadLiveTranscript(srcText)) {
+    setRealLiveStatus('Şüpheli transkript yok sayıldı');
+    appendRealLiveLog('Yok sayıldı: ' + srcText, 'status');
+    return;
+  }
+  const guessed=guessLiveSourceRole(srcText);
+  const from=guessed || 'tr';
+  if (!guessed) appendRealLiveLog('Dil net değildi, Türkçe varsayıldı: ' + srcText, 'status');
   const target=from === 'tr' ? 'vi' : 'tr';
   setRealLiveStatus('Çevriliyor: ' + modelName(selectedModel));
   try {
     const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
     const translated=String(tr.translation || '').trim();
     if (!translated) return;
-    appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
+    if (settings.response !== 'AUDIO') {
+      appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
+    }
     pseudoLiveLastText=translated;
     pseudoLiveLastTarget=target;
-    if (settings.response === 'TEXT_TTS') {
-      setRealLiveStatus('Seslendiriliyor: ' + getTtsSettings().model);
+    if (settings.response === 'TEXT_TTS' || settings.response === 'AUDIO') {
+      setRealLiveStatus('Seslendiriliyor: ' + ttsModelLabel(getTtsSettings().model));
       await speak(translated, target, null, true);
     }
   } catch (err) {
@@ -7615,7 +7654,7 @@ function liveEngineName(engine) {
 
 function isBadLiveTranscript(text) {
   const clean=String(text || '').trim();
-  if (clean.length < 2) return true;
+  if (clean.length < 2 && !/[ừừờờạàáảãăâđêôơư]/i.test(clean)) return true;
   if (/thanks for watching|subscribe|subtitle|subtitles|watching|спасибо|谢谢|ありがとう/i.test(clean)) return true;
   return false;
 }
