@@ -220,8 +220,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .chat-model-select{max-width:92px;padding:5px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;outline:none}
 .status-pill{font-size:11px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap;cursor:pointer;font-weight:800}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
-.status-pill.mode-toggle{min-width:78px;border-color:#6d28d9;background:#201331;color:#ddd}
-.status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#a78bfa;background:#7c3aed;color:#fff;box-shadow:0 0 0 1px rgba(167,139,250,.25),0 5px 14px rgba(124,58,237,.22)}
+.status-pill.mode-toggle{min-width:78px;border-color:#7c3aed;background:rgba(18,13,28,.64);color:#eadcff;box-shadow:inset 0 0 0 1px rgba(167,139,250,.14),0 4px 14px rgba(0,0,0,.18)}
+.status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#c4b5fd;background:rgba(124,58,237,.22);color:#fff;box-shadow:0 0 0 1px rgba(196,181,253,.26),0 0 16px rgba(124,58,237,.30)}
 .remote-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
 .remote-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
 .own-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
@@ -249,7 +249,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
 .real-live-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
 .panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid #171717}
-.panel-title{font-size:14px;font-weight:900;color:#c084fc}
+.panel-title{font-size:16px;font-weight:950;color:#f3e8ff;letter-spacing:.1px}
 .panel-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
 .ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
@@ -262,11 +262,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-action{padding:10px;border-radius:12px;border:1px solid var(--tr);background:var(--tr);color:#fff;font-weight:900;cursor:pointer}
 .ptt-action.vi{border-color:var(--vi);background:var(--vi)}
 .ptt-log,.real-live-log{flex:1;min-height:0;overflow:auto;padding:12px 14px;background:#070707;color:#c084fc;font-size:19px;font-weight:850;line-height:1.42;white-space:pre-wrap;word-break:break-word}
-.live-line{padding:7px 0;white-space:pre-wrap;word-break:break-word}
+.live-line{padding:9px 0 12px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word;border-bottom:1px solid rgba(255,255,255,.05)}
 .live-line.tr{color:#f9fafb}
 .live-line.vi{color:#d8b4fe}
 .live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
-.live-status{padding:10px 14px;border-bottom:1px solid #1b1b1b;color:#888;font-weight:850;font-size:13px;line-height:1.35;margin:0}
+.live-status{padding:10px 14px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
 .live-settings label{font-size:11px;font-weight:900;color:var(--muted)}
@@ -274,9 +274,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-check{display:flex!important;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:12px;font-weight:900}
 .live-check input{width:16px;height:16px;accent-color:#7c3aed}
 .live-bar{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
-.live-listen{min-height:50px;border:none;border-radius:10px;background:#7c3aed;color:#fff;font-weight:900;font-size:16px;padding:0 14px}
-.live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
-.live-mini{min-height:50px;min-width:52px;padding:0 12px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850}
+.live-listen{min-height:48px;border:1px solid #22c55e;border-radius:10px;background:#16a34a;color:#fff;font-weight:950;font-size:15px;padding:0 14px;box-shadow:0 4px 14px rgba(22,163,74,.20)}
+.live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;box-shadow:0 4px 14px rgba(220,38,38,.25);animation:pulse 1.2s infinite}
+.live-mini{min-height:48px;min-width:50px;padding:0 12px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:900;font-size:16px}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
 .ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
 .ptt-src{color:#f2f2f2;font-size:15px;font-weight:400;line-height:1.4;white-space:pre-wrap}
@@ -287,7 +287,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .tool-btn.primary{background:#2563eb;border-color:#60a5fa;color:#fff}
 .tool-btn.danger{background:#dc2626;border-color:#ef4444}
 .tool-btn.confirm{background:#16a34a!important;border-color:#22c55e!important}
-.status-pill.live-on{border-color:#22c55e;color:#86efac}
+.status-pill.live-on{border-color:#a78bfa;color:#fff}
 @media (max-width: 520px){
   .flag-actions,.ptt-actions{grid-template-columns:1fr}.roundflag{min-height:76px}
   .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:12px;padding-left:12px;padding-right:12px}
@@ -436,6 +436,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       </div>
       <div class="header-tools">
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu">Bas-Konuş</button>
+        <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden>Live</button>
         <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
         <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarları">&#9881;</button>
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön">&#8617;</button>
@@ -447,9 +448,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <span class="model-badge" id="theirModelBadge">?</span>
     </div>
     <div class="presence-status" id="presenceStatus"></div>
-    <div class="mode-row" id="modeRow">
-      <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Gemini Live Translate" style="display:none" hidden>Live</button>
-    </div>
+    <div class="mode-row" id="modeRow" style="display:none"></div>
     <div id="settingsBtnArea" class="settings-controls">
       <div class="control-row">
         <div class="left-controls">
@@ -1072,7 +1071,10 @@ const TTS_DEFAULTS = {
 };
 
 function getTranscribeEngine() {
-  return localStorage.getItem('askviet_live_model') || 'openai_gemini';
+  const value = localStorage.getItem('askviet_live_model');
+  if (value === 'gemini_openai' || value === 'openai_gemini') return value;
+  if (value) localStorage.setItem('askviet_live_model', 'openai_gemini');
+  return 'openai_gemini';
 }
 function saveTranscribeEngineSetting() {
   const value = document.getElementById('transcribeEngineSelect')?.value === 'gemini_openai' ? 'gemini_openai' : 'openai_gemini';
@@ -3191,6 +3193,7 @@ function reactionBurstChange(before={}, after={}) {
 
 function showReactionBurst(emoji, count=1) {
   if (!emoji) return;
+  if (typeof getCurrentUiMode === 'function' && getCurrentUiMode() !== 'chat') return;
   const now = Date.now();
   if (now - lastReactionBurstAt < 260) return;
   lastReactionBurstAt = now;
@@ -4118,10 +4121,10 @@ function updateRemoteAudioStatus(id, status) {
     rec.btn.dataset.busy = '1';
     rec.btn.dataset.remoteAudioId = id;
     setSpeakBtn(rec.btn, true);
-  } else if (status === 'done' || status === 'cancelled' || status === 'error' || status === 'timeout' || status === 'ptt-busy') {
+  } else if (status === 'done' || status === 'cancelled' || status === 'error' || status === 'timeout' || status === 'ptt-busy' || status === 'live-busy') {
     clearRemoteAudioTimeout(id);
     resetRemoteAudioButton(id);
-    if (status === 'error' || status === 'ptt-busy') showTransientNotice(audioUnavailableText());
+    if (status === 'error' || status === 'ptt-busy' || status === 'live-busy') showTransientNotice(audioUnavailableText());
   }
 }
 
@@ -4137,9 +4140,9 @@ async function handleAudioRequest(id, req) {
   if (!req.ts || req.ts < audioListenStartedAt - 1500) return;
   if (Date.now() - req.ts > 60000) return;
   if (req.target !== myRole) return;
-  if (isPttModeOpen()) {
+  if (isPttModeOpen() || isLiveModeOpen()) {
     handledAudioRequests.add(id);
-    await fbSet(AUDIO_PATH + '/' + id + '/status', 'ptt-busy').catch(()=>{});
+    await fbSet(AUDIO_PATH + '/' + id + '/status', isLiveModeOpen() ? 'live-busy' : 'ptt-busy').catch(()=>{});
     setTimeout(() => fbRemove(AUDIO_PATH + '/' + id).catch(()=>{}), 500);
     return;
   }
@@ -4166,6 +4169,7 @@ async function sendQuickMisunderstood() {
 }
 
 function maybeAutoReadMessage(key) {
+  if (isLiveModeOpen() || isPttModeOpen()) return;
   const box = document.getElementById('msg-' + key);
   if (!box || !getAutoReadState(myRole) || autoReadDone.has(key)) return;
   const senderRole = box.dataset.role;
@@ -4188,7 +4192,7 @@ function scanAutoReadMessages() {
 
 function enqueueAutoSpeak(text, target) {
   if (!text || !target || !getAutoReadState(myRole)) return;
-  if (isPttModeOpen()) return;
+  if (isPttModeOpen() || isLiveModeOpen()) return;
   const id = autoSpeakQueueId(text, target);
   if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
   autoSpeakDeferred.add(id);
@@ -4202,6 +4206,7 @@ function autoSpeakQueueId(text, target) {
 
 function queueAutoSpeakRetry(text, target) {
   if (!text || !target || !getLocalAutoSpeakEnabled()) return;
+  if (isPttModeOpen() || isLiveModeOpen()) return;
   const id = autoSpeakQueueId(text, target);
   if (autoSpeakDeferred.has(id) || autoSpeakQueue.some(item => item.id === id)) return;
   autoSpeakDeferred.add(id);
@@ -4218,6 +4223,7 @@ function scheduleAutoSpeakQueue(ms=1200) {
 
 async function autoSpeakNowOrQueue(text, target) {
   if (!text || !target || !getLocalAutoSpeakEnabled()) return false;
+  if (isPttModeOpen() || isLiveModeOpen()) return false;
   const ok = await speak(text, target, null, true);
   if (!ok) queueAutoSpeakRetry(text, target);
   return ok;
@@ -4235,11 +4241,11 @@ async function speakPttText(text, target, btn=null) {
 
 async function processAutoSpeakQueue() {
   if (autoSpeakRunning) return;
-  if (isPttModeOpen()) { suspendChatAutoSpeakForPtt(false); return; }
+  if (isPttModeOpen() || isLiveModeOpen()) { suspendChatAutoSpeakForPtt(false); return; }
   autoSpeakRunning = true;
   try {
     while (autoSpeakQueue.length) {
-      if (isPttModeOpen()) { suspendChatAutoSpeakForPtt(false); break; }
+      if (isPttModeOpen() || isLiveModeOpen()) { suspendChatAutoSpeakForPtt(false); break; }
       if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); clearTimeout(autoSpeakRetryTimer); autoSpeakRetryTimer = null; break; }
       const itemSeq = autoSpeakInterruptSeq;
       while (isSpeaking) await sleep(180);
@@ -5480,6 +5486,16 @@ function isPttModeOpen() {
   return !!document.getElementById('pttPanel')?.classList.contains('open');
 }
 
+function isLiveModeOpen() {
+  return !!document.getElementById('realLivePanel')?.classList.contains('open');
+}
+
+function getCurrentUiMode() {
+  if (isLiveModeOpen()) return 'live';
+  if (isPttModeOpen()) return 'ptt';
+  return 'chat';
+}
+
 function suspendChatAutoSpeakForPtt(stopCurrent=false) {
   autoSpeakInterruptSeq++;
   clearTimeout(autoSpeakRetryTimer);
@@ -5518,10 +5534,11 @@ function updateModePanelState() {
 
 function updateModeVoiceControls() {
   const pttOpen = isPttModeOpen();
+  const liveOpen = isLiveModeOpen();
   const autoBtn = document.getElementById('autoReadStatus');
   const ownBtn = document.getElementById('ownAutoReadStatus');
-  if (autoBtn) autoBtn.style.display = pttOpen ? 'none' : '';
-  if (ownBtn) ownBtn.style.display = pttOpen || myRole !== 'tr' ? 'none' : '';
+  if (autoBtn) autoBtn.style.display = (pttOpen || liveOpen) ? 'none' : '';
+  if (ownBtn) ownBtn.style.display = (pttOpen || liveOpen || myRole !== 'tr') ? 'none' : '';
 }
 
 function setPttLog(text) {
@@ -5930,6 +5947,7 @@ function toggleRealLive(force) {
   return false;
 }
 function getCurrentUiMode() {
+  if (document.getElementById('realLivePanel')?.classList.contains('open')) return 'live';
   if (document.getElementById('pttPanel')?.classList.contains('open')) return 'ptt';
   return 'chat';
 }
@@ -5960,7 +5978,7 @@ function speakLastLive() {
   if (lastLiveText) speak(lastLiveText, lastLiveTarget || 'vi', null, true).catch(()=>{});
 }
 function liveRepeatNotice() {
-  appendRealLiveLog(uiText('Tekrar özelliği Gemini Live için hazır değil.', 'Tính năng lặp lại cho Gemini Live chưa sẵn sàng.'));
+  appendRealLiveLog(uiText('Tekrar özelliği Live için hazır değil.', 'Tính năng lặp lại cho Live chưa sẵn sàng.'));
 }
 function setRealLiveStatus(text) { const el = document.getElementById('realLiveStatus'); if (el) el.textContent = text || ''; }
 function appendRealLiveLog(text) {
@@ -5972,7 +5990,7 @@ function appendRealLiveLog(text) {
     el.scrollTop = el.scrollHeight;
   }
 }
-function clearRealLiveLog(){ const el = document.getElementById('realLiveLog'); if(el) el.innerHTML='<div class="empty">' + uiText('Dinleye basınca sürekli dinler; sessizlikte çevirip seslendirir.', 'Bấm nghe để nghe liên tục; khi im lặng sẽ dịch và đọc.') + '</div>'; }
+function clearRealLiveLog(){ const el = document.getElementById('realLiveLog'); if(el) el.innerHTML='<div class="empty">' + uiText('Dinle&#39;ye basınca sürekli dinler; sessizlikte çevirip seslendirir.', 'Bấm nghe để nghe liên tục; khi im lặng sẽ dịch và đọc.') + '</div>'; }
 function pcm16Base64(float32) {
   const buf = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buf);
@@ -6055,7 +6073,7 @@ async function startGeminiLive(from, modelQueue) {
   if (btn) btn.classList.add('recording');
   const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
   updateLiveMainButton(true);
-  setRealLiveStatus(uiText('Gemini Live setup deneniyor...', 'Đang thử setup Gemini Live...'));
+  setRealLiveStatus(uiText('Live hazırlanıyor...', 'Đang chuẩn bị Live...'));
   if (!modelQueue) appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
   let setupReady = false;
   let receivedAnyContent = false;
@@ -6122,7 +6140,7 @@ async function startGeminiLive(from, modelQueue) {
       return false;
     }
   };
-  setRealLiveStatus(uiText('Gemini Live bağlanıyor... Model: ', 'Đang kết nối Gemini Live... Model: ') + settings.model + ' / ' + settings.response);
+  setRealLiveStatus(uiText('Live bağlanıyor...', 'Đang kết nối Live...'));
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
   const ws = new WebSocket(wsUrl);
   const setupTimer = setTimeout(() => {
@@ -6198,7 +6216,7 @@ async function startGeminiLive(from, modelQueue) {
     }
   };
   ws.onerror = () => {
-    setRealLiveStatus(uiText('Gemini Live bağlantı hatası.', 'Lỗi kết nối Gemini Live.'));
+    setRealLiveStatus(uiText('Live bağlantı hatası.', 'Lỗi kết nối Live.'));
   };
   ws.onclose = e => {
     clearTimeout(setupTimer);
@@ -6210,7 +6228,7 @@ async function startGeminiLive(from, modelQueue) {
     liveStarting = false;
     const rest = candidates.slice(1);
     if (!liveManualStop && !setupReady && rest.length) {
-      setRealLiveStatus(uiText('Bu Live modeli açılmadı, diğer model deneniyor: ', 'Model Live này không mở được, đang thử model khác: ') + rest[0]);
+      setRealLiveStatus(uiText('Live açılamadı, diğer seçenek deneniyor.', 'Không mở được Live, đang thử lựa chọn khác.'));
       setTimeout(() => startGeminiLive(from, rest), 450);
       return;
     }
@@ -6618,7 +6636,7 @@ function setupChatControls() {
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
   const modeRow = document.getElementById('modeRow');
-  if (modeRow) modeRow.style.display = myRole === 'tr' ? '' : 'none';
+  if (modeRow) modeRow.style.display = 'none';
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
@@ -6698,7 +6716,7 @@ function applyLocaleUI() {
   const pttBtn = document.getElementById('pttModeBtn');
   if (pttBtn) { pttBtn.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş'; pttBtn.title = isVi ? 'Chế độ bấm nói' : 'Bas-konuş modu'; }
   const liveBtn = document.getElementById('realLiveBtn');
-  if (liveBtn) { liveBtn.textContent = 'Live'; liveBtn.title = isVi ? 'Dịch trực tiếp Gemini' : 'Gemini Live Translate'; }
+  if (liveBtn) { liveBtn.textContent = 'Live'; liveBtn.title = 'Live'; }
   const pttTitle = document.querySelector('#pttPanel .panel-title');
   if (pttTitle) pttTitle.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş';
   const pttHelp = document.getElementById('pttHelp');
@@ -6709,14 +6727,13 @@ function applyLocaleUI() {
   if (pttLog && /Hazir\.|Hazır\.|San sang\.|Sẵn sàng\./.test(pttLog.textContent)) pttLog.textContent = isVi ? 'Sẵn sàng.' : 'Hazır.';
   updatePttAutoSpeakUI();
   const liveTitle = document.querySelector('#realLivePanel .panel-title');
-  if (liveTitle) liveTitle.textContent = isVi ? 'Dịch Live Gemini' : 'Gemini Live Translate';
+  if (liveTitle) liveTitle.textContent = 'Live';
   const liveLabels = document.querySelectorAll('#realLivePanel .live-settings label');
-  if (liveLabels[0]) liveLabels[0].textContent = isVi ? 'Model Live' : 'Live model';
-  if (liveLabels[1]) liveLabels[1].textContent = isVi ? 'Kiểu trả lời' : 'Cevap tipi';
-  if (liveLabels[2]) {
-    const input = liveLabels[2].querySelector('input');
-    liveLabels[2].textContent = isVi ? 'Tiết kiệm' : 'Tasarruf';
-    if (input) liveLabels[2].prepend(input);
+  if (liveLabels[0]) liveLabels[0].textContent = 'Cevap tipi';
+  if (liveLabels[1]) {
+    const input = liveLabels[1].querySelector('input');
+    liveLabels[1].textContent = 'Tasarruf';
+    if (input) liveLabels[1].prepend(input);
   }
   const liveLog = document.getElementById('realLiveLog');
   if (liveLog && /Hazir\.|Hazır\.|San sang\.|Sẵn sàng\./.test(liveLog.textContent)) liveLog.textContent = isVi ? 'Sẵn sàng.' : 'Hazır.';
@@ -6725,8 +6742,8 @@ function applyLocaleUI() {
   const back = document.querySelector('button[onclick="goBack()"]');
   if (back) back.title = isVi ? 'Quay lại API và chọn bên' : 'API ve taraf seçimine dön';
   const labels = document.querySelectorAll('#ttsPanel label');
-  const viLabels = ['Mẫu giọng', 'Giọng TR', 'Giọng VI', 'Tốc độ'];
-  const trLabels = ['Ses modeli', 'TR sesi', 'VI sesi', 'Hız'];
+  const viLabels = ['Mẫu giọng', 'Bộ chuyển giọng thành chữ', 'Giọng TR', 'Giọng VI', 'Tốc độ'];
+  const trLabels = ['Ses modeli', 'Transkript motoru', 'TR sesi', 'VI sesi', 'Hız'];
   labels.forEach((label, i) => label.textContent = (isVi ? viLabels : trLabels)[i] || label.textContent);
   const save = document.querySelector('#ttsPanel .tts-save');
   if (save) save.textContent = isVi ? 'Lưu' : 'Kaydet';
@@ -6735,7 +6752,7 @@ function applyLocaleUI() {
   document.querySelectorAll('.panel-close').forEach(b => b.textContent = isVi ? 'Đóng' : 'Kapat');
   renderTextLists();
   const liveStatus = document.getElementById('realLiveStatus');
-  if (liveStatus && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Chưa nghe' : 'Dinleniyor değil';
+  if (liveStatus && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Sẵn sàng' : 'Hazır';
   updateAutoReadUI();
   updateNotifySoundUI();
   updateWebPushButton();
@@ -7254,7 +7271,7 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
   return transcribeVoice(blob, voiceRoleOverride || myRole || 'tr');
 }
 
-// ── AskViet pseudo Live: Android mantığı, eski Gemini Live yerine ─────────
+// ── AskViet pseudo Live: Android mantığı, eski canlı motor yerine ─────────
 let pseudoLiveRunning=false;
 let pseudoLiveStream=null;
 let pseudoLiveCtx=null;
@@ -7308,6 +7325,8 @@ function toggleRealLive(force) {
   const next = typeof force === 'boolean' ? force : !panel?.classList.contains('open');
   if (next) {
     togglePttMode(false);
+    toggleTtsSettings(false);
+    suspendChatAutoSpeakForPtt(true);
     syncLiveSettingsUI();
     if (panel) { panel.hidden=false; panel.style.display=''; }
     setPanelOpen('realLivePanel', 'realLiveBtn', true);
@@ -7361,7 +7380,7 @@ function appendRealLiveLog(text, cls='') {
 
 function clearRealLiveLog() {
   const el=document.getElementById('realLiveLog');
-  if (el) el.innerHTML='<div class="empty">Dinleye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div>';
+  if (el) el.innerHTML='<div class="empty">Dinle&#39;ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div>';
 }
 
 function liveRepeatNotice() {
@@ -7397,6 +7416,10 @@ async function startPseudoLive() {
   appendRealLiveLog('Live başladı. Transkript: ' + liveEngineName(getTranscribeEngine()), 'status');
 }
 
+async function startGeminiLive() {
+  return startPseudoLive();
+}
+
 function stopPseudoLive(silent=false) {
   pseudoLiveRunning=false;
   try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
@@ -7412,7 +7435,7 @@ function stopPseudoLive(silent=false) {
   updateLiveMainButton(false);
   document.getElementById('realLiveBtn')?.classList.remove('live-on');
   releaseWakeLock();
-  if (!silent) setRealLiveStatus('Live durdu');
+  if (!silent) setRealLiveStatus('Live durdu | Live đã dừng');
 }
 
 function tickPseudoLive() {
