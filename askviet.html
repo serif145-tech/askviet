@@ -268,6 +268,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
 .live-top{align-items:center}
 #realLivePanel .live-info-title{display:none}
+#realLivePanel .live-top{justify-content:flex-end}
 .live-status{padding:8px 14px 10px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
@@ -276,7 +277,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-check{display:flex!important;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:12px;font-weight:900}
 .live-check input{width:16px;height:16px;accent-color:#7c3aed}
 .live-bar{display:grid;grid-template-columns:1fr;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
-.live-listen{min-height:48px;border:1px solid #22c55e;border-radius:10px;background:#16a34a;color:#fff;font-weight:950;font-size:15px;padding:0 14px;box-shadow:0 4px 14px rgba(22,163,74,.20)}
+.live-bar{display:flex;justify-content:center;align-items:center}
+.live-listen{width:min(280px,78vw);min-height:56px;border:1px solid #22c55e;border-radius:12px;background:#16a34a;color:#fff;font-weight:950;font-size:16px;padding:0 18px;box-shadow:0 4px 14px rgba(22,163,74,.20)}
 .live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;box-shadow:0 4px 14px rgba(220,38,38,.25);animation:pulse 1.2s infinite}
 .live-mini{min-height:40px;min-width:44px;padding:0 10px;border:1px solid rgba(168,85,247,.55);border-radius:10px;background:rgba(124,58,237,.12);color:#f3e8ff;font-weight:900;font-size:18px;box-shadow:0 0 12px rgba(124,58,237,.16)}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
@@ -294,7 +296,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   .flag-actions,.ptt-actions{grid-template-columns:1fr}.roundflag{min-height:76px}
   .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:12px;padding-left:12px;padding-right:12px}
   .ptt-panel .roundflag,.roundflag{width:118px;height:118px;min-height:118px}
-  .live-bar{grid-template-columns:1fr 54px 54px 54px}
+  #realLivePanel .live-bar{display:flex;justify-content:center}
 }
 .tts-panel{display:none;position:absolute;right:0;top:34px;width:min(310px,calc(100vw - 18px));padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 35px rgba(0,0,0,.45);z-index:20}
 .tts-panel.open{display:grid;gap:8px}
@@ -7357,6 +7359,12 @@ let pseudoLiveChunks=[];
 let pseudoLiveSegmentActive=false;
 let pseudoLiveVoiceMs=0;
 let pseudoLiveSilentMs=0;
+let pseudoLiveCountdownValue=0;
+let pseudoLiveCurrentVoiceRunMs=0;
+let pseudoLiveLongestVoiceRunMs=0;
+let pseudoLiveStrongVoiceMs=0;
+let pseudoLivePeakLevel=0;
+let pseudoLiveSpeechAccepted=false;
 let pseudoLiveQueue=[];
 let pseudoLiveProcessing=false;
 let pseudoLiveLastText='';
@@ -7522,6 +7530,7 @@ async function startGeminiLive() {
 
 function stopPseudoLive(silent=false) {
   pseudoLiveRunning=false;
+  stopAudio();
   try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
   try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
   try { if (pseudoLiveAnalyser) pseudoLiveAnalyser.disconnect(); } catch {}
@@ -7531,7 +7540,9 @@ function stopPseudoLive(silent=false) {
     try { pseudoLiveStream.getTracks().forEach(t=>t.stop()); } catch {}
   }
   pseudoLiveStream=null; pseudoLiveCtx=null; pseudoLiveSource=null; pseudoLiveProcessor=null; pseudoLiveMuteGain=null; pseudoLiveAnalyser=null; pseudoLiveData=null;
-  pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveChunks=[]; pseudoLiveRecorder=null;
+  pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveCountdownValue=0;
+  pseudoLiveCurrentVoiceRunMs=0; pseudoLiveLongestVoiceRunMs=0; pseudoLiveStrongVoiceMs=0; pseudoLivePeakLevel=0; pseudoLiveSpeechAccepted=false;
+  pseudoLiveChunks=[]; pseudoLiveRecorder=null;
   updateLiveMainButton(false);
   document.getElementById('realLiveBtn')?.classList.remove('live-on');
   releaseWakeLock();
@@ -7541,16 +7552,42 @@ function stopPseudoLive(silent=false) {
 function tickPseudoLive() {
   if (!pseudoLiveRunning || !pseudoLiveAnalyser || !pseudoLiveData) return;
   const settings=getLiveSettings();
-  const v=rms(pseudoLiveAnalyser, pseudoLiveData);
-  const voiceThreshold=settings.saver ? 0.021 : 0.018;
-  const silenceLimit=settings.saver ? 1300 : 1900;
-  if (v > voiceThreshold) {
+  const level=liveSignalLevel(pseudoLiveAnalyser, pseudoLiveData);
+  const peakThreshold=settings.saver ? (2600 / 32768) : (2000 / 32768);
+  const rmsFloor=settings.saver ? 0.012 : 0.009;
+  const requiredVoiceMs=settings.saver ? 360 : 320;
+  const silenceLimit=settings.saver ? 1750 : 2500;
+  const hasVoice=level.peak >= peakThreshold && level.rms >= rmsFloor;
+  if (hasVoice) {
+    if (!pseudoLiveSegmentActive) beginPseudoLiveSegment();
+    if (!pseudoLiveSegmentActive) return;
     pseudoLiveVoiceMs += 120;
+    pseudoLiveCurrentVoiceRunMs += 120;
+    pseudoLiveLongestVoiceRunMs=Math.max(pseudoLiveLongestVoiceRunMs,pseudoLiveCurrentVoiceRunMs);
+    pseudoLivePeakLevel=Math.max(pseudoLivePeakLevel,level.peak);
+    if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += 120;
+    const minRunMs=Math.max(180,Math.round(requiredVoiceMs * 2 / 3));
+    const hasSpeechShape=pseudoLiveStrongVoiceMs >= 70
+      || pseudoLivePeakLevel >= peakThreshold * 2
+      || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 140;
+    pseudoLiveSpeechAccepted=pseudoLiveVoiceMs >= requiredVoiceMs
+      && pseudoLiveLongestVoiceRunMs >= minRunMs
+      && hasSpeechShape;
     pseudoLiveSilentMs = 0;
-    if (!pseudoLiveSegmentActive && pseudoLiveVoiceMs >= 300) beginPseudoLiveSegment();
+    if (pseudoLiveCountdownValue) {
+      pseudoLiveCountdownValue=0;
+      if (!pseudoLiveProcessing) setRealLiveStatus('Ses alınıyor');
+    }
   } else {
-    pseudoLiveVoiceMs = 0;
-    if (pseudoLiveSegmentActive) pseudoLiveSilentMs += 120;
+    if (pseudoLiveSegmentActive) {
+      pseudoLiveCurrentVoiceRunMs=0;
+      pseudoLiveSilentMs += 120;
+      const countdown=Math.max(1, Math.ceil((silenceLimit - pseudoLiveSilentMs) / 1000));
+      if (!pseudoLiveProcessing && countdown !== pseudoLiveCountdownValue) {
+        pseudoLiveCountdownValue=countdown;
+        setRealLiveStatus('Çeviriye geçiliyor: ' + countdown);
+      }
+    }
   }
   if (pseudoLiveSegmentActive && (pseudoLiveSilentMs >= silenceLimit || pseudoLiveSegmentAge() > 60000)) {
     finishPseudoLiveSegment();
@@ -7561,9 +7598,28 @@ function pseudoLiveSegmentAge() {
   return pseudoLiveRecorder && pseudoLiveRecorder._startedAt ? Date.now() - pseudoLiveRecorder._startedAt : 0;
 }
 
+function liveSignalLevel(analyser,data) {
+  analyser.getByteTimeDomainData(data);
+  let sum=0,peak=0;
+  for(let i=0;i<data.length;i++){
+    const sample=(data[i]-128)/128;
+    const abs=Math.abs(sample);
+    if(abs>peak) peak=abs;
+    sum+=sample*sample;
+  }
+  return {rms:Math.sqrt(sum/data.length),peak};
+}
+
 function beginPseudoLiveSegment() {
   if (!pseudoLiveStream || pseudoLiveSegmentActive) return;
   pseudoLiveChunks=[];
+  pseudoLiveVoiceMs=0;
+  pseudoLiveSilentMs=0;
+  pseudoLiveCurrentVoiceRunMs=0;
+  pseudoLiveLongestVoiceRunMs=0;
+  pseudoLiveStrongVoiceMs=0;
+  pseudoLivePeakLevel=0;
+  pseudoLiveSpeechAccepted=false;
   let rec;
   try {
     const mimeType = pickMediaRecorderMime();
@@ -7575,18 +7631,22 @@ function beginPseudoLiveSegment() {
     return;
   }
   rec._startedAt=Date.now();
+  rec._speechAccepted=false;
   rec.ondataavailable=e=>{ if (e.data && e.data.size) pseudoLiveChunks.push(e.data); };
   rec.onstop=()=>{
     const blob=new Blob(pseudoLiveChunks, { type: rec.mimeType || 'audio/webm' });
-    if (blob.size >= Math.max(700, MIN_AUDIO_BLOB_SIZE)) {
+    if (rec._speechAccepted && blob.size >= Math.max(700, MIN_AUDIO_BLOB_SIZE)) {
       if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
       pseudoLiveQueue.push({ blob, ts: Date.now() });
       processPseudoLiveQueue();
+    } else if (pseudoLiveRunning && !pseudoLiveProcessing) {
+      setRealLiveStatus('Dinliyorum');
     }
   };
   pseudoLiveRecorder=rec;
   pseudoLiveSegmentActive=true;
-  setRealLiveStatus('Ses alınıyor');
+  pseudoLiveCountdownValue=0;
+  if (!pseudoLiveProcessing) setRealLiveStatus('Ses alınıyor');
   try {
     rec.start();
   } catch (err) {
@@ -7599,8 +7659,15 @@ function beginPseudoLiveSegment() {
 function finishPseudoLiveSegment() {
   if (!pseudoLiveSegmentActive) return;
   pseudoLiveSegmentActive=false;
+  if (pseudoLiveRecorder) pseudoLiveRecorder._speechAccepted=!!pseudoLiveSpeechAccepted;
   pseudoLiveSilentMs=0;
   pseudoLiveVoiceMs=0;
+  pseudoLiveCountdownValue=0;
+  pseudoLiveCurrentVoiceRunMs=0;
+  pseudoLiveLongestVoiceRunMs=0;
+  pseudoLiveStrongVoiceMs=0;
+  pseudoLivePeakLevel=0;
+  pseudoLiveSpeechAccepted=false;
   try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
 }
 
@@ -7668,7 +7735,7 @@ async function handlePseudoLiveBlob(blob) {
     pseudoLiveLastText=translated;
     pseudoLiveLastTarget=target;
     if (settings.response === 'TEXT_TTS' || settings.response === 'AUDIO') {
-      setRealLiveStatus('Seslendiriliyor: ' + ttsModelLabel(getTtsSettings().model));
+      setRealLiveStatus('Seslendiriliyor: ' + pttTtsLabel(target));
       await speak(translated, target, null, true);
     }
   } catch (err) {
@@ -7700,8 +7767,14 @@ function actualTranscribeLabel(model) {
 
 function isBadLiveTranscript(text) {
   const clean=String(text || '').trim();
+  const lower=clean.toLocaleLowerCase('tr-TR');
   if (clean.length < 2 && !/[ừừờờạàáảãăâđêôơư]/i.test(clean)) return true;
   if (/thanks for watching|subscribe|subtitle|subtitles|watching|спасибо|谢谢|ありがとう/i.test(clean)) return true;
+  // Some transcription models occasionally echo their instruction instead of the audio.
+  if (/(bu ses yalnızca|bu ses yalnizca).*(türkçe|turkce).*(vietnamca)/i.test(lower)) return true;
+  if (/(hangi dil duyuluyorsa|çeviri yapma|ceviri yapma|altyazı\/video|altyazi\/video|ses boş veya belirsizse|ses bos veya belirsizse)/i.test(lower)) return true;
+  if (/(âm thanh này chỉ có thể).*(tiếng thổ nhĩ kỳ).*(tiếng việt)/i.test(lower)) return true;
+  if (/(không dịch|không trả lời|không chuyển sang ngôn ngữ khác|phụ đề\/video|âm thanh trống|không rõ ràng)/i.test(lower)) return true;
   return false;
 }
 
