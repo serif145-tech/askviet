@@ -267,8 +267,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-line.vi,.live-line.output{color:#d8b4fe}
 .live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
 .live-top{align-items:center}
-#realLivePanel .live-info-title{display:none}
-#realLivePanel .live-top{justify-content:flex-end}
+#realLivePanel .live-info-title{display:block;flex:1;min-width:0;font-size:14px;line-height:1.3;color:#f8fafc;white-space:normal}
+#realLivePanel .live-top{justify-content:space-between}
+#realLivePanel .live-status{display:none}
 .live-status{padding:8px 14px 10px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
@@ -283,7 +284,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-mini{min-height:40px;min-width:44px;padding:0 10px;border:1px solid rgba(168,85,247,.55);border-radius:10px;background:rgba(124,58,237,.12);color:#f3e8ff;font-weight:900;font-size:18px;box-shadow:0 0 12px rgba(124,58,237,.16)}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
 .ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
-.ptt-src{color:#f2f2f2;font-size:15px;font-weight:400;line-height:1.4;white-space:pre-wrap}
+.ptt-src{color:#f2f2f2;font-size:15px;font-weight:750;line-height:1.4;white-space:pre-wrap}
 .ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
 .ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
@@ -4304,7 +4305,7 @@ async function speakPttText(text, target, btn=null) {
   if (!text || !target || !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
-    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...');
+    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...', true);
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
@@ -5612,7 +5613,7 @@ function updateModeVoiceControls() {
   if (ownBtn) ownBtn.style.display = (pttOpen || liveOpen || myRole !== 'tr') ? 'none' : '';
 }
 
-function setPttLog(text) {
+function setPttLog(text, beforeLastTurn=false) {
   const el = document.getElementById('pttLog');
   if (!el) return;
   el.querySelector('.empty')?.remove();
@@ -5621,7 +5622,10 @@ function setPttLog(text) {
   const status = document.createElement('div');
   status.className = 'ptt-status';
   status.textContent = text;
-  el.appendChild(status);
+  const turns=el.querySelectorAll('.ptt-turn');
+  const lastTurn=turns.length ? turns[turns.length-1] : null;
+  if (beforeLastTurn && lastTurn) el.insertBefore(status,lastTurn);
+  else el.appendChild(status);
   el.scrollTop = el.scrollHeight;
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
@@ -5634,10 +5638,10 @@ function appendPttLog(text) {
     el.scrollTop = el.scrollHeight;
   }
 }
-async function pttTranslate(text, from) {
+async function pttTranslate(text, from, transcribeNotice='') {
   const target = from === 'tr' ? 'vi' : 'tr';
   const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
-  setPttLog(modelName(baseModel) + ' çeviriyor...');
+  setPttLog((transcribeNotice || '') + modelName(baseModel) + ' çeviriyor...');
   const data = await askVietServer('translate', {
     text,
     fromRole: from,
@@ -5646,7 +5650,7 @@ async function pttTranslate(text, from) {
   const out = String(data.translation || '').trim();
   renderPttTurn(text, out, from, target);
   const usedModel = modelName(data.model || data.usedModel || baseModel);
-  setPttLog(usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'));
+  setPttLog((transcribeNotice || '') + usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'), true);
   if (out) speakPttText(out, target);
 }
 
@@ -5659,10 +5663,10 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   turn.className = 'ptt-turn';
   const src = document.createElement('div');
   src.className = 'ptt-src';
-  src.textContent = sourceText;
+  src.textContent = (sourceRole === 'vi' ? '🇻🇳 ' : '🇹🇷 ') + sourceText;
   const dst = document.createElement('div');
   dst.className = 'ptt-dst';
-  dst.textContent = translatedText;
+  dst.textContent = (targetRole === 'vi' ? '🇻🇳 ' : '🇹🇷 ') + translatedText;
   const tools = document.createElement('div');
   tools.className = 'turn-tools';
 
@@ -5891,11 +5895,17 @@ async function startPttVoice(from) {
         const tooShort = Date.now() - recStarted < 700 || blob.size < MIN_AUDIO_BLOB_SIZE;
         if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || tooShort || chunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.'); return; }
         resetNoSpeechStops();
-        setPttLog(transcribeEngineLabel() + ' ile ses yazıya çevriliyor...');
-        const text = await transcribeVoice(blob, from);
+        const firstTranscribe=primaryTranscribeLabel(getTranscribeEngine());
+        setPttLog(firstTranscribe + ' ile ses yazıya çevriliyor...');
+        const transcribed = await transcribeVoiceDetailed(blob, from);
+        const text=transcribed.text;
         if(!text){ setPttLog('Ses metne çevrilemedi.'); return; }
+        const actualTranscribe=actualTranscribeLabel(transcribed.model || firstTranscribe);
+        const transcribeNotice=actualTranscribe && actualTranscribe !== firstTranscribe
+          ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanıldı. '
+          : '';
         const input = document.getElementById('pttInput'); if (input) input.value = text;
-        await pttTranslate(text, from);
+        await pttTranslate(text, from, transcribeNotice);
       } catch(e) {
         setPttLog('Bas-konuş hatası: ' + normalizeApiError(e && e.message ? e.message : String(e), from));
       }
@@ -7295,6 +7305,11 @@ async function startVoice() {
 }
 
 async function transcribeVoice(blob, sourceOverride) {
+  const result=await transcribeVoiceDetailed(blob,sourceOverride);
+  return result.text;
+}
+
+async function transcribeVoiceDetailed(blob, sourceOverride) {
   if (!blob || blob.size < MIN_AUDIO_BLOB_SIZE) throw new Error('Ses algılanmadı');
   const voiceRole = sourceOverride || myRole || 'tr';
   const base64 = await new Promise((resolve, reject) => {
@@ -7311,7 +7326,7 @@ async function transcribeVoice(blob, sourceOverride) {
   });
   const text = String(data.text || '').trim();
   if (!text) throw new Error('Ses metne çevrilemedi');
-  return text;
+  return {text,model:String(data.model || '')};
 }
 
 async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
@@ -7356,6 +7371,10 @@ let pseudoLiveAnalyser=null;
 let pseudoLiveData=null;
 let pseudoLiveRecorder=null;
 let pseudoLiveChunks=[];
+let pseudoLivePreRollChunks=[];
+let pseudoLivePreRollSamples=0;
+let pseudoLiveSampleRate=48000;
+let pseudoLiveSegmentStartedAt=0;
 let pseudoLiveSegmentActive=false;
 let pseudoLiveVoiceMs=0;
 let pseudoLiveSilentMs=0;
@@ -7365,6 +7384,8 @@ let pseudoLiveLongestVoiceRunMs=0;
 let pseudoLiveStrongVoiceMs=0;
 let pseudoLivePeakLevel=0;
 let pseudoLiveSpeechAccepted=false;
+let pseudoLiveLastTickAt=0;
+let pseudoLiveSilenceStartedAt=0;
 let pseudoLiveQueue=[];
 let pseudoLiveProcessing=false;
 let pseudoLiveLastText='';
@@ -7507,6 +7528,9 @@ async function startPseudoLive() {
   pseudoLiveProcessing=false;
   pseudoLiveStream=await requestMicrophoneStream('live');
   pseudoLiveCtx=await ensureAudioCtx();
+  pseudoLiveSampleRate=pseudoLiveCtx.sampleRate || 48000;
+  pseudoLivePreRollChunks=[];
+  pseudoLivePreRollSamples=0;
   pseudoLiveSource=pseudoLiveCtx.createMediaStreamSource(pseudoLiveStream);
   pseudoLiveAnalyser=pseudoLiveCtx.createAnalyser();
   pseudoLiveAnalyser.fftSize=1024;
@@ -7518,6 +7542,8 @@ async function startPseudoLive() {
   pseudoLiveSource.connect(pseudoLiveProcessor);
   pseudoLiveProcessor.connect(pseudoLiveMuteGain);
   pseudoLiveMuteGain.connect(pseudoLiveCtx.destination);
+  pseudoLiveLastTickAt=Date.now();
+  pseudoLiveSilenceStartedAt=0;
   pseudoLiveProcessor.onaudioprocess=tickPseudoLive;
   updateLiveMainButton(true);
   document.getElementById('realLiveBtn')?.classList.add('live-on');
@@ -7531,7 +7557,6 @@ async function startGeminiLive() {
 function stopPseudoLive(silent=false) {
   pseudoLiveRunning=false;
   stopAudio();
-  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
   try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
   try { if (pseudoLiveAnalyser) pseudoLiveAnalyser.disconnect(); } catch {}
   try { if (pseudoLiveMuteGain) pseudoLiveMuteGain.disconnect(); } catch {}
@@ -7542,30 +7567,39 @@ function stopPseudoLive(silent=false) {
   pseudoLiveStream=null; pseudoLiveCtx=null; pseudoLiveSource=null; pseudoLiveProcessor=null; pseudoLiveMuteGain=null; pseudoLiveAnalyser=null; pseudoLiveData=null;
   pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveCountdownValue=0;
   pseudoLiveCurrentVoiceRunMs=0; pseudoLiveLongestVoiceRunMs=0; pseudoLiveStrongVoiceMs=0; pseudoLivePeakLevel=0; pseudoLiveSpeechAccepted=false;
-  pseudoLiveChunks=[]; pseudoLiveRecorder=null;
+  pseudoLiveLastTickAt=0; pseudoLiveSilenceStartedAt=0;
+  pseudoLiveChunks=[]; pseudoLivePreRollChunks=[]; pseudoLivePreRollSamples=0; pseudoLiveSegmentStartedAt=0; pseudoLiveRecorder=null;
   updateLiveMainButton(false);
   document.getElementById('realLiveBtn')?.classList.remove('live-on');
   releaseWakeLock();
   if (!silent) setRealLiveStatus('Live durdu');
 }
 
-function tickPseudoLive() {
-  if (!pseudoLiveRunning || !pseudoLiveAnalyser || !pseudoLiveData) return;
+function tickPseudoLive(event) {
+  if (!pseudoLiveRunning) return;
+  const input=event?.inputBuffer?.getChannelData(0);
+  if (!input || !input.length) return;
+  const pcm=new Float32Array(input);
+  const wasActive=pseudoLiveSegmentActive;
+  if (wasActive) pseudoLiveChunks.push(pcm);
+  else pushPseudoLivePreRoll(pcm);
   const settings=getLiveSettings();
-  const level=liveSignalLevel(pseudoLiveAnalyser, pseudoLiveData);
+  const now=Date.now();
+  const elapsed=pseudoLiveLastTickAt ? Math.max(1,Math.min(250,now-pseudoLiveLastTickAt)) : 1;
+  pseudoLiveLastTickAt=now;
+  const level=livePcmSignalLevel(pcm);
   const peakThreshold=settings.saver ? (2600 / 32768) : (2000 / 32768);
-  const rmsFloor=settings.saver ? 0.012 : 0.009;
   const requiredVoiceMs=settings.saver ? 360 : 320;
   const silenceLimit=settings.saver ? 1750 : 2500;
-  const hasVoice=level.peak >= peakThreshold && level.rms >= rmsFloor;
+  const hasVoice=level.peak > peakThreshold;
   if (hasVoice) {
     if (!pseudoLiveSegmentActive) beginPseudoLiveSegment();
     if (!pseudoLiveSegmentActive) return;
-    pseudoLiveVoiceMs += 120;
-    pseudoLiveCurrentVoiceRunMs += 120;
+    pseudoLiveVoiceMs += elapsed;
+    pseudoLiveCurrentVoiceRunMs += elapsed;
     pseudoLiveLongestVoiceRunMs=Math.max(pseudoLiveLongestVoiceRunMs,pseudoLiveCurrentVoiceRunMs);
     pseudoLivePeakLevel=Math.max(pseudoLivePeakLevel,level.peak);
-    if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += 120;
+    if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += elapsed;
     const minRunMs=Math.max(180,Math.round(requiredVoiceMs * 2 / 3));
     const hasSpeechShape=pseudoLiveStrongVoiceMs >= 70
       || pseudoLivePeakLevel >= peakThreshold * 2
@@ -7574,6 +7608,7 @@ function tickPseudoLive() {
       && pseudoLiveLongestVoiceRunMs >= minRunMs
       && hasSpeechShape;
     pseudoLiveSilentMs = 0;
+    pseudoLiveSilenceStartedAt=0;
     if (pseudoLiveCountdownValue) {
       pseudoLiveCountdownValue=0;
       if (!pseudoLiveProcessing) setRealLiveStatus('Ses alınıyor');
@@ -7581,7 +7616,8 @@ function tickPseudoLive() {
   } else {
     if (pseudoLiveSegmentActive) {
       pseudoLiveCurrentVoiceRunMs=0;
-      pseudoLiveSilentMs += 120;
+      if (!pseudoLiveSilenceStartedAt) pseudoLiveSilenceStartedAt=now;
+      pseudoLiveSilentMs=now-pseudoLiveSilenceStartedAt;
       const countdown=Math.max(1, Math.ceil((silenceLimit - pseudoLiveSilentMs) / 1000));
       if (!pseudoLiveProcessing && countdown !== pseudoLiveCountdownValue) {
         pseudoLiveCountdownValue=countdown;
@@ -7595,14 +7631,13 @@ function tickPseudoLive() {
 }
 
 function pseudoLiveSegmentAge() {
-  return pseudoLiveRecorder && pseudoLiveRecorder._startedAt ? Date.now() - pseudoLiveRecorder._startedAt : 0;
+  return pseudoLiveSegmentStartedAt ? Date.now() - pseudoLiveSegmentStartedAt : 0;
 }
 
-function liveSignalLevel(analyser,data) {
-  analyser.getByteTimeDomainData(data);
+function livePcmSignalLevel(data) {
   let sum=0,peak=0;
   for(let i=0;i<data.length;i++){
-    const sample=(data[i]-128)/128;
+    const sample=data[i];
     const abs=Math.abs(sample);
     if(abs>peak) peak=abs;
     sum+=sample*sample;
@@ -7610,9 +7645,44 @@ function liveSignalLevel(analyser,data) {
   return {rms:Math.sqrt(sum/data.length),peak};
 }
 
+function pushPseudoLivePreRoll(pcm) {
+  pseudoLivePreRollChunks.push(pcm);
+  pseudoLivePreRollSamples+=pcm.length;
+  const maxSamples=Math.round((pseudoLiveSampleRate || 48000) * 0.65);
+  while (pseudoLivePreRollSamples > maxSamples && pseudoLivePreRollChunks.length > 1) {
+    const removed=pseudoLivePreRollChunks.shift();
+    pseudoLivePreRollSamples-=removed?.length || 0;
+  }
+}
+
+function makePseudoLiveWav(chunks,sampleRate) {
+  const valid=chunks.filter(chunk=>chunk && chunk.length);
+  const total=valid.reduce((sum,chunk)=>sum+chunk.length,0);
+  const buffer=new ArrayBuffer(44 + total * 2);
+  const view=new DataView(buffer);
+  const ascii=(offset,text)=>{for(let i=0;i<text.length;i++)view.setUint8(offset+i,text.charCodeAt(i));};
+  const rate=Math.round(sampleRate || 48000);
+  ascii(0,'RIFF'); view.setUint32(4,36+total*2,true); ascii(8,'WAVE');
+  ascii(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+  view.setUint32(24,rate,true); view.setUint32(28,rate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+  ascii(36,'data'); view.setUint32(40,total*2,true);
+  let offset=44;
+  for(const chunk of valid){
+    for(let i=0;i<chunk.length;i++){
+      const sample=Math.max(-1,Math.min(1,chunk[i]));
+      view.setInt16(offset,sample<0?sample*0x8000:sample*0x7fff,true);
+      offset+=2;
+    }
+  }
+  return new Blob([buffer],{type:'audio/wav'});
+}
+
 function beginPseudoLiveSegment() {
   if (!pseudoLiveStream || pseudoLiveSegmentActive) return;
-  pseudoLiveChunks=[];
+  pseudoLiveChunks=pseudoLivePreRollChunks.slice();
+  pseudoLivePreRollChunks=[];
+  pseudoLivePreRollSamples=0;
+  pseudoLiveSegmentStartedAt=Date.now();
   pseudoLiveVoiceMs=0;
   pseudoLiveSilentMs=0;
   pseudoLiveCurrentVoiceRunMs=0;
@@ -7620,46 +7690,19 @@ function beginPseudoLiveSegment() {
   pseudoLiveStrongVoiceMs=0;
   pseudoLivePeakLevel=0;
   pseudoLiveSpeechAccepted=false;
-  let rec;
-  try {
-    const mimeType = pickMediaRecorderMime();
-    rec = mimeType ? new MediaRecorder(pseudoLiveStream, { mimeType }) : new MediaRecorder(pseudoLiveStream);
-  } catch (err) {
-    setRealLiveStatus('Kayıt başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
-    appendRealLiveLog('Kayıt başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
-    stopPseudoLive(true);
-    return;
-  }
-  rec._startedAt=Date.now();
-  rec._speechAccepted=false;
-  rec.ondataavailable=e=>{ if (e.data && e.data.size) pseudoLiveChunks.push(e.data); };
-  rec.onstop=()=>{
-    const blob=new Blob(pseudoLiveChunks, { type: rec.mimeType || 'audio/webm' });
-    if (rec._speechAccepted && blob.size >= Math.max(700, MIN_AUDIO_BLOB_SIZE)) {
-      if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
-      pseudoLiveQueue.push({ blob, ts: Date.now() });
-      processPseudoLiveQueue();
-    } else if (pseudoLiveRunning && !pseudoLiveProcessing) {
-      setRealLiveStatus('Dinliyorum');
-    }
-  };
-  pseudoLiveRecorder=rec;
+  pseudoLiveSilenceStartedAt=0;
   pseudoLiveSegmentActive=true;
   pseudoLiveCountdownValue=0;
   if (!pseudoLiveProcessing) setRealLiveStatus('Ses alınıyor');
-  try {
-    rec.start();
-  } catch (err) {
-    pseudoLiveSegmentActive=false;
-    setRealLiveStatus('Kayıt başlayamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
-    appendRealLiveLog('Kayıt başlayamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
-  }
 }
 
 function finishPseudoLiveSegment() {
   if (!pseudoLiveSegmentActive) return;
+  const accepted=!!pseudoLiveSpeechAccepted;
+  const chunks=pseudoLiveChunks;
   pseudoLiveSegmentActive=false;
-  if (pseudoLiveRecorder) pseudoLiveRecorder._speechAccepted=!!pseudoLiveSpeechAccepted;
+  pseudoLiveChunks=[];
+  pseudoLiveSegmentStartedAt=0;
   pseudoLiveSilentMs=0;
   pseudoLiveVoiceMs=0;
   pseudoLiveCountdownValue=0;
@@ -7668,7 +7711,17 @@ function finishPseudoLiveSegment() {
   pseudoLiveStrongVoiceMs=0;
   pseudoLivePeakLevel=0;
   pseudoLiveSpeechAccepted=false;
-  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
+  pseudoLiveSilenceStartedAt=0;
+  if (accepted && chunks.length) {
+    const blob=makePseudoLiveWav(chunks,pseudoLiveSampleRate);
+    if (blob.size >= 1200) {
+      if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
+      pseudoLiveQueue.push({blob,ts:Date.now()});
+      processPseudoLiveQueue();
+      return;
+    }
+  }
+  if (pseudoLiveRunning && !pseudoLiveProcessing) setRealLiveStatus('Dinliyorum');
 }
 
 async function processPseudoLiveQueue() {
@@ -7767,14 +7820,9 @@ function actualTranscribeLabel(model) {
 
 function isBadLiveTranscript(text) {
   const clean=String(text || '').trim();
-  const lower=clean.toLocaleLowerCase('tr-TR');
   if (clean.length < 2 && !/[ừừờờạàáảãăâđêôơư]/i.test(clean)) return true;
-  if (/thanks for watching|subscribe|subtitle|subtitles|watching|спасибо|谢谢|ありがとう/i.test(clean)) return true;
-  // Some transcription models occasionally echo their instruction instead of the audio.
-  if (/(bu ses yalnızca|bu ses yalnizca).*(türkçe|turkce).*(vietnamca)/i.test(lower)) return true;
-  if (/(hangi dil duyuluyorsa|çeviri yapma|ceviri yapma|altyazı\/video|altyazi\/video|ses boş veya belirsizse|ses bos veya belirsizse)/i.test(lower)) return true;
-  if (/(âm thanh này chỉ có thể).*(tiếng thổ nhĩ kỳ).*(tiếng việt)/i.test(lower)) return true;
-  if (/(không dịch|không trả lời|không chuyển sang ngôn ngữ khác|phụ đề\/video|âm thanh trống|không rõ ràng)/i.test(lower)) return true;
+  if (/[\u0400-\u04ff\u0370-\u03ff\u0590-\u05ff\u0600-\u06ff\u3040-\u30ff\u3400-\u9fff]/i.test(clean)) return true;
+  if (/thank you|thanks for watching|subscribe|subtitle|subtitles|caption|watching|video|channel|like and subscribe|izlediğiniz|izlediginiz|altyazı|altyazi|spasibo|privet|poka|merci beaucoup|gracias|hello everyone/i.test(clean)) return true;
   return false;
 }
 
