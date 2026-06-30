@@ -262,6 +262,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-action{padding:10px;border-radius:12px;border:1px solid var(--tr);background:var(--tr);color:#fff;font-weight:900;cursor:pointer}
 .ptt-action.vi{border-color:var(--vi);background:var(--vi)}
 .ptt-log,.real-live-log{flex:1;min-height:0;overflow:auto;padding:12px 14px;background:#070707;color:#c084fc;font-size:19px;font-weight:850;line-height:1.42;white-space:pre-wrap;word-break:break-word}
+.live-line{padding:7px 0;white-space:pre-wrap;word-break:break-word}
+.live-line.tr{color:#f9fafb}
+.live-line.vi{color:#d8b4fe}
+.live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
 .live-status{padding:10px 14px;border-bottom:1px solid #1b1b1b;color:#888;font-weight:850;font-size:13px;line-height:1.35;margin:0}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
@@ -473,7 +477,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <label>Ses modeli</label>
           <select id="ttsModelSelect" onchange="saveTtsSettings()">
             <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
+            <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
             <option value="gpt-4o-tts">GPT-4o TTS</option>
+          </select>
+          <label>Transkript motoru</label>
+          <select id="transcribeEngineSelect" onchange="saveTranscribeEngineSetting()">
+            <option value="openai_gemini">GPT-4o mini -> Gemini 2.5 Flash-Lite</option>
+            <option value="gemini_openai">Gemini 2.5 Flash-Lite -> GPT-4o mini</option>
           </select>
           <div class="tts-grid">
             <div>
@@ -551,27 +561,19 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
   <div class="real-live-panel" id="realLivePanel" style="display:none" hidden>
     <div class="panel-top">
-      <div class="panel-title">Gemini Live Translate</div>
+      <div class="panel-title">Live</div>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
-      <button class="panel-close" onclick="toggleRealLive(false)">Kapat</button>
     </div>
-    <div class="live-status" id="realLiveStatus">Dinleniyor değil</div>
+    <div class="live-status" id="realLiveStatus">Hazır</div>
     <div class="live-settings" id="liveSettingsPanel">
-      <label>Live model</label>
-      <select id="liveModelSelect" onchange="saveLiveSettings()">
-        <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live</option>
-        <option value="gemini-3.5-live-translate-preview">Gemini 3.5 Live Translate</option>
-        <option value="gemini-2.5-flash-native-audio-preview-12-2025">Gemini 2.5 Native Audio</option>
-      </select>
       <label>Cevap tipi</label>
       <select id="liveResponseSelect" onchange="saveLiveSettings()">
-        <option value="TEXT">Text</option>
-        <option value="TEXT_TTS">Text + Ses</option>
-        <option value="AUDIO">Gemini Ses</option>
+        <option value="TEXT">Sadece yazı</option>
+        <option value="TEXT_TTS">Yazı + ses</option>
       </select>
       <label class="live-check"><input type="checkbox" id="liveSaverToggle" onchange="saveLiveSettings()" checked> Tasarruf</label>
     </div>
-    <div class="real-live-log" id="realLiveLog"><div class="empty">Dinle'ye basınca sürekli dinler; sessizlikte çevirip seslendirir.</div></div>
+    <div class="real-live-log" id="realLiveLog"><div class="empty">Dinle'ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div></div>
     <div class="live-bar">
       <button class="live-listen" id="liveMainBtn" onclick="toggleGeminiLiveMain()">&#9654; Dinle</button>
       <button class="live-mini" onclick="liveRepeatNotice()">&#8635;</button>
@@ -1069,6 +1071,15 @@ const TTS_DEFAULTS = {
   speed: '1'
 };
 
+function getTranscribeEngine() {
+  return localStorage.getItem('askviet_live_model') || 'openai_gemini';
+}
+function saveTranscribeEngineSetting() {
+  const value = document.getElementById('transcribeEngineSelect')?.value === 'gemini_openai' ? 'gemini_openai' : 'openai_gemini';
+  localStorage.setItem('askviet_live_model', value);
+  syncLiveSettingsUI();
+}
+
 // ── Şifre ─────────────────────────────────────────────────────────────────
 function updateLoginRoleUI() {
   const tr = document.getElementById('loginRoleTr');
@@ -1165,16 +1176,48 @@ function setSelectValue(id, value) {
   if (el && value) el.value = value;
 }
 
+function isGeminiTtsModel(model) {
+  return String(model || '').startsWith('gemini-');
+}
+
+function rebuildVoiceSelect(id, values, selected) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = selected || el.value;
+  el.innerHTML = '';
+  values.forEach(v => {
+    const option = document.createElement('option');
+    option.value = v;
+    option.textContent = v;
+    el.appendChild(option);
+  });
+  el.value = values.includes(current) ? current : values[0];
+}
+
+function syncVoiceSelectsForModel(model) {
+  if (isGeminiTtsModel(model)) {
+    const voices = ['Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe'];
+    rebuildVoiceSelect('ttsVoiceTrSelect', voices, localStorage.getItem('askviet_tts_voice_tr') || 'Puck');
+    rebuildVoiceSelect('ttsVoiceViSelect', voices, localStorage.getItem('askviet_tts_voice_vi') || 'Kore');
+  } else {
+    rebuildVoiceSelect('ttsVoiceTrSelect', ['nova','alloy','echo','fable','onyx','shimmer'], localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr);
+    rebuildVoiceSelect('ttsVoiceViSelect', ['cedar','nova','alloy','shimmer','fable','onyx'], localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi);
+  }
+}
+
 function syncTtsSettingsUI() {
   const s = getTtsSettings();
   setSelectValue('ttsModelSelect', s.model);
+  syncVoiceSelectsForModel(s.model);
   setSelectValue('ttsVoiceTrSelect', s.voiceTr);
   setSelectValue('ttsVoiceViSelect', s.voiceVi);
   setSelectValue('ttsSpeedSelect', String(s.speed));
+  setSelectValue('transcribeEngineSelect', getTranscribeEngine());
 }
 
 function saveTtsSettings() {
   const model = document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model;
+  syncVoiceSelectsForModel(model);
   const voiceTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
   const voiceVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
   const speed = document.getElementById('ttsSpeedSelect')?.value || TTS_DEFAULTS.speed;
@@ -5040,7 +5083,7 @@ function normalizeApiError(msg, role) {
   if (!raw) return isVi ? 'Lỗi không xác định' : 'Bilinmeyen hata';
   if (/api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized/i.test(raw)) return isVi ? 'Cần API key' : raw;
   if (/boş cevap|bos cevap|empty response|no response/i.test(raw)) return isVi ? 'Dịch vụ trả lời trống. Thử lại.' : raw;
-  if (/Ses metne cevrilemedi|Ses metne çevrilemedi|transcri/i.test(raw)) return isVi ? 'Không chuyển được giọng nói thành chữ.' : raw;
+  if (/Ses metne cevrilemedi|Ses metne çevrilemedi|transcri|transcription empty|empty transcription/i.test(raw)) return isVi ? 'Không chuyển được giọng nói thành chữ.' : 'Ses metne çevrilemedi.';
   if (/adresine ulasilamadi|network|failed to fetch|abort/i.test(raw)) return isVi ? 'Không kết nối được dịch vụ. Kiểm tra mạng và thử lại.' : raw;
   if (/[\u{1F300}-\u{1FAFF}]/u.test(raw)) return isVi ? 'Dịch vụ tạm thời không khả dụng. Thử lại sau.' : 'Servis geçici olarak kullanılamıyor. Biraz sonra tekrar dene.';
   if (/temporar|unavailable|busy|overload|503/i.test(raw)) return isVi ? 'Dịch vụ tạm thời không khả dụng. Thử lại sau.' : 'Servis geçici olarak kullanılamıyor. Biraz sonra tekrar dene.';
@@ -6575,11 +6618,14 @@ function setupChatControls() {
   const onlineCounter = document.getElementById('onlineCounter');
   if (onlineCounter) onlineCounter.style.display = myRole === 'tr' ? 'inline-flex' : 'none';
   const modeRow = document.getElementById('modeRow');
-  if (modeRow) modeRow.style.display = 'none';
+  if (modeRow) modeRow.style.display = myRole === 'tr' ? '' : 'none';
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
-  if (realLiveBtn) realLiveBtn.style.display = 'none';
+  if (realLiveBtn) {
+    realLiveBtn.style.display = myRole === 'tr' ? '' : 'none';
+    realLiveBtn.hidden = myRole !== 'tr';
+  }
   if (myRole !== 'tr') { togglePttMode(false); toggleRealLive(false); }
   applyLocaleUI();
   setSelectedModel(selectedModel, true);
@@ -7169,7 +7215,8 @@ async function transcribeVoice(blob, sourceOverride) {
   const data = await askVietServer('transcribe', {
     audioBase64: base64,
     mime: blob.type || 'audio/webm',
-    sourceRole: voiceRole
+    sourceRole: voiceRole,
+    transcribeEngine: getTranscribeEngine()
   });
   const text = String(data.text || '').trim();
   if (!text) throw new Error('Ses metne çevrilemedi');
@@ -7204,26 +7251,311 @@ async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
 }
 
 async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
-  if (!blob || blob.size < MIN_AUDIO_BLOB_SIZE) throw new Error('Ses algılanmadı');
-  const voiceRole = voiceRoleOverride || myRole || 'tr';
-  const key = extractApiKey(keyOverride || apiKey || localStorage.getItem('askviet_key') || '', 'openai');
-  if (!key) throw new Error('OpenAI API key gerekli');
-  const fd = new FormData();
-  fd.append('file', blob, 'audio.webm');
-  fd.append('model', 'whisper-1');
-  fd.append('language', voiceRole === 'tr' ? 'tr' : 'vi');
-  fd.append('temperature', '0');
-  fd.append('prompt', voiceRole === 'tr'
-    ? 'Gündelik Türkçe-Vietnamca özel sohbet. Sadece duyulan Türkçe konuşmayı yaz. YouTube, video, altyazı, müzik veya anlatım bağlamı uydurma. Ses boş ya da belirsizse boş bırak.'
-    : 'Cuộc trò chuyện riêng hằng ngày giữa tiếng Việt và tiếng Thổ Nhĩ Kỳ. Chỉ chép lại lời tiếng Việt nghe được. Không tự thêm ngữ cảnh YouTube, video, phụ đề, âm nhạc hoặc thuyết minh. Nếu âm thanh trống hoặc không rõ thì để trống.');
-  const resp = await withTimeout(fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {'Authorization': 'Bearer ' + key},
-    body: fd
-  }), 10000, 'OpenAI Whisper');
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error('OpenAI Whisper: ' + (data.error?.message || resp.statusText || ('HTTP ' + resp.status)));
-  return (data.text || '').trim();
+  return transcribeVoice(blob, voiceRoleOverride || myRole || 'tr');
+}
+
+// ── AskViet pseudo Live: Android mantığı, eski Gemini Live yerine ─────────
+let pseudoLiveRunning=false;
+let pseudoLiveStream=null;
+let pseudoLiveCtx=null;
+let pseudoLiveSource=null;
+let pseudoLiveProcessor=null;
+let pseudoLiveMuteGain=null;
+let pseudoLiveAnalyser=null;
+let pseudoLiveData=null;
+let pseudoLiveRecorder=null;
+let pseudoLiveChunks=[];
+let pseudoLiveSegmentActive=false;
+let pseudoLiveVoiceMs=0;
+let pseudoLiveSilentMs=0;
+let pseudoLiveQueue=[];
+let pseudoLiveProcessing=false;
+let pseudoLiveLastText='';
+let pseudoLiveLastTarget='vi';
+
+function getLiveSettings() {
+  return {
+    model: getTranscribeEngine(),
+    response: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
+    saver: localStorage.getItem('askviet_live_saver') !== '0'
+  };
+}
+
+function saveLiveSettings() {
+  const response = document.getElementById('liveResponseSelect')?.value || 'TEXT_TTS';
+  const saver = document.getElementById('liveSaverToggle')?.checked !== false;
+  localStorage.setItem('askviet_live_response', response === 'TEXT' ? 'TEXT' : 'TEXT_TTS');
+  localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
+  syncLiveSettingsUI();
+}
+
+function syncLiveSettingsUI() {
+  const settings = getLiveSettings();
+  const response = document.getElementById('liveResponseSelect');
+  const saver = document.getElementById('liveSaverToggle');
+  if (response) response.value = settings.response;
+  if (saver) saver.checked = settings.saver;
+  setSelectValue('transcribeEngineSelect', getTranscribeEngine());
+}
+
+function toggleRealLive(force) {
+  if (myRole !== 'tr') {
+    stopPseudoLive(true);
+    setPanelOpen('realLivePanel', 'realLiveBtn', false);
+    return false;
+  }
+  const panel = document.getElementById('realLivePanel');
+  const next = typeof force === 'boolean' ? force : !panel?.classList.contains('open');
+  if (next) {
+    togglePttMode(false);
+    syncLiveSettingsUI();
+    if (panel) { panel.hidden=false; panel.style.display=''; }
+    setPanelOpen('realLivePanel', 'realLiveBtn', true);
+    setRealLiveStatus('Hazır');
+  } else {
+    stopPseudoLive(true);
+    setPanelOpen('realLivePanel', 'realLiveBtn', false);
+  }
+  return next;
+}
+
+async function toggleGeminiLiveMain() {
+  if (pseudoLiveRunning) {
+    stopPseudoLive(false);
+    return;
+  }
+  if (myRole !== 'tr') return;
+  try {
+    primeAudioForGesture();
+    await unlockAudio(true);
+    await keepAudioAwake(90000);
+    await startPseudoLive();
+  } catch (err) {
+    setRealLiveStatus('Live başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
+    stopPseudoLive(true);
+  }
+}
+
+function updateLiveMainButton(on=false) {
+  const btn=document.getElementById('liveMainBtn');
+  if (!btn) return;
+  btn.innerHTML = on ? '&#9632; Durdur' : '&#9654; Dinle';
+  btn.classList.toggle('recording', !!on);
+}
+
+function setRealLiveStatus(text) {
+  const el=document.getElementById('realLiveStatus');
+  if (el) el.textContent = text || '';
+}
+
+function appendRealLiveLog(text, cls='') {
+  const el=document.getElementById('realLiveLog');
+  if (!el) return;
+  if (el.querySelector('.empty')) el.textContent='';
+  const div=document.createElement('div');
+  div.className='live-line ' + cls;
+  div.textContent=text;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
+
+function clearRealLiveLog() {
+  const el=document.getElementById('realLiveLog');
+  if (el) el.innerHTML='<div class="empty">Dinleye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div>';
+}
+
+function liveRepeatNotice() {
+  if (pseudoLiveLastText) speakLastLive();
+}
+
+function speakLastLive() {
+  if (pseudoLiveLastText) speak(pseudoLiveLastText, pseudoLiveLastTarget || 'vi', null, true).catch(()=>{});
+}
+
+async function startPseudoLive() {
+  stopPseudoLive(true);
+  pseudoLiveRunning=true;
+  pseudoLiveQueue=[];
+  pseudoLiveProcessing=false;
+  pseudoLiveStream=await requestMicrophoneStream('live');
+  pseudoLiveCtx=await ensureAudioCtx();
+  pseudoLiveSource=pseudoLiveCtx.createMediaStreamSource(pseudoLiveStream);
+  pseudoLiveAnalyser=pseudoLiveCtx.createAnalyser();
+  pseudoLiveAnalyser.fftSize=1024;
+  pseudoLiveData=new Uint8Array(pseudoLiveAnalyser.fftSize);
+  pseudoLiveProcessor=pseudoLiveCtx.createScriptProcessor(2048,1,1);
+  pseudoLiveMuteGain=pseudoLiveCtx.createGain();
+  pseudoLiveMuteGain.gain.value=0;
+  pseudoLiveSource.connect(pseudoLiveAnalyser);
+  pseudoLiveSource.connect(pseudoLiveProcessor);
+  pseudoLiveProcessor.connect(pseudoLiveMuteGain);
+  pseudoLiveMuteGain.connect(pseudoLiveCtx.destination);
+  pseudoLiveProcessor.onaudioprocess=tickPseudoLive;
+  updateLiveMainButton(true);
+  document.getElementById('realLiveBtn')?.classList.add('live-on');
+  setRealLiveStatus('Dinliyorum | Đang nghe');
+  appendRealLiveLog('Live başladı. Transkript: ' + liveEngineName(getTranscribeEngine()), 'status');
+}
+
+function stopPseudoLive(silent=false) {
+  pseudoLiveRunning=false;
+  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
+  try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
+  try { if (pseudoLiveAnalyser) pseudoLiveAnalyser.disconnect(); } catch {}
+  try { if (pseudoLiveMuteGain) pseudoLiveMuteGain.disconnect(); } catch {}
+  try { if (pseudoLiveSource) pseudoLiveSource.disconnect(); } catch {}
+  if (pseudoLiveStream) {
+    try { pseudoLiveStream.getTracks().forEach(t=>t.stop()); } catch {}
+  }
+  pseudoLiveStream=null; pseudoLiveCtx=null; pseudoLiveSource=null; pseudoLiveProcessor=null; pseudoLiveMuteGain=null; pseudoLiveAnalyser=null; pseudoLiveData=null;
+  pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveChunks=[]; pseudoLiveRecorder=null;
+  updateLiveMainButton(false);
+  document.getElementById('realLiveBtn')?.classList.remove('live-on');
+  releaseWakeLock();
+  if (!silent) setRealLiveStatus('Live durdu');
+}
+
+function tickPseudoLive() {
+  if (!pseudoLiveRunning || !pseudoLiveAnalyser || !pseudoLiveData) return;
+  const settings=getLiveSettings();
+  const v=rms(pseudoLiveAnalyser, pseudoLiveData);
+  const voiceThreshold=settings.saver ? 0.021 : 0.018;
+  const silenceLimit=settings.saver ? 1300 : 1900;
+  if (v > voiceThreshold) {
+    pseudoLiveVoiceMs += 120;
+    pseudoLiveSilentMs = 0;
+    if (!pseudoLiveSegmentActive && pseudoLiveVoiceMs >= 300) beginPseudoLiveSegment();
+  } else {
+    pseudoLiveVoiceMs = 0;
+    if (pseudoLiveSegmentActive) pseudoLiveSilentMs += 120;
+  }
+  if (pseudoLiveSegmentActive && (pseudoLiveSilentMs >= silenceLimit || pseudoLiveSegmentAge() > 60000)) {
+    finishPseudoLiveSegment();
+  }
+}
+
+function pseudoLiveSegmentAge() {
+  return pseudoLiveRecorder && pseudoLiveRecorder._startedAt ? Date.now() - pseudoLiveRecorder._startedAt : 0;
+}
+
+function beginPseudoLiveSegment() {
+  if (!pseudoLiveStream || pseudoLiveSegmentActive) return;
+  pseudoLiveChunks=[];
+  const rec = new MediaRecorder(pseudoLiveStream, { mimeType: pickMediaRecorderMime() });
+  rec._startedAt=Date.now();
+  rec.ondataavailable=e=>{ if (e.data && e.data.size) pseudoLiveChunks.push(e.data); };
+  rec.onstop=()=>{
+    const blob=new Blob(pseudoLiveChunks, { type: rec.mimeType || 'audio/webm' });
+    if (blob.size >= Math.max(700, MIN_AUDIO_BLOB_SIZE)) {
+      if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
+      pseudoLiveQueue.push({ blob, ts: Date.now() });
+      processPseudoLiveQueue();
+    }
+  };
+  pseudoLiveRecorder=rec;
+  pseudoLiveSegmentActive=true;
+  setRealLiveStatus('Ses alınıyor | Đang nghe giọng nói');
+  rec.start();
+}
+
+function finishPseudoLiveSegment() {
+  if (!pseudoLiveSegmentActive) return;
+  pseudoLiveSegmentActive=false;
+  pseudoLiveSilentMs=0;
+  pseudoLiveVoiceMs=0;
+  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
+}
+
+async function processPseudoLiveQueue() {
+  if (pseudoLiveProcessing) return;
+  pseudoLiveProcessing=true;
+  try {
+    while (pseudoLiveRunning && pseudoLiveQueue.length) {
+      const item=pseudoLiveQueue.shift();
+      if (!item || Date.now() - item.ts > 45000) continue;
+      await handlePseudoLiveBlob(item.blob);
+    }
+  } finally {
+    pseudoLiveProcessing=false;
+    if (pseudoLiveRunning) setRealLiveStatus('Dinliyorum | Đang nghe');
+  }
+}
+
+async function handlePseudoLiveBlob(blob) {
+  const settings=getLiveSettings();
+  const payload=await liveFileToBase64(blob);
+  setRealLiveStatus('Ses metne çevriliyor: ' + liveEngineName(settings.model));
+  let data;
+  try {
+    data=await askVietServer('transcribe', {
+      audioBase64: payload,
+      mime: blob.type || 'audio/webm',
+      sourceRole: 'auto',
+      live: true,
+      transcribeEngine: settings.model
+    });
+  } catch (err) {
+    appendRealLiveLog('Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    return;
+  }
+  const srcText=String(data.text || '').trim();
+  if (!srcText || isBadLiveTranscript(srcText)) return;
+  const from=guessLiveSourceRole(srcText);
+  if (!from) return;
+  const target=from === 'tr' ? 'vi' : 'tr';
+  setRealLiveStatus('Çevriliyor: ' + modelName(selectedModel));
+  try {
+    const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
+    const translated=String(tr.translation || '').trim();
+    if (!translated) return;
+    appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
+    pseudoLiveLastText=translated;
+    pseudoLiveLastTarget=target;
+    if (settings.response === 'TEXT_TTS') {
+      setRealLiveStatus('Seslendiriliyor: ' + getTtsSettings().model);
+      await speak(translated, target, null, true);
+    }
+  } catch (err) {
+    appendRealLiveLog('Live çeviri hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+  }
+}
+
+function liveEngineName(engine) {
+  return engine === 'gemini_openai'
+    ? 'Gemini 2.5 Flash-Lite -> GPT-4o mini'
+    : 'GPT-4o mini -> Gemini 2.5 Flash-Lite';
+}
+
+function isBadLiveTranscript(text) {
+  const clean=String(text || '').trim();
+  if (clean.length < 2) return true;
+  if (/thanks for watching|subscribe|subtitle|subtitles|watching|спасибо|谢谢|ありがとう/i.test(clean)) return true;
+  return false;
+}
+
+function guessLiveSourceRole(text) {
+  const s=translationLanguageSignals(text);
+  if (s.vi >= s.tr + 1) return 'vi';
+  if (s.tr >= s.vi + 1) return 'tr';
+  const lower=String(text || '').toLowerCase();
+  if (/[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]/i.test(lower)) return 'vi';
+  if (/[çğıöşü]/i.test(lower) || /\b(ben|sen|gel|git|evet|hayır|hayir|tamam|aşkım|askim|oldu|olur|yok|var)\b/i.test(lower)) return 'tr';
+  return '';
+}
+
+function appendPseudoLiveTurn(sourceText, translatedText, from, target, model, engine) {
+  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, from);
+  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, target);
+  appendRealLiveLog('Model: ' + modelName(model) + (engine ? ' / ' + engine : ''), 'status');
+}
+
+function liveFileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror=()=>reject(new Error('Ses okunamadı'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 window.addEventListener('beforeunload', () => {
