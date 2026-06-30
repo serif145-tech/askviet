@@ -1893,6 +1893,7 @@ async function loadOlderMessages() {
   if (!oldestVisibleMessage || !oldestVisibleMessage.ts) return;
   const btn = document.getElementById('loadOlderBtn');
   const oldText = btn ? btn.textContent : '';
+  const anchor = captureScrollAnchor();
   if (btn) {
     btn.disabled = true;
     btn.textContent = viMode() ? 'Đang tải...' : 'Yükleniyor...';
@@ -1908,12 +1909,12 @@ async function loadOlderMessages() {
       if (btn) btn.style.display = 'none';
       return;
     }
-    const anchor = captureScrollAnchor();
     currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + entries.length);
     entries.forEach(([k, v]) => updateOrRender(k, v));
     reorderRenderedMessages();
     refreshVisibleMessageWindow();
     restoreOlderMessagesAnchor(anchor);
+    setTimeout(() => restoreOlderMessagesAnchor(anchor), 80);
     updateLoadOlderButton(entries.length >= CHAT_PAGE_SIZE);
   } catch (e) {
     console.warn('Eski mesajlar yüklenemedi:', e);
@@ -1933,7 +1934,7 @@ function updateLoadOlderButton(show=true) {
 }
 
 function messageTime(key, msg) {
-  const ts = Number(msg?.ts || 0);
+  const ts = Number(msg?.ts || msg?.clientTs || msg?.createdAt || 0);
   return Number.isFinite(ts) && ts > 0 ? ts : 0;
 }
 
@@ -4223,7 +4224,14 @@ async function processAutoSpeakQueue() {
 function formatTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  const hhmm = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return hhmm;
+  return d.getDate().toString().padStart(2,'0') + '.' +
+    (d.getMonth() + 1).toString().padStart(2,'0') + ' ' + hhmm;
 }
 
 function updateJumpBottomButton() {
