@@ -436,6 +436,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       </div>
       <div class="header-tools">
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu">Bas-Konuş</button>
+        <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden>Live</button>
         <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
         <button class="back-btn" onclick="toggleTtsSettings()" title="Ses ayarları">&#9881;</button>
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön">&#8617;</button>
@@ -557,6 +558,28 @@ img,svg,video,canvas{max-width:100%;height:auto}
     </div>
   </div>
 
+  <div class="real-live-panel" id="realLivePanel" style="display:none" hidden>
+    <div class="panel-top">
+      <div class="panel-title">Live</div>
+      <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
+    </div>
+    <div class="live-status" id="realLiveStatus">Hazır</div>
+    <div class="live-settings" id="liveSettingsPanel">
+      <label>Cevap tipi</label>
+      <select id="liveResponseSelect" onchange="saveLiveSettings()">
+        <option value="TEXT">Sadece yazı</option>
+        <option value="TEXT_TTS">Yazı + ses</option>
+      </select>
+      <label class="live-check"><input type="checkbox" id="liveSaverToggle" onchange="saveLiveSettings()" checked> Tasarruf</label>
+    </div>
+    <div class="real-live-log" id="realLiveLog"><div class="empty">Dinle'ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div></div>
+    <div class="live-bar">
+      <button class="live-listen" id="liveMainBtn" onclick="toggleGeminiLiveMain()">&#9654; Dinle</button>
+      <button class="live-mini" onclick="liveRepeatNotice()">&#8635;</button>
+      <button class="live-mini speakBtn" onclick="speakLastLive()">&#9654;</button>
+      <button class="live-mini" onclick="clearRealLiveLog()">&#129529;</button>
+    </div>
+  </div>
 
   <div class="messages" id="messages">
     <button class="load-older-btn" id="loadOlderBtn" onclick="loadOlderMessages()" style="display:none">Daha eski mesajları göster</button>
@@ -620,7 +643,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-06-29-live-removed-pagination-fix-1';
+const APP_VERSION = '2026-06-30-html-polish-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -632,10 +655,14 @@ let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi
 let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
+let autoReadEnabledAt = { tr: 0, vi: 0 };
 let theirRole = null;
 let apiKey = '';
 let geminiApiKey = '';
 let claudeApiKey = '';
+let liveRecognizer = null;
+let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr', liveOutputMuteUntil = 0;
+let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
 let selectedModel = 'openai:gpt-5.5';
 let typingTimer = null;
 let remoteTypingHideTimer = null;
@@ -1053,6 +1080,28 @@ function getTranscribeEngine() {
 function saveTranscribeEngineSetting() {
   const value = document.getElementById('transcribeEngineSelect')?.value === 'gemini_openai' ? 'gemini_openai' : 'openai_gemini';
   localStorage.setItem('askviet_live_model', value);
+  syncLiveSettingsUI();
+}
+
+function transcribeEngineLabel(engine=getTranscribeEngine()) {
+  return engine === 'gemini_openai'
+    ? 'Gemini 2.5 Flash Lite → GPT-4o mini'
+    : 'GPT-4o mini → Gemini 2.5 Flash Lite';
+}
+
+function ttsModelLabel(model) {
+  const labels = {
+    'gpt-4o-mini-tts': 'GPT-4o mini TTS',
+    'gpt-4o-tts': 'GPT-4o TTS',
+    'gemini-2.5-flash-preview-tts': 'Gemini 2.5 Flash TTS'
+  };
+  return labels[model] || model || 'TTS';
+}
+
+function pttTtsLabel(target) {
+  const s = getTtsSettings();
+  const voice = target === 'vi' ? s.voiceVi : s.voiceTr;
+  return ttsModelLabel(s.model) + ' / ' + voice;
 }
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
@@ -1270,7 +1319,7 @@ function resumeSavedSession() {
       await start(role);
       setTimeout(() => {
         if (role === 'tr' && mode === 'ptt') togglePttMode(true);
-        else { togglePttMode(false); }
+        else { togglePttMode(false); toggleRealLive(false); }
       }, 250);
     } catch(e) { console.error('Otomatik role/mod dönülemedi:', e); }
   }, 120);
@@ -1462,11 +1511,32 @@ function restoreDeletedMessageTombstones() {
   const items = Array.from(deletedMessageSnapshots.values())
     .filter(item => item && item.key && item.role)
     .sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+  const range = currentRenderedMessageRange();
+  document.querySelectorAll('.msg[data-deleted="1"]').forEach(el => {
+    const ts = Number(el.dataset.ts || 0);
+    if (!range || !ts || ts < range.min || ts > range.max) {
+      renderedKeys.delete(el.dataset.key || el.id.replace(/^msg-/, ''));
+      el.remove();
+    }
+  });
   for (const item of items) {
     deletedMessageKeys.add(String(item.key));
-    renderMessage(String(item.key), Object.assign({}, item, { deleted:true }));
+    const ts = Number(item.ts || 0);
+    if (range && ts && ts >= range.min && ts <= range.max && !renderedKeys.has(String(item.key))) {
+      renderMessage(String(item.key), Object.assign({}, item, { deleted:true }));
+    }
   }
   for (const item of items) markRepliesToDeleted(item.key);
+}
+
+function currentRenderedMessageRange() {
+  const values = Array.from(document.querySelectorAll('.msg'))
+    .filter(el => el.dataset.deleted !== '1')
+    .map(el => Number(el.dataset.ts || 0))
+    .filter(Boolean)
+    .sort((a, b) => a - b);
+  if (!values.length) return null;
+  return { min: values[0], max: values[values.length - 1] };
 }
 
 function loadPersistentQueues() {
@@ -1919,24 +1989,21 @@ async function loadOlderMessages() {
   try {
     const data = await fbGetQuery(MSGS_PATH, {
       orderBy: 'ts',
-      endAt: Number(oldestVisibleMessage.ts),
-      limitToLast: CHAT_PAGE_SIZE + 1
+      endAt: Number(oldestVisibleMessage.ts) - 1,
+      limitToLast: CHAT_PAGE_SIZE
     }, true);
-    const entries = latestMessageEntries(data, CHAT_PAGE_SIZE + 1);
-    // Keep only entries we haven't rendered yet (same-ms boundary messages are
-    // included by endAt(ts) but the ones already on screen get filtered here).
-    const fresh = entries.filter(([k]) => !renderedKeys.has(k));
-    if (!fresh.length) {
+    const entries = latestMessageEntries(data, CHAT_PAGE_SIZE);
+    if (!entries.length) {
       if (btn) btn.style.display = 'none';
       return;
     }
-    currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + fresh.length);
-    fresh.forEach(([k, v]) => updateOrRender(k, v));
+    currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + entries.length);
+    entries.forEach(([k, v]) => updateOrRender(k, v));
     reorderRenderedMessages();
     refreshVisibleMessageWindow();
     restoreOlderMessagesAnchor(anchor);
     setTimeout(() => restoreOlderMessagesAnchor(anchor), 80);
-    updateLoadOlderButton(fresh.length >= CHAT_PAGE_SIZE);
+    updateLoadOlderButton(entries.length >= CHAT_PAGE_SIZE);
   } catch (e) {
     console.warn('Eski mesajlar yüklenemedi:', e);
   } finally {
@@ -1985,6 +2052,7 @@ function applyMessagesSnapshot(data, forceBottom = false) {
   reorderRenderedMessages();
   if (renderedKeys.size > currentMessageLimit) pruneRenderedMessages(currentMessageLimit);
   refreshVisibleMessageWindow();
+  restoreDeletedMessageTombstones();
   if (followBottom) scrollToBottom(true);
   else restoreScrollAnchor(scrollAnchor);
   updateLoadOlderButton(true);
@@ -2010,6 +2078,7 @@ function applyMessagesPatch(data) {
   }
   for (const key of deletedMessageKeys) markRepliesToDeleted(key);
   pruneRenderedMessages(currentMessageLimit);
+  restoreDeletedMessageTombstones();
   if (followBottom) scrollToBottom(true);
   else {
     if (incomingWhileAway) unseenIncomingCount = Math.min(99, unseenIncomingCount + incomingWhileAway);
@@ -2211,7 +2280,7 @@ function isSafeToAutoRefresh() {
   if (document.visibilityState && document.visibilityState !== 'visible') return false;
   if (typeof getCurrentUiMode === 'function' && getCurrentUiMode() !== 'chat') return false;
   if (Date.now() - lastChatUserActivityAt < AUTO_REFRESH_IDLE_MS) return false;
-  if (rec || recStream) return false;
+  if (rec || recStream || geminiLiveWs || geminiLiveStream || liveStarting) return false;
   if (pendingMessageQueue.size || outgoingInFlight.size || translationRunTokens.size) return false;
   if (isTyping || autoSpeakRunning || autoSpeakQueue.length || pendingBlockedAudio) return false;
   const input = document.getElementById('msgInput');
@@ -2295,7 +2364,7 @@ function renderMessage(key, msg) {
   div.dataset.imageUrl = msg.deleted ? '' : (msg.imageUrl || '');
   div.dataset.mediaUrl = msg.deleted ? '' : (msg.mediaUrl || msg.imageUrl || '');
   div.dataset.mime = msg.deleted ? '' : (msg.mime || '');
-  div.dataset.ts = messageTime(key, msg) || '';
+  div.dataset.ts = msg.ts || '';
   div.dataset.readTr = msg.read?.tr || '';
   div.dataset.readVi = msg.read?.vi || '';
   div.dataset.localPending = msg.localPending ? '1' : '';
@@ -2395,14 +2464,14 @@ function renderMessage(key, msg) {
     div.appendChild(btnRow);
   }
 
-  if (btnRow) btnRow.appendChild(reactions);
+  if (btnRow && !msg.deleted) btnRow.appendChild(reactions);
 
   const time = document.createElement('div');
   time.className = 'msg-time';
   time.textContent = formatTime(msg.ts);
   div.appendChild(time);
 
-  if (btnRow) {
+  if (btnRow && !msg.deleted) {
     if (isMine) {
       const deliveryRetry = document.createElement('button');
       deliveryRetry.className = 'msg-delivery-retry';
@@ -2694,7 +2763,7 @@ function bindSwipeReply(box, head, key) {
     head.style.transform = '';
     box.classList.remove('reply-swipe-ready', 'reply-swipe-left', 'reply-swipe-right');
   };
-  const interactiveTarget = target => !!target?.closest?.('button,a,.msg-react-btn,.msg-media-img,.msg-media-video');
+  const interactiveTarget = target => !!target?.closest?.('button,a,.msg-react-btn');
   const begin = (x, y, id) => {
     gestureId = id;
     startX = x;
@@ -2794,7 +2863,6 @@ function setMessageContent(el, msg) {
     deleted.className = 'msg-deleted';
     deleted.textContent = deletedMessageLabel();
     el.appendChild(deleted);
-    if (existingReact) el.appendChild(existingReact);
     return;
   }
   const mediaUrl = msg.mediaUrl || msg.imageUrl || '';
@@ -3644,28 +3712,41 @@ function maybeNotifyIncoming(key, msg) {
 async function playNotifySound(force=false) {
   if (!force && !notifySoundOn) return;
   try {
-    if (navigator.vibrate) navigator.vibrate(60);
+    if (navigator.vibrate) navigator.vibrate([28, 18, 28]);
   } catch {}
   try {
     const ctx = await ensureAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') await ctx.resume();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    gain.gain.value = 0.12;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, ctx.currentTime);
+    master.gain.exponentialRampToValueAtTime(0.105, ctx.currentTime + 0.018);
+    master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.285);
+    master.connect(ctx.destination);
+    const makeTone = (freq, start, dur, type='sine') => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.9, ctx.currentTime + start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.02);
+      setTimeout(() => { try { osc.disconnect(); gain.disconnect(); } catch {} }, (start + dur + 0.08) * 1000);
+    };
+    makeTone(784, 0, 0.115, 'triangle');
+    makeTone(1175, 0.105, 0.16, 'sine');
     setTimeout(async () => {
-      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch {}
+      try { master.disconnect(); } catch {}
       // Release the web audio session immediately after the short alert. Keeping
       // it active makes iOS treat the PWA as the primary media player.
       if (!isSpeaking && !rec && !pttAudioActive && ctx.state === 'running') {
         try { await ctx.suspend(); } catch {}
       }
-    }, 220);
+    }, 310);
   } catch {}
 }
 
@@ -4151,7 +4232,9 @@ function maybeAutoReadMessage(key) {
   const senderRole = box.dataset.role;
   if (!senderRole || senderRole === myRole) return;
   const ts = Number(box.dataset.ts || 0);
-  if (!ts || ts < chatListenStartedAt - 1500) {
+  const enabledAt = Number(autoReadEnabledAt[myRole] || 0);
+  const minAutoReadTs = Math.max(chatListenStartedAt - 1500, enabledAt ? enabledAt - 250 : 0);
+  if (!ts || ts < minAutoReadTs) {
     autoReadDone.add(key);
     return;
   }
@@ -4209,6 +4292,10 @@ async function speakPttText(text, target, btn=null) {
   if (!text || !target || !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
+    setPttLog(roleText(target,
+      pttTtsLabel(target) + ' ile seslendiriliyor...',
+      'Đang đọc bằng ' + pttTtsLabel(target) + '...'
+    ));
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
@@ -5161,13 +5248,12 @@ function markMessageDeleted(key, msg=null) {
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
   if (orig) {
-    const existingReact = orig.querySelector('.msg-react-btn');
     orig.textContent = '';
     const del = document.createElement('div');
     del.className = 'msg-deleted';
     del.textContent = deletedMessageLabel();
     orig.appendChild(del);
-    if (existingReact) orig.appendChild(existingReact);
+    box.querySelectorAll('.btn-row,.msg-react-btn').forEach(el => el.remove());
   }
   if (trans) {
     trans.textContent = '';
@@ -5451,6 +5537,7 @@ function persistSessionState(modeOverride) {
 function togglePttMode(force) {
   const open = setPanelOpen('pttPanel', 'pttModeBtn', force);
   if (open) {
+    toggleRealLive(false);
     suspendChatAutoSpeakForPtt(true);
   } else {
     updatePttAutoSpeakUI();
@@ -5462,7 +5549,7 @@ function isPttModeOpen() {
 }
 
 function isLiveModeOpen() {
-  return false;
+  return !!document.getElementById('realLivePanel')?.classList.contains('open');
 }
 
 function getCurrentUiMode() {
@@ -5502,7 +5589,8 @@ function updatePttAutoSpeakUI() {
 function updateModePanelState() {
   const chat = document.getElementById('chat');
   const pttOpen = document.getElementById('pttPanel')?.classList.contains('open');
-  if (chat) chat.classList.toggle('mode-panel-open', !!pttOpen);
+  const liveOpen = document.getElementById('realLivePanel')?.classList.contains('open');
+  if (chat) chat.classList.toggle('mode-panel-open', !!(pttOpen || liveOpen));
   updateModeVoiceControls();
 }
 
@@ -5546,6 +5634,11 @@ async function pttTranslate(text, from) {
   });
   const out = String(data.translation || '').trim();
   renderPttTurn(text, out, from, target);
+  const usedModel = modelName(data.model || data.usedModel || baseModel);
+  setPttLog(roleText(from,
+    usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'),
+    usedModel + ' đã dịch xong. ' + (pttAutoSpeak ? 'Đang chuẩn bị ' + pttTtsLabel(target) + '...' : 'Âm thanh đang tắt.')
+  ));
   if (out) speakPttText(out, target);
 }
 
@@ -5789,7 +5882,10 @@ async function startPttVoice(from) {
         const tooShort = Date.now() - recStarted < 700 || blob.size < MIN_AUDIO_BLOB_SIZE;
         if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || tooShort || chunks.length===0){ noteNoSpeechStop(); setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy tiếng. Thử lại.')); return; }
         resetNoSpeechStops();
-        setPttLog(roleText(from, 'Ses yazıya çevriliyor...', 'Đang chuyển giọng nói thành chữ...'));
+        setPttLog(roleText(from,
+          transcribeEngineLabel() + ' ile ses yazıya çevriliyor...',
+          'Đang chuyển giọng nói thành chữ bằng ' + transcribeEngineLabel() + '...'
+        ));
         const text = await transcribeVoice(blob, from);
         if(!text){ setPttLog(roleText(from, 'Ses metne çevrilemedi.', 'Không chuyển được giọng nói thành chữ.')); return; }
         const input = document.getElementById('pttInput'); if (input) input.value = text;
@@ -5828,18 +5924,393 @@ function normalizeLiveModel(model) {
   };
   return map[model] || model || 'gemini-3.1-flash-live-preview';
 }
+function getLiveSettings() {
+  return {
+    model: normalizeLiveModel(localStorage.getItem('askviet_live_model')),
+    response: localStorage.getItem('askviet_live_response') || 'TEXT',
+    saver: localStorage.getItem('askviet_live_saver') !== '0'
+  };
+}
 const LIVE_MODEL_FALLBACKS = [
   'gemini-3.5-live-translate-preview',
   'gemini-3.1-flash-live-preview'
 ];
+function liveModelCandidates(model) {
+  const first = normalizeLiveModel(model);
+  return [first, ...LIVE_MODEL_FALLBACKS.filter(m => m !== first)];
+}
+function liveSetupPayload(settings, source, target, modality) {
+  const isLiveTranslate = settings.model === 'gemini-3.5-live-translate-preview';
+  if (isLiveTranslate) {
+    const targetLanguageCode = target === 'Vietnamese' ? 'vi' : 'tr';
+    return {
+      setup: {
+        model: 'models/' + settings.model,
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          translationConfig: {
+            targetLanguageCode,
+            echoTargetLanguage: true
+          }
+        }
+      }
+    };
+  }
+  const prompt = 'You are a real-time translator for casual daily conversation between Turkish and Vietnamese. Translate spoken ' + source + ' to natural ' + target + '. Return only the translation, with no explanations, no guessed context, no platform names, no YouTube-style narration, and no extra commentary. If the audio is unclear or empty, return nothing.';
+  return {
+    setup: {
+      model: 'models/' + settings.model,
+      generationConfig: { responseModalities: ['AUDIO'] },
+      systemInstruction: { parts: [{ text: prompt }] },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      realtimeInputConfig: {
+        automaticActivityDetection: {
+          disabled: false,
+          silenceDurationMs: 1200
+        }
+      }
+    }
+  };
+}
+function liveAudioPayload(channel, sampleRate) {
+  const pcm = downsampleTo16k(channel, sampleRate || 48000);
+  return { realtimeInput: { audio: { data: pcm16Base64(pcm), mimeType: 'audio/pcm;rate=16000' } } };
+}
+function liveAudioEndPayload() {
+  return { realtimeInput: { audioStreamEnd: true } };
+}
+function liveSetupIsReady(data) {
+  return !!(data?.setupComplete || data?.setup_complete);
+}
+function liveResponseParts(data) {
+  const server = data?.serverContent || data?.server_content || {};
+  const turn = server.modelTurn || server.model_turn || data?.modelTurn || data?.model_turn || {};
+  return Array.isArray(turn.parts) ? turn.parts : [];
+}
+function liveOutputText(data) {
+  const server = data?.serverContent || data?.server_content || {};
+  return (server.outputTranscription?.text || server.output_transcription?.text || '').trim();
+}
+function syncLiveSettingsUI() {
+  const settings = getLiveSettings();
+  const model = document.getElementById('liveModelSelect');
+  const response = document.getElementById('liveResponseSelect');
+  const saver = document.getElementById('liveSaverToggle');
+  if (model) model.value = settings.model;
+  if (response) response.value = settings.response;
+  if (saver) saver.checked = settings.saver;
+}
+function saveLiveSettings() {
+  const model = normalizeLiveModel(document.getElementById('liveModelSelect')?.value || 'gemini-3.1-flash-live-preview');
+  const response = document.getElementById('liveResponseSelect')?.value || 'TEXT';
+  const saver = document.getElementById('liveSaverToggle')?.checked !== false;
+  localStorage.setItem('askviet_live_model', model);
+  localStorage.setItem('askviet_live_response', response);
+  localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
+}
+function toggleRealLive(force) {
+  stopGeminiLive(true, true);
+  setPanelOpen('realLivePanel', 'realLiveBtn', false);
+  return false;
+}
 function getCurrentUiMode() {
+  if (document.getElementById('realLivePanel')?.classList.contains('open')) return 'live';
   if (document.getElementById('pttPanel')?.classList.contains('open')) return 'ptt';
   return 'chat';
+}
+function toggleLiveSettings(force) {
+  const panel = document.getElementById('liveSettingsPanel');
+  if (!panel) return;
+  const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+}
+function updateLiveMainButton(on=false) {
+  const btn = document.getElementById('liveMainBtn');
+  if (!btn) return;
+  btn.innerHTML = on ? ('&#9632; ' + uiText('Durdur', 'Dừng')) : ('&#9654; ' + uiText('Dinle', 'Nghe'));
+  btn.classList.toggle('recording', !!on);
+}
+async function toggleGeminiLiveMain() {
+  if (geminiLiveWs || geminiLiveStream) stopGeminiLive();
+  else {
+    try { primeAudioForGesture(); await unlockAudio(true); await keepAudioAwake(90000); } catch {}
+    const from = myRole === 'vi' ? 'vi' : 'tr';
+    startGeminiLive(from).catch(err => {
+      setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err?.message || String(err), from));
+      stopGeminiLive(true, false);
+    });
+  }
+}
+function speakLastLive() {
+  if (lastLiveText) speak(lastLiveText, lastLiveTarget || 'vi', null, true).catch(()=>{});
+}
+function liveRepeatNotice() {
+  appendRealLiveLog(uiText('Tekrar özelliği Live için hazır değil.', 'Tính năng lặp lại cho Live chưa sẵn sàng.'));
+}
+function setRealLiveStatus(text) { const el = document.getElementById('realLiveStatus'); if (el) el.textContent = text || ''; }
+function appendRealLiveLog(text) {
+  const el = document.getElementById('realLiveLog');
+  const ready = uiText('Hazır.', 'Sẵn sàng.');
+  if (el) {
+    if (el.querySelector('.empty')) el.textContent = '';
+    el.textContent = (el.textContent && el.textContent !== ready ? el.textContent + '\n' : '') + text;
+    el.scrollTop = el.scrollHeight;
+  }
+}
+function clearRealLiveLog(){ const el = document.getElementById('realLiveLog'); if(el) el.innerHTML='<div class="empty">' + uiText('Dinle&#39;ye basınca sürekli dinler; sessizlikte çevirip seslendirir.', 'Bấm nghe để nghe liên tục; khi im lặng sẽ dịch và đọc.') + '</div>'; }
+function pcm16Base64(float32) {
+  const buf = new ArrayBuffer(float32.length * 2);
+  const view = new DataView(buf);
+  for (let i=0;i<float32.length;i++) { const sample=Math.max(-1,Math.min(1,float32[i])); view.setInt16(i*2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); }
+  let bin=''; const bytes=new Uint8Array(buf); for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function downsampleTo16k(input, sampleRate) {
+  if (sampleRate === 16000) return input;
+  const ratio = sampleRate / 16000;
+  const len = Math.max(1, Math.round(input.length / ratio));
+  const out = new Float32Array(len);
+  for (let i=0;i<len;i++) out[i] = input[Math.min(input.length-1, Math.round(i * ratio))] || 0;
+  return out;
 }
 function base64ToBytes(b64) {
   const bin = atob(b64); const bytes = new Uint8Array(bin.length);
   for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+function wavFromPcm16(base64, rate=24000) {
+  const pcm = base64ToBytes(base64);
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  function writeStr(off, str){ for(let i=0;i<str.length;i++) view.setUint8(off+i, str.charCodeAt(i)); }
+  writeStr(0,'RIFF'); view.setUint32(4,36+pcm.length,true); writeStr(8,'WAVE'); writeStr(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true); view.setUint32(24,rate,true); view.setUint32(28,rate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+  writeStr(36,'data'); view.setUint32(40,pcm.length,true);
+  return new Blob([header, pcm], {type:'audio/wav'});
+}
+async function playLiveAudio(base64, mimeType) {
+  let rate = 24000;
+  const m = String(mimeType || '').match(/rate=(\d+)/); if (m) rate = Number(m[1]) || rate;
+  const bytes = base64ToBytes(base64);
+  liveOutputMuteUntil = Date.now() + Math.max(1200, Math.ceil(bytes.length / Math.max(1, rate * 2) * 1000) + 650);
+  const blob = wavFromPcm16(base64, rate);
+  try {
+    await playBlob(blob, ++ttsToken, null, 'live');
+  } finally {
+    liveOutputMuteUntil = Math.min(liveOutputMuteUntil, Date.now() + 350);
+  }
+}
+function cleanupGeminiLiveAudio() {
+  try { if (geminiLiveProcessor) geminiLiveProcessor.disconnect(); } catch {}
+  try { if (geminiLiveMuteGain) geminiLiveMuteGain.disconnect(); } catch {}
+  try { if (geminiLiveSource) geminiLiveSource.disconnect(); } catch {}
+  if (geminiLiveStream) { try { geminiLiveStream.getTracks().forEach(t=>{ t.onended = null; t.stop(); }); } catch {} }
+  geminiLiveProcessor=null; geminiLiveMuteGain=null; geminiLiveSource=null; geminiLiveStream=null; geminiLiveCtx=null;
+}
+function stopGeminiLive(silent=false, manual=true) {
+  liveManualStop = manual;
+  cleanupGeminiLiveAudio();
+  try { if (geminiLiveWs) geminiLiveWs.close(); } catch {}
+  releaseWakeLock();
+  geminiLiveWs=null; liveStarting=false; liveActiveModel='';
+  document.querySelectorAll('#liveTrStartBtn,#liveViStartBtn').forEach(b=>b.classList.remove('recording'));
+  const b=document.getElementById('realLiveBtn'); if(b) b.classList.remove('live-on');
+  updateLiveMainButton(false);
+  if (!silent) setRealLiveStatus(uiText('Live durdu.', 'Live đã dừng.'));
+}
+async function startGeminiLive(from, modelQueue) {
+  const key = geminiApiKey || localStorage.getItem('askviet_gemini_key') || document.getElementById('geminiKeyInput')?.value.trim() || '';
+  if (!key) { setRealLiveStatus(uiText('Canlı çeviri şu an kapalı.', 'Dịch trực tiếp hiện đang tắt.')); return; }
+  saveLiveSettings();
+  const settings = getLiveSettings();
+  const candidates = Array.isArray(modelQueue) && modelQueue.length ? modelQueue : liveModelCandidates(settings.model);
+  settings.model = candidates[0];
+  stopGeminiLive(true, false);
+  liveManualStop = false;
+  liveStarting = true;
+  liveActiveModel = settings.model;
+  geminiLiveDirection = from;
+  const target = from === 'tr' ? 'Vietnamese' : 'Turkish';
+  const source = from === 'tr' ? 'Turkish' : 'Vietnamese';
+  const targetRole = from === 'tr' ? 'vi' : 'tr';
+  const shouldAutoSpeak = getLocalAutoSpeakEnabled();
+  const isLiveTranslateModel = settings.model === 'gemini-3.5-live-translate-preview';
+  const modality = 'AUDIO';
+  const btn = document.getElementById('liveMainBtn');
+  if (btn) btn.classList.add('recording');
+  const topBtn=document.getElementById('realLiveBtn'); if(topBtn) topBtn.classList.add('live-on');
+  updateLiveMainButton(true);
+  setRealLiveStatus(uiText('Live hazırlanıyor...', 'Đang chuẩn bị Live...'));
+  if (!modelQueue) appendRealLiveLog((from === 'tr' ? 'TR' : 'VI') + uiText(' Live başladı.', ' Live bắt đầu.'));
+  let setupReady = false;
+  let receivedAnyContent = false;
+  let liveMicReady = false;
+  let liveSpeechActive = false;
+  let liveVoiceMs = 0;
+  let liveSilentMs = 0;
+  let lastLiveError = '';
+  const startLiveMic = async () => {
+    if (liveMicReady || !geminiLiveWs || geminiLiveWs.readyState !== WebSocket.OPEN) return true;
+    try {
+      setRealLiveStatus(uiText('Live setup tamam, mikrofon hazırlanıyor...', 'Setup Live xong, đang chuẩn bị micro...'));
+      await tryRequestWakeLock();
+      await keepAudioAwake(90000);
+      geminiLiveCtx = await ensureAudioCtx();
+      if (!geminiLiveCtx || geminiLiveCtx.state !== 'running') throw new Error(uiText('Ses motoru kilitli, Dinle’ye tekrar bas.', 'Bộ âm thanh bị khóa, hãy bấm Nghe lại.'));
+      geminiLiveStream = await requestMicrophoneStream('live');
+      geminiLiveSource = geminiLiveCtx.createMediaStreamSource(geminiLiveStream);
+      geminiLiveProcessor = geminiLiveCtx.createScriptProcessor(4096,1,1);
+      geminiLiveMuteGain = geminiLiveCtx.createGain();
+      geminiLiveMuteGain.gain.value = 0;
+      liveSpeechActive = false;
+      liveVoiceMs = 0;
+      liveSilentMs = 0;
+    geminiLiveProcessor.onaudioprocess = e => {
+      const ws = geminiLiveWs;
+      if (!setupReady || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const ctx = geminiLiveCtx;
+      if (!ctx || ctx.state !== 'running') return;
+      if (Date.now() < liveOutputMuteUntil) return;
+      const channel = e.inputBuffer.getChannelData(0);
+      const sampleRate = ctx.sampleRate || 48000;
+      const frameMs = Math.round(channel.length / sampleRate * 1000);
+      const hasVoice = floatRms(channel) > VOICE_RMS_THRESHOLD;
+      if (hasVoice) {
+        liveVoiceMs += frameMs;
+        liveSilentMs = 0;
+        if (liveVoiceMs >= Math.min(MIN_VOICE_MS, 360)) liveSpeechActive = true;
+      } else {
+        liveVoiceMs = 0;
+        if (!liveSpeechActive) return;
+        liveSilentMs += frameMs;
+      }
+      if (!liveSpeechActive) return;
+      try { ws.send(JSON.stringify(liveAudioPayload(channel, sampleRate))); } catch {}
+      if (liveSilentMs > (settings.saver ? 1800 : 2800)) {
+        try { ws.send(JSON.stringify(liveAudioEndPayload())); } catch {}
+        liveSpeechActive = false;
+        liveVoiceMs = 0;
+        liveSilentMs = 0;
+      }
+    };
+    geminiLiveSource.connect(geminiLiveProcessor);
+    geminiLiveProcessor.connect(geminiLiveMuteGain);
+    geminiLiveMuteGain.connect(geminiLiveCtx.destination);
+      liveMicReady = true;
+      setRealLiveStatus(uiText('Bağlantı hazır. Konuşabilirsin.', 'Kết nối sẵn sàng. Bạn có thể nói.'));
+      appendRealLiveLog(uiText('Mikrofon hazır.', 'Micro sẵn sàng.'));
+      return true;
+    } catch (err) {
+      lastLiveError = err && err.message ? err.message : String(err);
+      setRealLiveStatus(uiText('Live mikrofon açılamadı: ', 'Không mở được micro Live: ') + normalizeApiError(lastLiveError, from));
+      try { if (geminiLiveWs) geminiLiveWs.close(); } catch {}
+      return false;
+    }
+  };
+  setRealLiveStatus(uiText('Live bağlanıyor...', 'Đang kết nối Live...'));
+  const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
+  const ws = new WebSocket(wsUrl);
+  const setupTimer = setTimeout(() => {
+    if (!setupReady && geminiLiveWs === ws) {
+      setRealLiveStatus(uiText('Live setupComplete gelmedi, diğer model deneniyor...', 'Live không nhận setupComplete, đang thử model khác...'));
+      try { ws.close(); } catch {}
+    }
+  }, 12000);
+  geminiLiveWs = ws;
+  ws.onopen = () => {
+    try {
+      setRealLiveStatus(uiText('Live açıldı, setup gönderiliyor...', 'Live đã mở, đang gửi setup...'));
+      ws.send(JSON.stringify(liveSetupPayload(settings, source, target, modality)));
+    } catch (err) {
+      setRealLiveStatus(uiText('Live başlatılamadı: ', 'Không khởi động được Live: ') + normalizeApiError(err && err.message ? err.message : String(err), from));
+      try { ws.close(); } catch {}
+    }
+  };
+  ws.onmessage = e => {
+    try {
+      if (!e.data || typeof e.data !== 'string') return;
+      const data = JSON.parse(e.data);
+      const raw = JSON.stringify(data);
+      if (liveSetupIsReady(data)) {
+        setupReady = true;
+        clearTimeout(setupTimer);
+        liveStarting = false;
+        appendRealLiveLog(uiText('Setup tamam.', 'Setup xong.'));
+        startLiveMic();
+      }
+      if (data.error) {
+        receivedAnyContent = true;
+        const msg = data.error.message || JSON.stringify(data.error).slice(0, 220);
+        lastLiveError = msg;
+        appendRealLiveLog(uiText('Live hata: ', 'Lỗi Live: ') + msg);
+        try { ws.close(); } catch {}
+        return;
+      }
+      const parts = liveResponseParts(data);
+      const transcribedOutput = liveOutputText(data);
+      for (const part of parts) {
+        if (part.text) {
+          receivedAnyContent = true;
+          appendRealLiveLog(part.text);
+          lastLiveText = part.text;
+          lastLiveTarget = targetRole;
+          if (modality !== 'AUDIO' && settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(part.text, targetRole);
+        }
+        const audio = part.inlineData || part.inline_data;
+        if (audio?.data && shouldAutoSpeak && modality === 'AUDIO') {
+          receivedAnyContent = true;
+          playLiveAudio(audio.data, audio.mimeType || audio.mime_type).catch(()=>appendRealLiveLog(uiText('Live sesi çalınamadı.', 'Không phát được âm thanh Live.')));
+        }
+      }
+      if (transcribedOutput && !parts.some(p => p.text)) {
+        receivedAnyContent = true;
+        appendRealLiveLog(transcribedOutput);
+        lastLiveText = transcribedOutput;
+        lastLiveTarget = targetRole;
+        if (modality !== 'AUDIO' && settings.response === 'TEXT_TTS' && shouldAutoSpeak) enqueueAutoSpeak(transcribedOutput, targetRole);
+      }
+      if (!parts.length && /error/i.test(raw)) {
+        receivedAnyContent = true;
+        lastLiveError = raw.slice(0,220);
+        appendRealLiveLog(uiText('Live hata: ', 'Lỗi Live: ') + raw.slice(0,220));
+      }
+    } catch(err) {
+      const now = Date.now();
+      if (now - lastLiveReadErrorAt > 6000) {
+        lastLiveReadErrorAt = now;
+        console.warn('Live cevap okunamadı:', err);
+      }
+    }
+  };
+  ws.onerror = () => {
+    setRealLiveStatus(uiText('Live bağlantı hatası.', 'Lỗi kết nối Live.'));
+  };
+  ws.onclose = e => {
+    clearTimeout(setupTimer);
+    cleanupGeminiLiveAudio();
+    releaseWakeLock();
+    if (geminiLiveWs === ws) geminiLiveWs = null;
+    updateLiveMainButton(false);
+    if(topBtn) topBtn.classList.remove('live-on');
+    liveStarting = false;
+    const rest = candidates.slice(1);
+    if (!liveManualStop && !setupReady && rest.length) {
+      setRealLiveStatus(uiText('Live açılamadı, diğer seçenek deneniyor.', 'Không mở được Live, đang thử lựa chọn khác.'));
+      setTimeout(() => startGeminiLive(from, rest), 450);
+      return;
+    }
+    const closeInfo = lastLiveError || (e?.reason ? e.reason : (e?.code && e.code !== 1000 ? ('WebSocket code ' + e.code) : ''));
+    if (closeInfo && !setupReady) appendRealLiveLog(uiText('Live kapanış detayı: ', 'Chi tiết Live đóng: ') + closeInfo);
+    const message = closeInfo
+      ? (setupReady ? uiText('Live kapandı: ', 'Live đã đóng: ') : uiText('Live açılamadı: ', 'Không mở được Live: ')) + closeInfo
+      : (receivedAnyContent || setupReady
+        ? uiText('Live kapandı.', 'Live đã đóng.')
+        : uiText('Live açılamadı. API key, model erişimi veya tarayıcı WebSocket desteğini kontrol et.', 'Không mở được Live. Hãy kiểm tra API key, quyền model hoặc hỗ trợ WebSocket của trình duyệt.'));
+    setRealLiveStatus(message);
+  };
 }
 function initPWA() {
   const link = document.getElementById('pwaManifest');
@@ -6237,8 +6708,13 @@ function setupChatControls() {
   const modeRow = document.getElementById('modeRow');
   if (modeRow) modeRow.style.display = 'none';
   const pttBtn = document.getElementById('pttModeBtn');
+  const realLiveBtn = document.getElementById('realLiveBtn');
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
-  if (myRole !== 'tr') { togglePttMode(false); }
+  if (realLiveBtn) {
+    realLiveBtn.style.display = myRole === 'tr' ? '' : 'none';
+    realLiveBtn.hidden = myRole !== 'tr';
+  }
+  if (myRole !== 'tr') { togglePttMode(false); toggleRealLive(false); }
   applyLocaleUI();
   setSelectedModel(selectedModel, true);
   updateAutoReadUI();
@@ -6309,6 +6785,8 @@ function applyLocaleUI() {
   if (ct) ct.textContent = isVi ? '🇻🇳 → 🇹🇷' : '🇹🇷 → 🇻🇳';
   const pttBtn = document.getElementById('pttModeBtn');
   if (pttBtn) { pttBtn.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş'; pttBtn.title = isVi ? 'Chế độ bấm nói' : 'Bas-konuş modu'; }
+  const liveBtn = document.getElementById('realLiveBtn');
+  if (liveBtn) { liveBtn.textContent = 'Live'; liveBtn.title = 'Live'; }
   const pttTitle = document.querySelector('#pttPanel .panel-title');
   if (pttTitle) pttTitle.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş';
   const pttHelp = document.getElementById('pttHelp');
@@ -6318,6 +6796,17 @@ function applyLocaleUI() {
   const pttLog = document.getElementById('pttLog');
   if (pttLog && /Hazir\.|Hazır\.|San sang\.|Sẵn sàng\./.test(pttLog.textContent)) pttLog.textContent = isVi ? 'Sẵn sàng.' : 'Hazır.';
   updatePttAutoSpeakUI();
+  const liveTitle = document.querySelector('#realLivePanel .panel-title');
+  if (liveTitle) liveTitle.textContent = 'Live';
+  const liveLabels = document.querySelectorAll('#realLivePanel .live-settings label');
+  if (liveLabels[0]) liveLabels[0].textContent = 'Cevap tipi';
+  if (liveLabels[1]) {
+    const input = liveLabels[1].querySelector('input');
+    liveLabels[1].textContent = 'Tasarruf';
+    if (input) liveLabels[1].prepend(input);
+  }
+  const liveLog = document.getElementById('realLiveLog');
+  if (liveLog && /Hazir\.|Hazır\.|San sang\.|Sẵn sàng\./.test(liveLog.textContent)) liveLog.textContent = isVi ? 'Sẵn sàng.' : 'Hazır.';
   const gear = document.querySelector('button[onclick="toggleTtsSettings()"]');
   if (gear) gear.title = isVi ? 'Cài đặt giọng đọc' : 'Ses ayarları';
   const back = document.querySelector('button[onclick="goBack()"]');
@@ -6332,6 +6821,8 @@ function applyLocaleUI() {
   if (listBtn) listBtn.textContent = isVi ? 'Danh sách chặn / cho phép' : 'Kara / Beyaz Liste';
   document.querySelectorAll('.panel-close').forEach(b => b.textContent = isVi ? 'Đóng' : 'Kapat');
   renderTextLists();
+  const liveStatus = document.getElementById('realLiveStatus');
+  if (liveStatus && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Sẵn sàng' : 'Hazır';
   updateAutoReadUI();
   updateNotifySoundUI();
   updateWebPushButton();
@@ -6433,7 +6924,6 @@ function applyAutoReadData(data, path='/') {
   if (myRole) { const own = getAutoReadState(myRole); autoRead = own; localStorage.setItem('askviet_autoread', own ? '1' : '0'); }
   updateAutoReadUI();
   if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
-  scanAutoReadMessages();
 }
 async function toggleAutoRead() {
   unlockAudio();
@@ -6445,7 +6935,8 @@ async function toggleAutoRead() {
   updateAutoReadUI();
   fbSet(AUTO_READ_PATH + '/' + role, next);
   if (role === myRole && !next) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
-  if (role === myRole && next) scanAutoReadMessages();
+  autoReadEnabledAt[role] = next ? Date.now() : 0;
+  if (role === myRole && next) clearAutoSpeakQueue(false);
 }
 async function toggleOwnAutoRead() {
   unlockAudio();
@@ -6458,7 +6949,8 @@ async function toggleOwnAutoRead() {
   updateAutoReadUI();
   fbSet(AUTO_READ_PATH + '/' + myRole, next);
   if (!next) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
-  if (next) scanAutoReadMessages();
+  autoReadEnabledAt[myRole] = next ? Date.now() : 0;
+  if (next) clearAutoSpeakQueue(false);
 }
 function updateAutoReadUI() {
   const status = document.getElementById('autoReadStatus');
@@ -6594,12 +7086,12 @@ const MIC_ICON = '&#127908;';
 const REC_SILENCE_MS = 2000;
 const VOICE_RMS_THRESHOLD = 0.018;
 const MIN_VOICE_MS = 750;
-const MIC_VOICE_RMS_THRESHOLD = 0.014;
-const MIC_MIN_VOICE_MS = 420;
-const MIC_NO_SPEECH_MS = 4500;
+const MIC_VOICE_RMS_THRESHOLD = 0.011;
+const MIC_MIN_VOICE_MS = 240;
+const MIC_NO_SPEECH_MS = 8000;
 const MIC_SILENCE_MS = 2000;
 const PTT_SILENCE_MS = 2000;
-const MIN_AUDIO_BLOB_SIZE = 2500;
+const MIN_AUDIO_BLOB_SIZE = 700;
 const PRESENCE_STALE_MS = 75000;
 function noteNoSpeechStop() {
   const now = Date.now();
@@ -6623,14 +7115,7 @@ function noteNoSpeechStop() {
     btn.classList.remove('mic-recording');
     btn.innerHTML = MIC_ICON;
   }
-  const role = myRole || localStorage.getItem('askviet_last_role') || 'tr';
-  if (role === 'tr' || role === 'vi') {
-    localStorage.setItem('askviet_resume_role', role);
-    localStorage.setItem('askviet_resume_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
-    localStorage.setItem('askviet_last_role', role);
-    localStorage.setItem('askviet_last_mode', typeof getCurrentUiMode === 'function' ? getCurrentUiMode() : 'chat');
-  }
-  setTimeout(() => location.reload(), 120);
+  resetMicrophoneAudioContext();
 }
 function resetNoSpeechStops() { noSpeechStops = []; }
 
@@ -6662,6 +7147,7 @@ async function requestMicrophoneStream(kind='mic') {
   stream.getAudioTracks().forEach(track => {
     track.onended = () => {
       if (kind === 'ptt') setPttLog(roleText(document.querySelector('.roundflag.recording')?.dataset.recRole || myRole, 'Mikrofon kapandı. Tekrar dene.', 'Micro đã tắt. Thử lại.'));
+      else if (kind === 'live') { setRealLiveStatus(uiText('Mikrofon kapandı. Tekrar başlat.', 'Micro đã tắt. Hãy bật lại.')); stopGeminiLive(); }
       else if (kind === 'mic') console.warn('Mikrofon OS tarafindan kapatildi.');
       stopRec();
     };
@@ -6849,31 +7335,315 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
   return transcribeVoice(blob, voiceRoleOverride || myRole || 'tr');
 }
 
+// ── AskViet pseudo Live: Android mantığı, eski canlı motor yerine ─────────
+let pseudoLiveRunning=false;
+let pseudoLiveStream=null;
+let pseudoLiveCtx=null;
+let pseudoLiveSource=null;
+let pseudoLiveProcessor=null;
+let pseudoLiveMuteGain=null;
+let pseudoLiveAnalyser=null;
+let pseudoLiveData=null;
+let pseudoLiveRecorder=null;
+let pseudoLiveChunks=[];
+let pseudoLiveSegmentActive=false;
+let pseudoLiveVoiceMs=0;
+let pseudoLiveSilentMs=0;
+let pseudoLiveQueue=[];
+let pseudoLiveProcessing=false;
+let pseudoLiveLastText='';
+let pseudoLiveLastTarget='vi';
 
+function getLiveSettings() {
+  return {
+    model: getTranscribeEngine(),
+    response: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
+    saver: localStorage.getItem('askviet_live_saver') !== '0'
+  };
+}
 
+function saveLiveSettings() {
+  const response = document.getElementById('liveResponseSelect')?.value || 'TEXT_TTS';
+  const saver = document.getElementById('liveSaverToggle')?.checked !== false;
+  localStorage.setItem('askviet_live_response', response === 'TEXT' ? 'TEXT' : 'TEXT_TTS');
+  localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
+  syncLiveSettingsUI();
+}
 
+function syncLiveSettingsUI() {
+  const settings = getLiveSettings();
+  const response = document.getElementById('liveResponseSelect');
+  const saver = document.getElementById('liveSaverToggle');
+  if (response) response.value = settings.response;
+  if (saver) saver.checked = settings.saver;
+  setSelectValue('transcribeEngineSelect', getTranscribeEngine());
+}
 
+function toggleRealLive(force) {
+  if (myRole !== 'tr') {
+    stopPseudoLive(true);
+    setPanelOpen('realLivePanel', 'realLiveBtn', false);
+    return false;
+  }
+  const panel = document.getElementById('realLivePanel');
+  const next = typeof force === 'boolean' ? force : !panel?.classList.contains('open');
+  if (next) {
+    togglePttMode(false);
+    toggleTtsSettings(false);
+    suspendChatAutoSpeakForPtt(true);
+    syncLiveSettingsUI();
+    if (panel) { panel.hidden=false; panel.style.display=''; }
+    setPanelOpen('realLivePanel', 'realLiveBtn', true);
+    setRealLiveStatus('Hazır');
+  } else {
+    stopPseudoLive(true);
+    setPanelOpen('realLivePanel', 'realLiveBtn', false);
+  }
+  return next;
+}
 
+async function toggleGeminiLiveMain() {
+  if (pseudoLiveRunning) {
+    stopPseudoLive(false);
+    return;
+  }
+  if (myRole !== 'tr') return;
+  try {
+    primeAudioForGesture();
+    await unlockAudio(true);
+    await keepAudioAwake(90000);
+    await startPseudoLive();
+  } catch (err) {
+    setRealLiveStatus('Live başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
+    stopPseudoLive(true);
+  }
+}
 
+function updateLiveMainButton(on=false) {
+  const btn=document.getElementById('liveMainBtn');
+  if (!btn) return;
+  btn.innerHTML = on ? '&#9632; Durdur' : '&#9654; Dinle';
+  btn.classList.toggle('recording', !!on);
+}
 
+function setRealLiveStatus(text) {
+  const el=document.getElementById('realLiveStatus');
+  if (el) el.textContent = text || '';
+}
 
+function appendRealLiveLog(text, cls='') {
+  const el=document.getElementById('realLiveLog');
+  if (!el) return;
+  if (el.querySelector('.empty')) el.textContent='';
+  const div=document.createElement('div');
+  div.className='live-line ' + cls;
+  div.textContent=text;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
 
+function clearRealLiveLog() {
+  const el=document.getElementById('realLiveLog');
+  if (el) el.innerHTML='<div class="empty">Dinle&#39;ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div>';
+}
 
+function liveRepeatNotice() {
+  if (pseudoLiveLastText) speakLastLive();
+}
 
+function speakLastLive() {
+  if (pseudoLiveLastText) speak(pseudoLiveLastText, pseudoLiveLastTarget || 'vi', null, true).catch(()=>{});
+}
 
+async function startPseudoLive() {
+  stopPseudoLive(true);
+  pseudoLiveRunning=true;
+  pseudoLiveQueue=[];
+  pseudoLiveProcessing=false;
+  pseudoLiveStream=await requestMicrophoneStream('live');
+  pseudoLiveCtx=await ensureAudioCtx();
+  pseudoLiveSource=pseudoLiveCtx.createMediaStreamSource(pseudoLiveStream);
+  pseudoLiveAnalyser=pseudoLiveCtx.createAnalyser();
+  pseudoLiveAnalyser.fftSize=1024;
+  pseudoLiveData=new Uint8Array(pseudoLiveAnalyser.fftSize);
+  pseudoLiveProcessor=pseudoLiveCtx.createScriptProcessor(2048,1,1);
+  pseudoLiveMuteGain=pseudoLiveCtx.createGain();
+  pseudoLiveMuteGain.gain.value=0;
+  pseudoLiveSource.connect(pseudoLiveAnalyser);
+  pseudoLiveSource.connect(pseudoLiveProcessor);
+  pseudoLiveProcessor.connect(pseudoLiveMuteGain);
+  pseudoLiveMuteGain.connect(pseudoLiveCtx.destination);
+  pseudoLiveProcessor.onaudioprocess=tickPseudoLive;
+  updateLiveMainButton(true);
+  document.getElementById('realLiveBtn')?.classList.add('live-on');
+  setRealLiveStatus('Dinliyorum | Đang nghe');
+  appendRealLiveLog('Live başladı. Transkript: ' + liveEngineName(getTranscribeEngine()), 'status');
+}
 
+async function startGeminiLive() {
+  return startPseudoLive();
+}
 
+function stopPseudoLive(silent=false) {
+  pseudoLiveRunning=false;
+  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
+  try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
+  try { if (pseudoLiveAnalyser) pseudoLiveAnalyser.disconnect(); } catch {}
+  try { if (pseudoLiveMuteGain) pseudoLiveMuteGain.disconnect(); } catch {}
+  try { if (pseudoLiveSource) pseudoLiveSource.disconnect(); } catch {}
+  if (pseudoLiveStream) {
+    try { pseudoLiveStream.getTracks().forEach(t=>t.stop()); } catch {}
+  }
+  pseudoLiveStream=null; pseudoLiveCtx=null; pseudoLiveSource=null; pseudoLiveProcessor=null; pseudoLiveMuteGain=null; pseudoLiveAnalyser=null; pseudoLiveData=null;
+  pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveChunks=[]; pseudoLiveRecorder=null;
+  updateLiveMainButton(false);
+  document.getElementById('realLiveBtn')?.classList.remove('live-on');
+  releaseWakeLock();
+  if (!silent) setRealLiveStatus('Live durdu | Live đã dừng');
+}
 
+function tickPseudoLive() {
+  if (!pseudoLiveRunning || !pseudoLiveAnalyser || !pseudoLiveData) return;
+  const settings=getLiveSettings();
+  const v=rms(pseudoLiveAnalyser, pseudoLiveData);
+  const voiceThreshold=settings.saver ? 0.021 : 0.018;
+  const silenceLimit=settings.saver ? 1300 : 1900;
+  if (v > voiceThreshold) {
+    pseudoLiveVoiceMs += 120;
+    pseudoLiveSilentMs = 0;
+    if (!pseudoLiveSegmentActive && pseudoLiveVoiceMs >= 300) beginPseudoLiveSegment();
+  } else {
+    pseudoLiveVoiceMs = 0;
+    if (pseudoLiveSegmentActive) pseudoLiveSilentMs += 120;
+  }
+  if (pseudoLiveSegmentActive && (pseudoLiveSilentMs >= silenceLimit || pseudoLiveSegmentAge() > 60000)) {
+    finishPseudoLiveSegment();
+  }
+}
 
+function pseudoLiveSegmentAge() {
+  return pseudoLiveRecorder && pseudoLiveRecorder._startedAt ? Date.now() - pseudoLiveRecorder._startedAt : 0;
+}
 
+function beginPseudoLiveSegment() {
+  if (!pseudoLiveStream || pseudoLiveSegmentActive) return;
+  pseudoLiveChunks=[];
+  const rec = new MediaRecorder(pseudoLiveStream, { mimeType: pickMediaRecorderMime() });
+  rec._startedAt=Date.now();
+  rec.ondataavailable=e=>{ if (e.data && e.data.size) pseudoLiveChunks.push(e.data); };
+  rec.onstop=()=>{
+    const blob=new Blob(pseudoLiveChunks, { type: rec.mimeType || 'audio/webm' });
+    if (blob.size >= Math.max(700, MIN_AUDIO_BLOB_SIZE)) {
+      if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
+      pseudoLiveQueue.push({ blob, ts: Date.now() });
+      processPseudoLiveQueue();
+    }
+  };
+  pseudoLiveRecorder=rec;
+  pseudoLiveSegmentActive=true;
+  setRealLiveStatus('Ses alınıyor | Đang nghe giọng nói');
+  rec.start();
+}
 
+function finishPseudoLiveSegment() {
+  if (!pseudoLiveSegmentActive) return;
+  pseudoLiveSegmentActive=false;
+  pseudoLiveSilentMs=0;
+  pseudoLiveVoiceMs=0;
+  try { if (pseudoLiveRecorder && pseudoLiveRecorder.state !== 'inactive') pseudoLiveRecorder.stop(); } catch {}
+}
 
+async function processPseudoLiveQueue() {
+  if (pseudoLiveProcessing) return;
+  pseudoLiveProcessing=true;
+  try {
+    while (pseudoLiveRunning && pseudoLiveQueue.length) {
+      const item=pseudoLiveQueue.shift();
+      if (!item || Date.now() - item.ts > 45000) continue;
+      await handlePseudoLiveBlob(item.blob);
+    }
+  } finally {
+    pseudoLiveProcessing=false;
+    if (pseudoLiveRunning) setRealLiveStatus('Dinliyorum | Đang nghe');
+  }
+}
 
+async function handlePseudoLiveBlob(blob) {
+  const settings=getLiveSettings();
+  const payload=await liveFileToBase64(blob);
+  setRealLiveStatus('Ses metne çevriliyor: ' + liveEngineName(settings.model));
+  let data;
+  try {
+    data=await askVietServer('transcribe', {
+      audioBase64: payload,
+      mime: blob.type || 'audio/webm',
+      sourceRole: 'auto',
+      live: true,
+      transcribeEngine: settings.model
+    });
+  } catch (err) {
+    appendRealLiveLog('Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    return;
+  }
+  const srcText=String(data.text || '').trim();
+  if (!srcText || isBadLiveTranscript(srcText)) return;
+  const from=guessLiveSourceRole(srcText);
+  if (!from) return;
+  const target=from === 'tr' ? 'vi' : 'tr';
+  setRealLiveStatus('Çevriliyor: ' + modelName(selectedModel));
+  try {
+    const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
+    const translated=String(tr.translation || '').trim();
+    if (!translated) return;
+    appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
+    pseudoLiveLastText=translated;
+    pseudoLiveLastTarget=target;
+    if (settings.response === 'TEXT_TTS') {
+      setRealLiveStatus('Seslendiriliyor: ' + getTtsSettings().model);
+      await speak(translated, target, null, true);
+    }
+  } catch (err) {
+    appendRealLiveLog('Live çeviri hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+  }
+}
 
+function liveEngineName(engine) {
+  return engine === 'gemini_openai'
+    ? 'Gemini 2.5 Flash-Lite -> GPT-4o mini'
+    : 'GPT-4o mini -> Gemini 2.5 Flash-Lite';
+}
 
+function isBadLiveTranscript(text) {
+  const clean=String(text || '').trim();
+  if (clean.length < 2) return true;
+  if (/thanks for watching|subscribe|subtitle|subtitles|watching|спасибо|谢谢|ありがとう/i.test(clean)) return true;
+  return false;
+}
 
+function guessLiveSourceRole(text) {
+  const s=translationLanguageSignals(text);
+  if (s.vi >= s.tr + 1) return 'vi';
+  if (s.tr >= s.vi + 1) return 'tr';
+  const lower=String(text || '').toLowerCase();
+  if (/[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]/i.test(lower)) return 'vi';
+  if (/[çğıöşü]/i.test(lower) || /\b(ben|sen|gel|git|evet|hayır|hayir|tamam|aşkım|askim|oldu|olur|yok|var)\b/i.test(lower)) return 'tr';
+  return '';
+}
 
+function appendPseudoLiveTurn(sourceText, translatedText, from, target, model, engine) {
+  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, from);
+  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, target);
+  appendRealLiveLog('Model: ' + modelName(model) + (engine ? ' / ' + engine : ''), 'status');
+}
 
+function liveFileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror=()=>reject(new Error('Ses okunamadı'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 window.addEventListener('beforeunload', () => {
   try { prepareResumeState(); } catch {}
@@ -6926,7 +7696,7 @@ document.addEventListener('visibilitychange', () => {
     clearUnreadCount();
     settleChatVisualViewport();
     if (myRole) resumeChatTransport();
-    if (rec) tryRequestWakeLock();
+    if (rec || geminiLiveStream) tryRequestWakeLock();
     if (myRole && !autoRefreshTimer) startAutoRefreshTimer();
   } else if (myRole) {
     lastPageHiddenAt = Date.now();
@@ -6953,3 +7723,4 @@ clearUnreadCount();
 </script>
 </body>
 </html>
+
