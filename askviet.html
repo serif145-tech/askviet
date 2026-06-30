@@ -263,10 +263,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-action.vi{border-color:var(--vi);background:var(--vi)}
 .ptt-log,.real-live-log{flex:1;min-height:0;overflow:auto;padding:12px 14px;background:#070707;color:#c084fc;font-size:19px;font-weight:850;line-height:1.42;white-space:pre-wrap;word-break:break-word}
 .live-line{padding:9px 0 12px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word;border-bottom:1px solid rgba(255,255,255,.05)}
-.live-line.tr{color:#f9fafb}
-.live-line.vi{color:#d8b4fe}
+.live-line.tr,.live-line.source{color:#f9fafb}
+.live-line.vi,.live-line.output{color:#d8b4fe}
 .live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
-.live-status{padding:10px 14px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
+.live-top{align-items:center}
+#realLivePanel .live-info-title{display:none}
+.live-status{padding:8px 14px 10px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
 .live-settings label{font-size:11px;font-weight:900;color:var(--muted)}
@@ -559,11 +561,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
   </div>
 
   <div class="real-live-panel" id="realLivePanel" style="display:none" hidden>
-    <div class="panel-top">
-      <div class="panel-title">Live</div>
+    <div class="panel-top live-top">
+      <div class="panel-title live-info-title" id="liveInfoTitle">Hazır</div>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
     </div>
-    <div class="live-status" id="realLiveStatus">Hazır</div>
+    <div class="live-status" id="realLiveStatus">Dinliyorum</div>
     <div class="live-settings" id="liveSettingsPanel">
       <label>Cevap tipi</label>
       <select id="liveResponseSelect" onchange="saveLiveSettings()">
@@ -1068,16 +1070,26 @@ const TTS_DEFAULTS = {
   voiceVi: 'cedar',
   speed: '1'
 };
+const TRANSCRIBE_ENGINE_KEY = 'askviet_transcribe_engine';
 
 function getTranscribeEngine() {
-  const value = localStorage.getItem('askviet_live_model');
+  let value = localStorage.getItem(TRANSCRIBE_ENGINE_KEY);
+  if (!value) {
+    const legacy = localStorage.getItem('askviet_live_model');
+    if (legacy === 'gemini_openai' || legacy === 'openai_gemini') {
+      value = legacy;
+      localStorage.setItem(TRANSCRIBE_ENGINE_KEY, value);
+      localStorage.removeItem('askviet_live_model');
+    }
+  }
   if (value === 'gemini_openai' || value === 'openai_gemini') return value;
-  if (value) localStorage.setItem('askviet_live_model', 'openai_gemini');
+  if (value) localStorage.setItem(TRANSCRIBE_ENGINE_KEY, 'openai_gemini');
   return 'openai_gemini';
 }
 function saveTranscribeEngineSetting() {
   const value = document.getElementById('transcribeEngineSelect')?.value === 'gemini_openai' ? 'gemini_openai' : 'openai_gemini';
-  localStorage.setItem('askviet_live_model', value);
+  localStorage.setItem(TRANSCRIBE_ENGINE_KEY, value);
+  localStorage.removeItem('askviet_live_model');
   syncLiveSettingsUI();
 }
 
@@ -7425,6 +7437,8 @@ function updateLiveMainButton(on=false) {
 function setRealLiveStatus(text) {
   const el=document.getElementById('realLiveStatus');
   if (el) el.textContent = text || '';
+  const title=document.getElementById('liveInfoTitle');
+  if (title) title.textContent = text || 'Hazır';
 }
 
 function appendRealLiveLog(text, cls='') {
@@ -7435,7 +7449,17 @@ function appendRealLiveLog(text, cls='') {
   div.className='live-line ' + cls;
   div.textContent=text;
   el.appendChild(div);
-  el.scrollTop=el.scrollHeight;
+  trimRealLiveLog(el);
+  requestAnimationFrame(() => { el.scrollTop=el.scrollHeight; });
+}
+
+function trimRealLiveLog(el) {
+  const lines=[...el.querySelectorAll('.live-line')];
+  const maxLines=100;
+  while (lines.length > maxLines) {
+    const first=lines.shift();
+    if (first) first.remove();
+  }
 }
 
 function clearRealLiveLog() {
@@ -7490,7 +7514,6 @@ async function startPseudoLive() {
   updateLiveMainButton(true);
   document.getElementById('realLiveBtn')?.classList.add('live-on');
   setRealLiveStatus('Dinliyorum');
-  appendRealLiveLog('Live başladı. Transkript: ' + liveEngineName(getTranscribeEngine()), 'status');
 }
 
 async function startGeminiLive() {
@@ -7599,7 +7622,8 @@ async function processPseudoLiveQueue() {
 async function handlePseudoLiveBlob(blob) {
   const settings=getLiveSettings();
   const payload=await liveFileToBase64(blob);
-  setRealLiveStatus('Ses metne çevriliyor: ' + liveEngineName(settings.model));
+  const firstTranscribe=primaryTranscribeLabel(settings.model);
+  setRealLiveStatus('Ses metne çevriliyor: ' + firstTranscribe);
   let data;
   try {
     data=await askVietServer('transcribe', {
@@ -7610,8 +7634,15 @@ async function handlePseudoLiveBlob(blob) {
       transcribeEngine: settings.model
     });
   } catch (err) {
-    appendRealLiveLog('Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    setRealLiveStatus('Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'));
     return;
+  }
+  const actualTranscribe=actualTranscribeLabel(data.model || firstTranscribe);
+  const transcribeFallbackNotice = actualTranscribe && actualTranscribe !== firstTranscribe
+    ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' ile metne çevrildi. '
+    : '';
+  if (actualTranscribe && actualTranscribe !== firstTranscribe) {
+    setRealLiveStatus(firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanıldı');
   }
   const srcText=String(data.text || '').trim();
   if (!srcText) {
@@ -7620,14 +7651,13 @@ async function handlePseudoLiveBlob(blob) {
   }
   if (isBadLiveTranscript(srcText)) {
     setRealLiveStatus('Şüpheli transkript yok sayıldı');
-    appendRealLiveLog('Yok sayıldı: ' + srcText, 'status');
     return;
   }
   const guessed=guessLiveSourceRole(srcText);
   const from=guessed || 'tr';
-  if (!guessed) appendRealLiveLog('Dil net değildi, Türkçe varsayıldı: ' + srcText, 'status');
+  if (!guessed) setRealLiveStatus('Dil net değildi, Türkçe varsayıldı');
   const target=from === 'tr' ? 'vi' : 'tr';
-  setRealLiveStatus('Çevriliyor: ' + modelName(selectedModel));
+  setRealLiveStatus(transcribeFallbackNotice + 'Çevriliyor: ' + modelName(selectedModel));
   try {
     const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
     const translated=String(tr.translation || '').trim();
@@ -7652,6 +7682,22 @@ function liveEngineName(engine) {
     : 'GPT-4o mini -> Gemini 2.5 Flash-Lite';
 }
 
+function primaryTranscribeLabel(engine) {
+  return engine === 'gemini_openai' ? 'Gemini 2.5 Flash-Lite' : 'GPT-4o mini';
+}
+
+function fallbackTranscribeLabel(engine) {
+  return engine === 'gemini_openai' ? 'GPT-4o mini' : 'Gemini 2.5 Flash-Lite';
+}
+
+function actualTranscribeLabel(model) {
+  const raw=String(model || '').toLowerCase();
+  if (!raw) return '';
+  if (raw.includes('gemini')) return 'Gemini 2.5 Flash-Lite';
+  if (raw.includes('gpt-4o-mini') || raw.includes('4o-mini') || raw.includes('openai')) return 'GPT-4o mini';
+  return String(model || '');
+}
+
 function isBadLiveTranscript(text) {
   const clean=String(text || '').trim();
   if (clean.length < 2 && !/[ừừờờạàáảãăâđêôơư]/i.test(clean)) return true;
@@ -7670,9 +7716,8 @@ function guessLiveSourceRole(text) {
 }
 
 function appendPseudoLiveTurn(sourceText, translatedText, from, target, model, engine) {
-  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, from);
-  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, target);
-  appendRealLiveLog('Model: ' + modelName(model) + (engine ? ' / ' + engine : ''), 'status');
+  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, 'source');
+  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, 'output');
 }
 
 function liveFileToBase64(blob) {
