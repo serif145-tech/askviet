@@ -488,7 +488,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <select id="ttsModelSelect" onchange="saveTtsSettings()">
             <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
             <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
-            <option value="gpt-4o-tts">GPT-4o TTS</option>
           </select>
           <label>Transkript motoru</label>
           <select id="transcribeEngineSelect" onchange="saveTranscribeEngineSetting()">
@@ -1111,10 +1110,9 @@ function transcribeEngineLabel(engine=getTranscribeEngine()) {
 function ttsModelLabel(model) {
   const labels = {
     'gpt-4o-mini-tts': 'GPT-4o mini TTS',
-    'gpt-4o-tts': 'GPT-4o TTS',
     'gemini-2.5-flash-preview-tts': 'Gemini 2.5 Flash TTS'
   };
-  return labels[model] || model || 'TTS';
+  return labels[normalizeTtsModel(model)] || model || 'TTS';
 }
 
 function pttTtsLabel(target) {
@@ -1205,11 +1203,42 @@ function extractApiKey(text, provider) {
   return raw;
 }
 
+function normalizeTtsModel(model) {
+  const value = String(model || '').trim();
+  if (value === 'gpt-4o-tts') return 'gpt-4o-mini-tts';
+  if (value === 'gpt-4o-mini-tts' || value === 'gemini-2.5-flash-preview-tts') return value;
+  return TTS_DEFAULTS.model;
+}
+
+function ttsVoiceOptions(model, role) {
+  if (isGeminiTtsModel(model)) {
+    return ['Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe'];
+  }
+  return role === 'vi'
+    ? ['cedar','nova','alloy','ash','coral','fable','onyx','sage','shimmer']
+    : ['nova','alloy','ash','ballad','coral','echo','fable','onyx','sage','shimmer'];
+}
+
+function normalizeTtsVoice(model, role, voice) {
+  const options = ttsVoiceOptions(model, role);
+  const value = String(voice || '').trim();
+  const exact = options.find(v => v === value);
+  if (exact) return exact;
+  const sameCase = options.find(v => v.toLowerCase() === value.toLowerCase());
+  if (sameCase) return sameCase;
+  return isGeminiTtsModel(model)
+    ? (role === 'vi' ? 'Kore' : 'Puck')
+    : (role === 'vi' ? TTS_DEFAULTS.voiceVi : TTS_DEFAULTS.voiceTr);
+}
+
 function getTtsSettings() {
+  const model = normalizeTtsModel(localStorage.getItem('askviet_tts_model') || TTS_DEFAULTS.model);
+  const voiceTr = normalizeTtsVoice(model, 'tr', localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr);
+  const voiceVi = normalizeTtsVoice(model, 'vi', localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi);
   return {
-    model: localStorage.getItem('askviet_tts_model') || TTS_DEFAULTS.model,
-    voiceTr: localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr,
-    voiceVi: localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi,
+    model,
+    voiceTr,
+    voiceVi,
     speed: parseFloat(localStorage.getItem('askviet_tts_speed') || TTS_DEFAULTS.speed) || 1
   };
 }
@@ -1237,21 +1266,18 @@ function rebuildVoiceSelect(id, values, selected) {
   el.value = values.includes(current) ? current : values[0];
 }
 
-function syncVoiceSelectsForModel(model) {
-  if (isGeminiTtsModel(model)) {
-    const voices = ['Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe'];
-    rebuildVoiceSelect('ttsVoiceTrSelect', voices, localStorage.getItem('askviet_tts_voice_tr') || 'Puck');
-    rebuildVoiceSelect('ttsVoiceViSelect', voices, localStorage.getItem('askviet_tts_voice_vi') || 'Kore');
-  } else {
-    rebuildVoiceSelect('ttsVoiceTrSelect', ['nova','alloy','echo','fable','onyx','shimmer'], localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr);
-    rebuildVoiceSelect('ttsVoiceViSelect', ['cedar','nova','alloy','shimmer','fable','onyx'], localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi);
-  }
+function syncVoiceSelectsForModel(model, preferredTr, preferredVi) {
+  const cleanModel = normalizeTtsModel(model);
+  const trVoice = normalizeTtsVoice(cleanModel, 'tr', preferredTr || localStorage.getItem('askviet_tts_voice_tr'));
+  const viVoice = normalizeTtsVoice(cleanModel, 'vi', preferredVi || localStorage.getItem('askviet_tts_voice_vi'));
+  rebuildVoiceSelect('ttsVoiceTrSelect', ttsVoiceOptions(cleanModel, 'tr'), trVoice);
+  rebuildVoiceSelect('ttsVoiceViSelect', ttsVoiceOptions(cleanModel, 'vi'), viVoice);
 }
 
 function syncTtsSettingsUI() {
   const s = getTtsSettings();
   setSelectValue('ttsModelSelect', s.model);
-  syncVoiceSelectsForModel(s.model);
+  syncVoiceSelectsForModel(s.model, s.voiceTr, s.voiceVi);
   setSelectValue('ttsVoiceTrSelect', s.voiceTr);
   setSelectValue('ttsVoiceViSelect', s.voiceVi);
   setSelectValue('ttsSpeedSelect', String(s.speed));
@@ -1259,10 +1285,12 @@ function syncTtsSettingsUI() {
 }
 
 function saveTtsSettings() {
-  const model = document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model;
-  syncVoiceSelectsForModel(model);
-  const voiceTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
-  const voiceVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
+  const model = normalizeTtsModel(document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model);
+  const selectedTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
+  const selectedVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
+  const voiceTr = normalizeTtsVoice(model, 'tr', selectedTr);
+  const voiceVi = normalizeTtsVoice(model, 'vi', selectedVi);
+  syncVoiceSelectsForModel(model, voiceTr, voiceVi);
   const speed = document.getElementById('ttsSpeedSelect')?.value || TTS_DEFAULTS.speed;
   const old = getTtsSettings();
   const changed = old.model !== model || old.voiceTr !== voiceTr || old.voiceVi !== voiceVi || String(old.speed) !== String(parseFloat(speed) || 1);
@@ -2008,10 +2036,10 @@ async function loadOlderMessages() {
   try {
     const data = await fbGetQuery(MSGS_PATH, {
       orderBy: 'ts',
-      endAt: Number(oldestVisibleMessage.ts) - 1,
+      endAt: Number(oldestVisibleMessage.ts),
       limitToLast: CHAT_PAGE_SIZE
     }, true);
-    const entries = latestMessageEntries(data, CHAT_PAGE_SIZE);
+    const entries = latestMessageEntries(data, CHAT_PAGE_SIZE).filter(([k]) => !renderedKeys.has(k));
     if (!entries.length) {
       if (btn) btn.style.display = 'none';
       return;
