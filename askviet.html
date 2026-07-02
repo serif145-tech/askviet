@@ -758,7 +758,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-blacklist-micbtn-1';
+const APP_VERSION = '2026-07-02-remote-media-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -5867,6 +5867,12 @@ function togglePttMode(force) {
     toggleRealLive(false);
     suspendChatAutoSpeakForPtt(true);
     updatePwaRemoteButtons();
+    // Kumanda kayıtlıysa medya oturumunu hemen kur (kullanıcı dokunuşu
+    // bağlamındayız, autoplay izni var) — tuşlar anında bize aksın.
+    if (localStorage.getItem('askviet_pwa_remote_tr') || localStorage.getItem('askviet_pwa_remote_vi')) {
+      installPwaMediaRemoteHandlers();
+      startPwaRemoteKeepalive(30000);
+    }
   } else {
     updatePttAutoSpeakUI();
   }
@@ -5927,12 +5933,24 @@ function startPwaRemoteKeepalive(ms=20000) {
     if (!pwaRemoteKeepaliveAudio) {
       pwaRemoteKeepaliveAudio = new Audio(pwaRemoteSilentWavUrl());
       pwaRemoteKeepaliveAudio.loop = true;
-      pwaRemoteKeepaliveAudio.volume = 0;
-      pwaRemoteKeepaliveAudio.muted = true;
+      // CRITICAL: must NOT be muted/volume-0. iOS and Android only route
+      // hardware media buttons to a page that is audibly "playing" —
+      // muted audio never becomes the media-session target, so remote
+      // play/pause never reached our handlers. The WAV contains silent
+      // samples, so full volume is still inaudible.
+      pwaRemoteKeepaliveAudio.volume = 1;
+      pwaRemoteKeepaliveAudio.muted = false;
       pwaRemoteKeepaliveAudio.setAttribute('playsinline', 'playsinline');
+      pwaRemoteKeepaliveAudio.addEventListener('playing', () => {
+        installPwaMediaRemoteHandlers();
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      });
     }
     const play = pwaRemoteKeepaliveAudio.play();
-    if (play && typeof play.catch === 'function') play.catch(() => {});
+    if (play && typeof play.then === 'function') play.then(() => {
+      installPwaMediaRemoteHandlers();
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    }).catch(() => {});
     if ('mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({ title:'AskViet kumanda', artist:'AskViet', album:'Bas-Konuş' });
@@ -5942,9 +5960,13 @@ function startPwaRemoteKeepalive(ms=20000) {
   } catch {}
   pwaRemoteKeepaliveTimer = setTimeout(() => {
     pwaRemoteKeepaliveTimer = null;
-    if (!pwaRemoteAssignRole && !isPttModeOpen()) {
-      try { pwaRemoteKeepaliveAudio?.pause(); } catch {}
+    if (pwaRemoteAssignRole || isPttModeOpen()) {
+      // Bas-Konuş açıkken oturumu bırakma: medya tuşları hep bize aksın.
+      startPwaRemoteKeepalive(30000);
+      return;
     }
+    try { pwaRemoteKeepaliveAudio?.pause(); } catch {}
+    try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; } catch {}
   }, ms);
 }
 
@@ -5958,7 +5980,7 @@ function savePwaRemoteSignature(role, signature) {
   localStorage.setItem(role === 'vi' ? 'askviet_pwa_remote_vi' : 'askviet_pwa_remote_tr', signature);
   pwaRemoteAssignRole = '';
   updatePwaRemoteButtons();
-  showTransientNotice((role === 'vi' ? 'VI' : 'TR') + ' kumanda kaydedildi', 2400);
+  showTransientNotice((role === 'vi' ? 'VI' : 'TR') + ' kumanda kaydedildi (' + signature + ')', 3200);
   return true;
 }
 
