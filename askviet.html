@@ -123,12 +123,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-flag{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #ddd;box-shadow:0 1px 4px rgba(0,0,0,.12);font-size:11px;line-height:1;flex:0 0 18px}
 
 /* Okunacak dil — büyük ve belirgin */
-.msg-original{max-width:100%;padding:11px 15px;border-radius:20px;font-size:16px;font-weight:600;line-height:1.42;word-break:break-word;overflow-wrap:anywhere;position:relative;box-shadow:0 1px 2px rgba(0,0,0,.06)}
-.msg.mine .msg-original{background:linear-gradient(135deg,#7c4dff,#6d5df2);color:#fff;border-bottom-right-radius:6px}
-.msg.theirs .msg-original{background:linear-gradient(135deg,#be2a72,#a21f6a);color:#fff;border-bottom-left-radius:6px}
+.msg-original{max-width:100%;padding:13px 16px;border-radius:22px;font-size:16.5px;font-weight:500;letter-spacing:.1px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.msg.mine .msg-original{background:linear-gradient(180deg,#7b4af7,#6c36ee);color:#fff;border-bottom-right-radius:8px}
+.msg.theirs .msg-original{background:linear-gradient(180deg,#7b4af7,#6c36ee);color:#fff;border-bottom-left-radius:8px}
+.msg .msg-original:has(+ .msg-translation){border-bottom-left-radius:7px;border-bottom-right-radius:7px}
 .msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
 .msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
-.msg.media-msg.theirs .msg-original{border:1px solid rgba(185,28,110,.36);border-bottom-left-radius:5px}
+.msg.media-msg.theirs .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-left-radius:5px}
 .msg-deleted{padding:4px 0 2px;font-size:13px;font-weight:900;font-style:italic;opacity:.8;letter-spacing:.1px}
 .msg.mine .msg-deleted{color:rgba(255,255,255,.92)}
 .msg.theirs .msg-deleted{color:rgba(255,255,255,.92)}
@@ -140,9 +141,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.media-msg .msg-reply-quote{margin:2px 2px 4px;width:calc(100% - 4px);background:rgba(17,24,39,.88);color:#fff;border-left-color:#f9a8d4}
 
 /* Çeviri — küçük ve soluk */
-.msg-translation{font-size:12.5px;color:#5b5b66;padding:8px 13px;margin-top:5px;font-style:italic;line-height:1.45;touch-action:manipulation;background:#f0f0f4;border-radius:14px;max-width:100%;word-break:break-word;overflow-wrap:anywhere}
-.msg.mine .msg-translation{border-bottom-right-radius:5px}
-.msg.theirs .msg-translation{border-bottom-left-radius:5px}
+.msg-translation{font-size:13.5px;color:#585862;padding:11px 15px;margin-top:3px;font-style:italic;font-weight:500;line-height:1.5;touch-action:manipulation;background:#fdfdfd;border-radius:7px 7px 20px 20px;max-width:100%;word-break:break-word;overflow-wrap:anywhere;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.msg.mine .msg-translation{border-bottom-right-radius:9px}
+.msg.theirs .msg-translation{border-bottom-left-radius:9px}
 .translation-copy-tick{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #22c55e;box-shadow:0 2px 7px rgba(22,163,74,.35);font:900 10px/1 Arial,sans-serif;vertical-align:middle;pointer-events:none;animation:translationTick .95s ease forwards}
 @keyframes translationTick{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1.18)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82)}}
 .msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
@@ -286,7 +287,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 #realLivePanel .live-info-title{display:block;flex:1;min-width:0;font-size:14px;line-height:1.3;color:#f8fafc;white-space:normal}
 #realLivePanel .live-top{justify-content:space-between}
 #realLivePanel .live-status{display:none}
-.live-status{padding:8px 14px 10px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0}
+.live-status{padding:8px 14px 10px;border-bottom:1px solid #1b1b1b;color:#f8fafc;font-weight:950;font-size:15px;line-height:1.35;margin:0;display:flex;align-items:center;gap:10px}
+.live-state-big{flex:0 0 auto;width:24px;height:24px;border-radius:50%;position:relative;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff}
+.live-state-big[data-state="idle"]{background:#a78bfa;animation:liveDotIdle 2.4s ease-in-out infinite}
+.live-state-big[data-state="working"]{background:transparent;border:3px solid rgba(251,191,36,.25);border-top-color:#fbbf24;animation:liveDotSpin .7s linear infinite}
+.live-state-big[data-state="speaking"]{background:#22c55e;animation:liveDotPulse .9s ease-in-out infinite}
+.live-state-big[data-state="error"]{background:#ef4444;animation:none}
+.live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
 .live-info-title{display:flex;align-items:center;gap:9px}
 .live-state-dot{flex:0 0 auto;width:15px;height:15px;border-radius:50%;position:relative;background:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.18);transition:background .2s ease,box-shadow .2s ease}
 .live-state-dot[data-state="idle"]{background:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.18);animation:liveDotIdle 2.4s ease-in-out infinite}
@@ -313,7 +320,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
 .ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
-.tool-btn{min-height:34px;border:1px solid #303030;border-radius:9px;background:#151515;color:#fff;font-weight:850;font-size:12px;padding:0 10px}
+.tool-btn{min-height:38px;border:1px solid #2e2e38;border-radius:12px;background:#1a1a21;color:#e8e8f0;font-weight:800;font-size:13px;padding:0 13px;display:inline-flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .1s ease,background .15s ease;cursor:pointer}
+.tool-btn:active{transform:scale(.95);background:#232330}
 .tool-btn.primary,.tool-btn.retry{background:rgba(249,115,22,.14);border-color:#fb923c;color:#fdba74}
 .tool-btn.warn{background:rgba(124,58,237,.15);border-color:#a78bfa;color:#c4b5fd}
 .tool-btn.copy{background:rgba(6,182,212,.13);border-color:#22d3ee;color:#67e8f9}
@@ -597,7 +605,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="panel-title live-info-title" id="liveInfoTitle"><span class="live-state-dot" id="liveStateDot" data-state="idle"></span><span id="liveInfoText">Hazır</span></div>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
     </div>
-    <div class="live-status" id="realLiveStatus">Dinliyorum</div>
+    <div class="live-status" id="realLiveStatus"><span class="live-state-big" id="liveStateBig" data-state="idle"></span><span id="realLiveStatusText">Dinliyorum</span></div>
     <div class="live-settings" id="liveSettingsPanel">
       <label>Cevap tipi</label>
       <select id="liveResponseSelect" onchange="saveLiveSettings()">
@@ -668,7 +676,7 @@ const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
-const TTS_SETTINGS_PATH = CONFIG_PATH + '/ttsSettings';
+const TTS_SETTINGS_PATH = CONFIG_PATH + '/sharedSettings';
 const PRESENCE_PATH = CONFIG_PATH + '/presence';
 const PRESENCE_SESSIONS_PATH = CONFIG_PATH + '/presenceSessions';
 const AUDIO_PATH = '/rooms/' + ROOM + '/audioRequests';
@@ -676,7 +684,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-01-live-states-white-ui-1';
+const APP_VERSION = '2026-07-02-pro-ui-devicecount-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -891,6 +899,11 @@ let ttsPending = new Map();
 let lastChatUserActivityAt = Date.now();
 const SESSION_ID = sessionStorage.getItem('askviet_session_id') || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 sessionStorage.setItem('askviet_session_id', SESSION_ID);
+// Persistent per-device id (localStorage): survives reloads, app restarts and
+// role switches. The online counter counts distinct DEVICE_IDs, so the same
+// phone hopping VN→TR can never count as two.
+const DEVICE_ID = localStorage.getItem('askviet_device_id') || ('d' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+localStorage.setItem('askviet_device_id', DEVICE_ID);
 const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
 const OUTGOING_RETRY_TIMEOUT_MS = 8000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
@@ -1378,25 +1391,29 @@ function saveTtsSettings(fromRemote=false) {
 
 function syncTtsSettingsToFirebase(s) {
   if (myRole !== 'tr') return;
-  localStorage.setItem('askviet_tts_settings_updated_at', String(Date.now()));
+  const ts = Date.now();
+  localStorage.setItem('askviet_tts_settings_updated_at', String(ts));
+  // Same path + field names the Android app already publishes/reads
+  // (config/sharedSettings), so PWA and Android stay in one sync system.
   fbSet(TTS_SETTINGS_PATH, {
-    model: s.model,
-    voiceTr: s.voiceTr,
-    voiceVi: s.voiceVi,
-    speed: s.speed,
+    ttsModel: s.model,
+    ttsVoiceTr: s.voiceTr,
+    ttsVoiceVi: s.voiceVi,
+    ttsSpeed: String(s.speed),
+    transcriptEngine: 'openai',
     liveResponse: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
     liveSaver: localStorage.getItem('askviet_live_saver') !== '0',
-    updatedAt: { '.sv':'timestamp' },
-    source: SESSION_ID
+    updatedAt: ts,
+    updatedBy: 'pwa-' + myRole
   }).catch(e => recordConnectionEvent('tts-sync-error', e?.message || e));
 }
 
 function applyRemoteTtsSettings(data) {
   if (!data || typeof data !== 'object') return;
-  const model = normalizeTtsModel(data.model || TTS_DEFAULTS.model);
-  const voiceTr = normalizeTtsVoice(model, 'tr', data.voiceTr || TTS_DEFAULTS.voiceTr);
-  const voiceVi = normalizeTtsVoice(model, 'vi', data.voiceVi || TTS_DEFAULTS.voiceVi);
-  const speed = parseFloat(data.speed) || 1;
+  const model = normalizeTtsModel(data.ttsModel || data.model || TTS_DEFAULTS.model);
+  const voiceTr = normalizeTtsVoice(model, 'tr', data.ttsVoiceTr || data.voiceTr || TTS_DEFAULTS.voiceTr);
+  const voiceVi = normalizeTtsVoice(model, 'vi', data.ttsVoiceVi || data.voiceVi || TTS_DEFAULTS.voiceVi);
+  const speed = parseFloat(String(data.ttsSpeed != null ? data.ttsSpeed : data.speed).replace('x','')) || 1;
   const old = getTtsSettings();
   const changed = old.model !== model || old.voiceTr !== voiceTr || old.voiceVi !== voiceVi || String(old.speed) !== String(speed);
   localStorage.setItem('askviet_tts_model', model);
@@ -2607,30 +2624,30 @@ function renderMessage(key, msg) {
   const spBtn = document.createElement('button');
   spBtn.className = 'speakBtn';
   spBtn.innerHTML = '&#9654;';
-  spBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  spBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#7c3aed';
   bindSpeakAction(spBtn, () => requestSpeakForMessage(key, spBtn));
 
   const misBtn = document.createElement('button');
   misBtn.innerHTML = '&#9888;';
   misBtn.title = myRole === 'vi' ? 'Không hiểu, nói lại được không?' : 'Anlamadım, tekrar söyler misin?';
-  misBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#e8e0f8;border:1px solid #c4b5fd;color:#5b21b6;cursor:pointer';
+  misBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#d97706';
   misBtn.onclick = () => sendQuickMisunderstood();
 
   const retryBtn = document.createElement('button');
   retryBtn.innerHTML = '&#8635;';
   retryBtn.title = myRole === 'vi' ? 'Dịch lại' : 'Tekrar çevir';
-  retryBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#ea580c;cursor:pointer';
+  retryBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#ea580c';
   retryBtn.onclick = () => retryMessageTranslation(key, retryBtn);
 
   const copyBtn = document.createElement('button');
   copyBtn.innerHTML = '&#10697;';
   copyBtn.title = myRole === 'vi' ? 'Sao chép' : 'Kopyala';
-  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#ecfeff;border:1px solid #67e8f9;color:#0891b2;cursor:pointer';
+  copyBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#0891b2';
   copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
 
   const delBtn = document.createElement('button');
   delBtn.innerHTML = '&times;';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+  delBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#e11d48';
   delBtn.onclick = () => deleteMessage(key);
 
   btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
@@ -2642,7 +2659,7 @@ function renderMessage(key, msg) {
     const delBtn = document.createElement('button');
     delBtn.innerHTML = '&times;';
     delBtn.title = myRole === 'vi' ? 'Xóa' : 'Sil';
-    delBtn.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:#fce7f3;border:1px solid #f9a8d4;color:#be185d;cursor:pointer';
+    delBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#e11d48';
     delBtn.onclick = e => { e.preventDefault(); e.stopPropagation(); deleteMessage(key); };
     btnRow.appendChild(delBtn);
     div.appendChild(btnRow);
@@ -6995,8 +7012,8 @@ function applyLocaleUI() {
   const back = document.querySelector('button[onclick="goBack()"]');
   if (back) back.title = isVi ? 'Quay lại API và chọn bên' : 'API ve taraf seçimine dön';
   const labels = document.querySelectorAll('#ttsPanel label');
-  const viLabels = ['Mẫu giọng', 'Bộ chuyển giọng thành chữ', 'Giọng TR', 'Giọng VI', 'Tốc độ'];
-  const trLabels = ['Ses modeli', 'Transkript motoru', 'TR sesi', 'VI sesi', 'Hız'];
+  const viLabels = ['Mẫu giọng', 'Giọng TR', 'Giọng VI', 'Tốc độ'];
+  const trLabels = ['Ses modeli', 'TR sesi', 'VI sesi', 'Hız'];
   labels.forEach((label, i) => label.textContent = (isVi ? viLabels : trLabels)[i] || label.textContent);
   const save = document.querySelector('#ttsPanel .tts-save');
   if (save) save.textContent = isVi ? 'Lưu' : 'Kaydet';
@@ -7004,8 +7021,8 @@ function applyLocaleUI() {
   if (listBtn) listBtn.textContent = isVi ? 'Danh sách chặn / cho phép' : 'Kara / Beyaz Liste';
   document.querySelectorAll('.panel-close').forEach(b => b.textContent = isVi ? 'Đóng' : 'Kapat');
   renderTextLists();
-  const liveStatus = document.getElementById('realLiveStatus');
-  if (liveStatus && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatus.textContent)) liveStatus.textContent = isVi ? 'Sẵn sàng' : 'Hazır';
+  const liveStatusText = document.getElementById('realLiveStatusText') || document.getElementById('realLiveStatus');
+  if (liveStatusText && /Gemini API|phien Live|phiên Live|Dinleniyor|Không nghe|Khong nghe/.test(liveStatusText.textContent)) setRealLiveStatus(isVi ? 'Sẵn sàng' : 'Hazır', 'idle');
   updateAutoReadUI();
   updateNotifySoundUI();
   updateWebPushButton();
@@ -7192,8 +7209,8 @@ function updatePresenceStatus(data) {
 }
 function updateMyPresence(online=true, keepalive=false) {
   if (!myRole) return;
-  const payload = { online: !!online, lastActive: Date.now() };
-  const sessionPayload = { online: !!online, lastActive: payload.lastActive, role: myRole };
+  const payload = { online: !!online, lastActive: Date.now(), deviceId: DEVICE_ID };
+  const sessionPayload = { online: !!online, lastActive: payload.lastActive, role: myRole, deviceId: DEVICE_ID };
   if (keepalive) {
     if (firebaseAuth?.idToken) {
       fetch(dbUrlSync(PRESENCE_PATH + '/' + myRole), {
@@ -7238,11 +7255,41 @@ function removeMyPresenceSession(keepalive=false) {
 }
 function startPresence() {
   updateMyPresence(true);
+  clearMyOtherRolePresence();
   pruneStalePresenceSessions();
   const counter = document.getElementById('onlineCounter');
   if (counter) counter.textContent = '1';
   if (presenceTimer) clearInterval(presenceTimer);
   presenceTimer = setInterval(() => updateMyPresence(true), 30000);
+}
+// Role-switch cleanup: if this same device previously sat on the other role,
+// that record still says online:true and inflates the counter. On entering a
+// role, mark the other role's record offline when it carries OUR deviceId,
+// and delete our own leftover sessions written under older SESSION_IDs.
+function clearMyOtherRolePresence() {
+  if (!theirRole) return;
+  fbGet(PRESENCE_PATH + '/' + theirRole, true).then(d => {
+    if (d && d.deviceId === DEVICE_ID && d.online) {
+      fbSet(PRESENCE_PATH + '/' + theirRole, { online:false, lastActive:0, deviceId: DEVICE_ID });
+    }
+  }).catch(()=>{});
+  Promise.all([
+    fbGet(PRESENCE_SESSIONS_PATH, true).catch(()=>null),
+    fbGet(PRESENCE_PATH + '/sessions', true).catch(()=>null)
+  ]).then(([alt, main]) => {
+    const kill = new Set();
+    for (const bag of [alt, main]) {
+      if (!bag || typeof bag !== 'object') continue;
+      for (const [sid, s] of Object.entries(bag)) {
+        if (sid === SESSION_ID) continue;
+        if (s && s.deviceId === DEVICE_ID) kill.add(sid);
+      }
+    }
+    kill.forEach(sid => {
+      fetch(dbUrlSync(PRESENCE_SESSIONS_PATH + '/' + sid), { method:'DELETE' }).catch(()=>{});
+      fetch(dbUrlSync(PRESENCE_PATH + '/sessions/' + sid), { method:'DELETE' }).catch(()=>{});
+    });
+  }).catch(()=>{});
 }
 // Delete presence sessions whose lastActive is well past the stale window.
 // These are leftovers from closed tabs / role switches that never got cleaned
@@ -7285,14 +7332,21 @@ function listenPresence() {
     const now = Date.now();
     const allSessions = Object.assign({}, sessions && typeof sessions === 'object' ? sessions : {}, altSessions && typeof altSessions === 'object' ? altSessions : {});
     const freshSessions = Object.values(allSessions).filter(s => s && s.online && Number(s.lastActive || 0) && now - Number(s.lastActive || 0) <= PRESENCE_STALE_MS);
-    const sessionCount = freshSessions.length;
+    // Count distinct devices, not sessions: a device that switched roles or
+    // reopened the app writes new sessions but keeps its deviceId.
+    const devicesSeen = new Set();
+    let legacyCount = 0;
+    for (const s of freshSessions) {
+      if (s.deviceId) devicesSeen.add(s.deviceId);
+      else legacyCount++;
+    }
     const rolesSeen = new Set(freshSessions.map(s => s.role).filter(Boolean));
     let roleFallback = 0;
     const myFresh = !!(myData && myData.online && Number(myData.lastActive || 0) && now - Number(myData.lastActive || 0) <= PRESENCE_STALE_MS);
     const theirFresh = !!(theirData && theirData.online && Number(theirData.lastActive || 0) && now - Number(theirData.lastActive || 0) <= PRESENCE_STALE_MS);
-    if (myFresh && !rolesSeen.has(myRole)) roleFallback++;
-    if (theirFresh && !rolesSeen.has(theirRole)) roleFallback++;
-    updatePresenceStatus(Object.assign({}, theirData || {}, { __onlineCount: sessionCount + roleFallback }));
+    if (myFresh && !rolesSeen.has(myRole) && !(myData.deviceId && devicesSeen.has(myData.deviceId))) roleFallback++;
+    if (theirFresh && !rolesSeen.has(theirRole) && !(theirData.deviceId && devicesSeen.has(theirData.deviceId))) roleFallback++;
+    updatePresenceStatus(Object.assign({}, theirData || {}, { __onlineCount: devicesSeen.size + legacyCount + roleFallback }));
   }).catch(()=>{});
   poll();
   presencePollTimer = setInterval(poll, 6000);
@@ -7725,16 +7779,24 @@ function updateLiveMainButton(on=false) {
 }
 
 function setRealLiveStatus(text, state='') {
-  const el=document.getElementById('realLiveStatus');
-  if (el) el.textContent = text || '';
+  const textEl2=document.getElementById('realLiveStatusText');
+  if (textEl2) textEl2.textContent = text || '';
+  else {
+    const el=document.getElementById('realLiveStatus');
+    if (el) el.textContent = text || '';
+  }
   const textEl=document.getElementById('liveInfoText');
   if (textEl) textEl.textContent = text || 'Hazır';
   else {
     const title=document.getElementById('liveInfoTitle');
     if (title) title.textContent = text || 'Hazır';
   }
-  const dot=document.getElementById('liveStateDot');
-  if (dot && state) dot.dataset.state = state;
+  if (state) {
+    const dot=document.getElementById('liveStateDot');
+    if (dot) dot.dataset.state = state;
+    const big=document.getElementById('liveStateBig');
+    if (big) big.dataset.state = state;
+  }
 }
 
 function appendRealLiveLog(text, cls='') {
