@@ -125,11 +125,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 /* Okunacak dil — büyük ve belirgin */
 .msg-original{max-width:100%;padding:13px 16px;border-radius:22px;font-size:16.5px;font-weight:500;letter-spacing:.1px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .msg.mine .msg-original{background:linear-gradient(180deg,#7b4af7,#6c36ee);color:#fff;border-bottom-right-radius:8px}
-.msg.theirs .msg-original{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border-bottom-left-radius:8px}
+.msg.theirs .msg-original{background:linear-gradient(180deg,#ec4899,#db2777);color:#fff;border-bottom-left-radius:8px}
 .msg .msg-original:has(+ .msg-translation){border-bottom-left-radius:7px;border-bottom-right-radius:7px}
 .msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
 .msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
-.msg.media-msg.theirs .msg-original{border:1px solid rgba(37,99,235,.36);border-bottom-left-radius:5px}
+.msg.media-msg.theirs .msg-original{border:1px solid rgba(219,39,119,.36);border-bottom-left-radius:5px}
 .msg-deleted{padding:4px 0 2px;font-size:13px;font-weight:900;font-style:italic;opacity:.8;letter-spacing:.1px}
 .msg.mine .msg-deleted{color:rgba(255,255,255,.92)}
 .msg.theirs .msg-deleted{color:rgba(255,255,255,.92)}
@@ -295,6 +295,18 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-state-big[data-state="error"]{background:#ef4444;animation:none}
 .live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
 .live-info-title{display:flex;align-items:center;gap:11px}
+.live-beacon{width:28px!important;height:28px!important;margin-right:8px}
+#micReviveOverlay{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:rgba(5,5,10,.72);backdrop-filter:blur(3px)}
+#micReviveOverlay.show{display:flex}
+.mic-revive-circle{position:relative;width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%,rgba(124,58,237,.35),rgba(124,58,237,.08));box-shadow:0 0 0 1px rgba(167,139,250,.4),0 0 46px rgba(124,58,237,.45);color:#c4b5fd}
+.mic-revive-ring{position:absolute;inset:-9px;border-radius:50%;border:4px solid rgba(167,139,250,.18);border-top-color:#a78bfa;animation:micReviveSpin .85s linear infinite}
+.mic-revive-check{display:none;color:#4ade80}
+#micReviveOverlay.ok .mic-revive-circle{background:radial-gradient(circle at 50% 42%,rgba(34,197,94,.35),rgba(34,197,94,.08));box-shadow:0 0 0 1px rgba(74,222,128,.5),0 0 46px rgba(34,197,94,.5);color:#4ade80}
+#micReviveOverlay.ok .mic-revive-ring{display:none}
+#micReviveOverlay.ok .mic-revive-mic{display:none}
+#micReviveOverlay.ok .mic-revive-check{display:block;animation:micRevivePop .3s ease}
+@keyframes micReviveSpin{to{transform:rotate(360deg)}}
+@keyframes micRevivePop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
 .live-state-dot{flex:0 0 auto;width:20px;height:20px;border-radius:50%;position:relative;background:radial-gradient(circle at 38% 32%,#c4b5fd,#8b5cf6);box-shadow:0 0 0 2px rgba(167,139,250,.35),0 0 14px rgba(139,92,246,.55);transition:background .25s ease,box-shadow .25s ease}
 .live-state-dot[data-state="idle"]{background:radial-gradient(circle at 38% 32%,#c4b5fd,#8b5cf6);box-shadow:0 0 0 2px rgba(167,139,250,.35),0 0 14px rgba(139,92,246,.55);animation:liveDotIdle 2.4s ease-in-out infinite}
 .live-state-dot[data-state="working"]{background:conic-gradient(#fbbf24 0 76%,rgba(251,191,36,.15) 76% 100%);box-shadow:0 0 14px rgba(251,191,36,.5);animation:liveDotSpin .8s linear infinite}
@@ -604,6 +616,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="real-live-panel" id="realLivePanel" style="display:none" hidden>
     <div class="panel-top live-top">
       <div class="panel-title live-info-title" id="liveInfoTitle"><span class="live-state-dot" id="liveStateDot" data-state="idle"></span><span id="liveInfoText">Hazır</span></div>
+      <span class="live-state-dot live-beacon" id="liveBeacon" data-state="idle"></span>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
     </div>
     <div class="live-status" id="realLiveStatus"><span class="live-state-big" id="liveStateBig" data-state="idle"></span><span id="realLiveStatusText">Dinliyorum</span></div>
@@ -685,7 +698,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-states-revive-ui-1';
+const APP_VERSION = '2026-07-02-mic-fix-beacon-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -7815,6 +7828,8 @@ function setRealLiveStatus(text, state='') {
     if (dot) dot.dataset.state = state;
     const big=document.getElementById('liveStateBig');
     if (big) big.dataset.state = state;
+    const beacon=document.getElementById('liveBeacon');
+    if (beacon) beacon.dataset.state = state;
   }
 }
 
@@ -7872,18 +7887,61 @@ function speakLastLive() {
 // After backgrounding a PWA, iOS/Android can silently kill the mic track:
 // Live looks running but hears nothing. On returning to foreground, detect a
 // dead track/context and rebuild the whole capture pipeline automatically.
-async function revivePseudoLiveMic() {
-  if (!pseudoLiveRunning) return;
-  try { if (pseudoLiveCtx && pseudoLiveCtx.state === 'suspended') await pseudoLiveCtx.resume(); } catch {}
-  const t = pseudoLiveStream && pseudoLiveStream.getAudioTracks ? pseudoLiveStream.getAudioTracks()[0] : null;
-  const dead = !t || t.readyState === 'ended' || t.muted === true || !pseudoLiveCtx || pseudoLiveCtx.state === 'closed';
-  if (!dead) return;
-  appendRealLiveLog('Mikrofon arka planda kapanmış, yeniden bağlanıyor...', 'status');
-  try { stopPseudoLive(true); } catch {}
+let micReviveHideTimer = null;
+function showMicRevive(mode) {
+  const o = document.getElementById('micReviveOverlay');
+  if (!o) return;
+  if (micReviveHideTimer) { clearTimeout(micReviveHideTimer); micReviveHideTimer = null; }
+  if (mode === 'spin') { o.classList.remove('ok'); o.classList.add('show'); }
+  else if (mode === 'ok') {
+    o.classList.add('show', 'ok');
+    micReviveHideTimer = setTimeout(() => { o.classList.remove('show', 'ok'); }, 1400);
+  } else o.classList.remove('show', 'ok');
+}
+function forceAbortRecording() {
   try {
-    await startPseudoLive();
-  } catch (e) {
-    setRealLiveStatus('Mikrofon geri alınamadı: ' + normalizeApiError(e && e.message ? e.message : String(e), 'tr'), 'error');
+    if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.ondataavailable = null; rec.stop(); }
+  } catch {}
+  try {
+    if (recStream) recStream.getTracks().forEach(t => t.stop());
+    if (recNode) recNode.disconnect();
+  } catch {}
+  recStream = null; recNode = null; rec = null; recAnalyser = null; recData = null;
+  if (recTimer) { clearInterval(recTimer); recTimer = null; }
+  const btn = document.getElementById('micBtn');
+  if (btn) { btn.classList.remove('mic-recording'); btn.innerHTML = MIC_ICON; }
+  try { resetMicrophoneAudioContext(); } catch {}
+}
+async function revivePseudoLiveMic() {
+  // Live: rebuild the whole capture pipeline with a big visual (spinning mic
+  // -> green check) so the VI side understands without reading Turkish.
+  if (pseudoLiveRunning) {
+    try { if (pseudoLiveCtx && pseudoLiveCtx.state === 'suspended') await pseudoLiveCtx.resume(); } catch {}
+    const t = pseudoLiveStream && pseudoLiveStream.getAudioTracks ? pseudoLiveStream.getAudioTracks()[0] : null;
+    const dead = !t || t.readyState === 'ended' || t.muted === true || !pseudoLiveCtx || pseudoLiveCtx.state === 'closed';
+    if (dead) {
+      showMicRevive('spin');
+      appendRealLiveLog('Mikrofon arka planda kapanmış, yeniden bağlanıyor...', 'status');
+      try { stopPseudoLive(true); } catch {}
+      try {
+        await startPseudoLive();
+        showMicRevive('ok');
+      } catch (e) {
+        showMicRevive(false);
+        setRealLiveStatus('Mikrofon geri alınamadı: ' + normalizeApiError(e && e.message ? e.message : String(e), 'tr'), 'error');
+      }
+    }
+    return;
+  }
+  // Message / Bas-Konuş: a recording whose track died in the background hangs
+  // the recorder. Abort it cleanly (fresh stream is acquired on next tap) and
+  // show the same mic->check visual so it's obvious the mic was refreshed.
+  const rt = recStream && recStream.getAudioTracks ? recStream.getAudioTracks()[0] : null;
+  const recDead = (rec || recStream) && (!rt || rt.readyState === 'ended' || rt.muted === true);
+  if (recDead) {
+    showMicRevive('spin');
+    forceAbortRecording();
+    setTimeout(() => showMicRevive('ok'), 500);
   }
 }
 document.addEventListener('visibilitychange', () => {
@@ -7970,10 +8028,14 @@ function tickPseudoLive(event) {
     pseudoLiveLongestVoiceRunMs=Math.max(pseudoLiveLongestVoiceRunMs,pseudoLiveCurrentVoiceRunMs);
     pseudoLivePeakLevel=Math.max(pseudoLivePeakLevel,level.peak);
     if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += elapsed;
-    const minRunMs=Math.max(140,Math.round(requiredVoiceMs * 2 / 3));
-    const hasSpeechShape=pseudoLiveStrongVoiceMs >= 50
-      || pseudoLivePeakLevel >= peakThreshold * 1.8
-      || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 90;
+    const minRunMs=Math.max(150,Math.round(requiredVoiceMs * 2 / 3));
+    // Shape requirements back to strict: the looser gate let noise/silence
+    // segments through, and the STT model hallucinates (even echoes its own
+    // prompt) on near-empty audio. Short answers still pass thanks to the
+    // lowered requiredVoiceMs + latch; noise no longer does.
+    const hasSpeechShape=pseudoLiveStrongVoiceMs >= 70
+      || pseudoLivePeakLevel >= peakThreshold * 2
+      || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 140;
     // Latch acceptance: once a segment has enough real speech, keep it accepted
     // so trailing noise can't throw away a segment that began with real talk.
     if (pseudoLiveVoiceMs >= requiredVoiceMs && pseudoLiveLongestVoiceRunMs >= minRunMs && hasSpeechShape) {
@@ -8343,6 +8405,15 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => setConnected(false));
 clearUnreadCount();
 </script>
+<div id="micReviveOverlay" aria-hidden="true">
+  <div class="mic-revive-box">
+    <div class="mic-revive-circle">
+      <span class="mic-revive-ring"></span>
+      <svg class="mic-revive-mic" viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      <svg class="mic-revive-check" viewBox="0 0 24 24" width="58" height="58" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+  </div>
+</div>
 </body>
 </html>
 
