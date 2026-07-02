@@ -86,7 +86,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .transient-notice{position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),12px) + 68px);transform:translate(-50%,-12px);z-index:10000;width:max-content;max-width:min(88vw,430px);padding:11px 14px;border-radius:8px;background:#18181b;color:#fff;border:1px solid #3f3f46;box-shadow:0 10px 28px #0007;font-size:13px;font-weight:800;line-height:1.35;text-align:center;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
 .transient-notice.show{opacity:1;transform:translate(-50%,0)}
 .header-tools{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex:0 0 auto}
-.witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88}
+.witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88;cursor:pointer;transition:transform .1s ease,box-shadow .15s ease}
+.witch-avatar:active{transform:scale(.94);box-shadow:0 0 18px #a78bfa}
 .model-row{display:flex;gap:6px;align-items:center;min-width:0}
 .model-vs{color:var(--muted);font-size:10px}
 .mode-row{display:flex;align-items:center;gap:8px;justify-content:flex-end;width:100%;min-width:0}
@@ -302,7 +303,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
 .live-info-title{display:flex;align-items:center;gap:11px}
 .live-beacon{width:28px!important;height:28px!important;margin-right:8px}
-.mic-refresh-btn{width:38px;height:38px;border-radius:12px;background:#17171f;border:1px solid rgba(139,92,246,.55);color:#c4b5fd;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s ease,box-shadow .15s ease}
+.mic-refresh-btn{width:42px;height:38px;border-radius:12px;background:#17171f;border:1px solid rgba(139,92,246,.70);color:#c4b5fd;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s ease,box-shadow .15s ease;box-shadow:0 0 12px rgba(124,58,237,.18)}
 .mic-refresh-btn:active{transform:scale(.92);box-shadow:0 0 12px rgba(139,92,246,.5)}
 #blockToast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,14px);z-index:100001;display:flex;align-items:center;gap:12px;background:#17171f;border:1px solid rgba(139,92,246,.5);color:#f3e8ff;font-size:13.5px;font-weight:800;padding:11px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}
 #blockToast.show{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
@@ -516,9 +517,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar">Mesaj</button>
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
-        <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
-        <button class="back-btn" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" title="Ses ayarları">&#9881;</button>
+        <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="Ses ayarları" title="Ses ayarları">
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön">&#8617;</button>
+        <button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button>
       </div>
     </div>
     <div class="model-row">
@@ -549,7 +550,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
-          <button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button>
         </div>
       </div>
         <div class="tts-panel" id="ttsPanel">
@@ -5810,15 +5810,125 @@ function switchToChatMode() {
 let pwaRemoteAssignRole = '';
 let pwaRemoteActiveRole = '';
 let pwaRemoteLastHandledAt = 0;
+let pwaRemoteSuppressPointerUntil = 0;
+let pwaRemoteKeepaliveAudio = null;
+let pwaRemoteKeepaliveTimer = null;
 
 function pwaRemoteSignature(event) {
   return String(event?.code || '') + '|' + String(event?.key || '') + '|' + String(event?.keyCode || 0);
 }
 
+function normalizePwaMediaAction(action) {
+  return action === 'play' || action === 'pause' ? 'playpause' : String(action || '');
+}
+
+function pwaRemoteSilentWavUrl() {
+  const sampleRate = 8000;
+  const samples = sampleRate;
+  const buffer = new ArrayBuffer(44 + samples * 2);
+  const view = new DataView(buffer);
+  const write = (offset, text) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + samples * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, samples * 2, true);
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+function startPwaRemoteKeepalive(ms=20000) {
+  if (pwaRemoteKeepaliveTimer) clearTimeout(pwaRemoteKeepaliveTimer);
+  try {
+    if (!pwaRemoteKeepaliveAudio) {
+      pwaRemoteKeepaliveAudio = new Audio(pwaRemoteSilentWavUrl());
+      pwaRemoteKeepaliveAudio.loop = true;
+      pwaRemoteKeepaliveAudio.volume = 0;
+      pwaRemoteKeepaliveAudio.muted = true;
+      pwaRemoteKeepaliveAudio.setAttribute('playsinline', 'playsinline');
+    }
+    const play = pwaRemoteKeepaliveAudio.play();
+    if (play && typeof play.catch === 'function') play.catch(() => {});
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title:'AskViet kumanda', artist:'AskViet', album:'Bas-Konuş' });
+        navigator.mediaSession.playbackState = 'playing';
+      } catch {}
+    }
+  } catch {}
+  pwaRemoteKeepaliveTimer = setTimeout(() => {
+    pwaRemoteKeepaliveTimer = null;
+    if (!pwaRemoteAssignRole && !isPttModeOpen()) {
+      try { pwaRemoteKeepaliveAudio?.pause(); } catch {}
+    }
+  }, ms);
+}
+
+function pwaRemoteClickSignature(event) {
+  if (!event) return '';
+  return 'click:' + String(event.button ?? 0) + ':' + String(event.detail || 1);
+}
+
+function savePwaRemoteSignature(role, signature) {
+  if (!signature) return false;
+  localStorage.setItem(role === 'vi' ? 'askviet_pwa_remote_vi' : 'askviet_pwa_remote_tr', signature);
+  pwaRemoteAssignRole = '';
+  updatePwaRemoteButtons();
+  showTransientNotice((role === 'vi' ? 'VI' : 'TR') + ' kumanda kaydedildi', 2400);
+  return true;
+}
+
+function triggerPwaRemoteRole(role) {
+  if (!role) return;
+  const now = Date.now();
+  if (now - pwaRemoteLastHandledAt < 300) return;
+  pwaRemoteLastHandledAt = now;
+  pwaRemoteActiveRole = role;
+  updatePwaRemoteButtons();
+  startPwaRemoteKeepalive(30000);
+  togglePttMode(true);
+  startPttVoice(role);
+  setTimeout(() => {
+    pwaRemoteActiveRole = '';
+    updatePwaRemoteButtons();
+  }, 900);
+}
+
+function handlePwaRemoteMediaAction(action) {
+  const signature = 'media:' + normalizePwaMediaAction(action);
+  if (pwaRemoteAssignRole) {
+    savePwaRemoteSignature(pwaRemoteAssignRole, signature);
+    return;
+  }
+  const tr = localStorage.getItem('askviet_pwa_remote_tr');
+  const vi = localStorage.getItem('askviet_pwa_remote_vi');
+  triggerPwaRemoteRole(signature === tr ? 'tr' : (signature === vi ? 'vi' : ''));
+}
+
+function installPwaMediaRemoteHandlers() {
+  if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setActionHandler !== 'function') return false;
+  const actions = ['play','pause','stop','previoustrack','nexttrack','seekbackward','seekforward'];
+  actions.forEach(action => {
+    try { navigator.mediaSession.setActionHandler(action, () => handlePwaRemoteMediaAction(action)); } catch {}
+  });
+  return true;
+}
+
 function beginPwaRemoteAssign(role) {
   pwaRemoteAssignRole = role === 'vi' ? 'vi' : 'tr';
+  installPwaMediaRemoteHandlers();
+  startPwaRemoteKeepalive(20000);
   updatePwaRemoteButtons();
-  showTransientNotice((pwaRemoteAssignRole === 'vi' ? 'VI' : 'TR') + ' kumanda için şimdi tuşa bas', 5000);
+  showTransientNotice((pwaRemoteAssignRole === 'vi' ? 'VI' : 'TR') + ' kumanda için şimdi tuşa bas', 8000);
 }
 
 function updatePwaRemoteButtons() {
@@ -5837,10 +5947,62 @@ function updatePwaRemoteButtons() {
 }
 
 function pwaRemoteRoleForEvent(event) {
-  const sig = pwaRemoteSignature(event);
+  return pwaRemoteRoleForSignature(pwaRemoteSignature(event));
+}
+
+function pwaRemoteRoleForSignature(sig) {
   if (sig && sig === localStorage.getItem('askviet_pwa_remote_tr')) return 'tr';
   if (sig && sig === localStorage.getItem('askviet_pwa_remote_vi')) return 'vi';
   return '';
+}
+
+function pwaRemotePointerSignature(event) {
+  if (!event || event.pointerType !== 'mouse') return '';
+  return 'pointer:mouse:' + String(event.button ?? 0);
+}
+
+function handlePwaRemotePointer(event) {
+  const signature = pwaRemotePointerSignature(event);
+  if (!signature) return;
+  if (pwaRemoteAssignRole && event.target?.closest?.('.ptt-remote-btn')) return;
+  if (pwaRemoteAssignRole) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    pwaRemoteSuppressPointerUntil = Date.now() + 600;
+    savePwaRemoteSignature(pwaRemoteAssignRole, signature);
+    return;
+  }
+  const role = pwaRemoteRoleForSignature(signature);
+  if (!role) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  pwaRemoteSuppressPointerUntil = Date.now() + 600;
+  triggerPwaRemoteRole(role);
+}
+
+function pwaRemoteWheelSignature(event) {
+  if (!event) return '';
+  const ax = Math.abs(Number(event.deltaX || 0));
+  const ay = Math.abs(Number(event.deltaY || 0));
+  if (ax < 1 && ay < 1) return '';
+  if (ax > ay) return 'wheel:' + (event.deltaX > 0 ? 'right' : 'left');
+  return 'wheel:' + (event.deltaY > 0 ? 'down' : 'up');
+}
+
+function handlePwaRemoteWheel(event) {
+  const signature = pwaRemoteWheelSignature(event);
+  if (!signature) return;
+  if (pwaRemoteAssignRole) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    savePwaRemoteSignature(pwaRemoteAssignRole, signature);
+    return;
+  }
+  const role = pwaRemoteRoleForSignature(signature);
+  if (!role) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  triggerPwaRemoteRole(role);
 }
 
 function handlePwaRemoteKey(event) {
@@ -5848,14 +6010,11 @@ function handlePwaRemoteKey(event) {
   const target = event.target;
   if (!pwaRemoteAssignRole && target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
 
-  if (pwaRemoteAssignRole && event.type === 'keydown' && !event.repeat) {
+  if (pwaRemoteAssignRole && !event.repeat) {
     event.preventDefault();
     event.stopImmediatePropagation();
     const role = pwaRemoteAssignRole;
-    localStorage.setItem(role === 'vi' ? 'askviet_pwa_remote_vi' : 'askviet_pwa_remote_tr', pwaRemoteSignature(event));
-    pwaRemoteAssignRole = '';
-    updatePwaRemoteButtons();
-    showTransientNotice((role === 'vi' ? 'VI' : 'TR') + ' kumanda kaydedildi', 2400);
+    savePwaRemoteSignature(role, pwaRemoteSignature(event));
     return;
   }
 
@@ -5865,21 +6024,26 @@ function handlePwaRemoteKey(event) {
   event.stopImmediatePropagation();
   if (event.type !== 'keydown' || event.repeat) return;
 
-  const now = Date.now();
-  if (now - pwaRemoteLastHandledAt < 260) return;
-  pwaRemoteLastHandledAt = now;
-  pwaRemoteActiveRole = role;
-  updatePwaRemoteButtons();
-  togglePttMode(true);
-  startPttVoice(role);
-  setTimeout(() => {
-    pwaRemoteActiveRole = '';
-    updatePwaRemoteButtons();
-  }, 900);
+  triggerPwaRemoteRole(role);
 }
 
 window.addEventListener('keydown', handlePwaRemoteKey, true);
 window.addEventListener('keyup', handlePwaRemoteKey, true);
+window.addEventListener('pointerdown', handlePwaRemotePointer, true);
+window.addEventListener('wheel', handlePwaRemoteWheel, {capture:true, passive:false});
+window.addEventListener('click', event => {
+  if (pwaRemoteAssignRole && !event.target?.closest?.('.ptt-remote-btn')) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    savePwaRemoteSignature(pwaRemoteAssignRole, pwaRemoteClickSignature(event));
+    return;
+  }
+  if (Date.now() < pwaRemoteSuppressPointerUntil) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
+installPwaMediaRemoteHandlers();
 
 function isPttModeOpen() {
   return !!document.getElementById('pttPanel')?.classList.contains('open');
@@ -6021,7 +6185,8 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
 
   const block = makeToolButton('Engelle', () => {
     if (block.dataset.confirm === '1') {
-      addBlockedText(sourceText || translatedText);
+      addBlockedText(sourceText);
+      addBlockedText(translatedText);
       block.textContent = '✓';
       block.classList.add('confirm');
       return;
