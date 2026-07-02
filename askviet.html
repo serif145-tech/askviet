@@ -125,11 +125,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 /* Okunacak dil — büyük ve belirgin */
 .msg-original{max-width:100%;padding:13px 16px;border-radius:22px;font-size:16.5px;font-weight:500;letter-spacing:.1px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .msg.mine .msg-original{background:linear-gradient(180deg,#7b4af7,#6c36ee);color:#fff;border-bottom-right-radius:8px}
-.msg.theirs .msg-original{background:linear-gradient(180deg,#7b4af7,#6c36ee);color:#fff;border-bottom-left-radius:8px}
+.msg.theirs .msg-original{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border-bottom-left-radius:8px}
 .msg .msg-original:has(+ .msg-translation){border-bottom-left-radius:7px;border-bottom-right-radius:7px}
 .msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
 .msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
-.msg.media-msg.theirs .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-left-radius:5px}
+.msg.media-msg.theirs .msg-original{border:1px solid rgba(37,99,235,.36);border-bottom-left-radius:5px}
 .msg-deleted{padding:4px 0 2px;font-size:13px;font-weight:900;font-style:italic;opacity:.8;letter-spacing:.1px}
 .msg.mine .msg-deleted{color:rgba(255,255,255,.92)}
 .msg.theirs .msg-deleted{color:rgba(255,255,255,.92)}
@@ -257,7 +257,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .real-live-panel.open{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:none}
 .panel-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid #171717}
 .panel-title{font-size:16px;font-weight:950;color:#f3e8ff;letter-spacing:.1px}
-#pttStatusTitle{flex:1;min-width:0;color:#f8fafc;font-size:14px;line-height:1.3;white-space:normal}
+#pttStatusTitle{flex:1;min-width:0;color:#f8fafc;font-size:14px;line-height:1.3;white-space:normal;display:flex;align-items:center;gap:10px}
 .panel-close{padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
 .ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
@@ -294,15 +294,16 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-state-big[data-state="speaking"]{background:#22c55e;animation:liveDotPulse .9s ease-in-out infinite}
 .live-state-big[data-state="error"]{background:#ef4444;animation:none}
 .live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
-.live-info-title{display:flex;align-items:center;gap:9px}
-.live-state-dot{flex:0 0 auto;width:15px;height:15px;border-radius:50%;position:relative;background:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.18);transition:background .2s ease,box-shadow .2s ease}
-.live-state-dot[data-state="idle"]{background:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.18);animation:liveDotIdle 2.4s ease-in-out infinite}
-.live-state-dot[data-state="working"]{background:transparent;border:2.5px solid rgba(251,191,36,.28);border-top-color:#fbbf24;box-shadow:none;animation:liveDotSpin .7s linear infinite}
-.live-state-dot[data-state="speaking"]{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.22);animation:liveDotPulse .9s ease-in-out infinite}
-.live-state-dot[data-state="error"]{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.24);animation:none}
-@keyframes liveDotIdle{0%,100%{box-shadow:0 0 0 3px rgba(167,139,250,.14)}50%{box-shadow:0 0 0 5px rgba(167,139,250,.28)}}
+.live-info-title{display:flex;align-items:center;gap:11px}
+.live-state-dot{flex:0 0 auto;width:20px;height:20px;border-radius:50%;position:relative;background:radial-gradient(circle at 38% 32%,#c4b5fd,#8b5cf6);box-shadow:0 0 0 2px rgba(167,139,250,.35),0 0 14px rgba(139,92,246,.55);transition:background .25s ease,box-shadow .25s ease}
+.live-state-dot[data-state="idle"]{background:radial-gradient(circle at 38% 32%,#c4b5fd,#8b5cf6);box-shadow:0 0 0 2px rgba(167,139,250,.35),0 0 14px rgba(139,92,246,.55);animation:liveDotIdle 2.4s ease-in-out infinite}
+.live-state-dot[data-state="working"]{background:conic-gradient(#fbbf24 0 76%,rgba(251,191,36,.15) 76% 100%);box-shadow:0 0 14px rgba(251,191,36,.5);animation:liveDotSpin .8s linear infinite}
+.live-state-dot[data-state="working"]::after{content:'';position:absolute;inset:4px;border-radius:50%;background:#101014}
+.live-state-dot[data-state="speaking"]{background:radial-gradient(circle at 38% 32%,#86efac,#22c55e);box-shadow:0 0 0 2px rgba(34,197,94,.4),0 0 16px rgba(34,197,94,.65);animation:liveDotPulse .85s ease-in-out infinite}
+.live-state-dot[data-state="error"]{background:radial-gradient(circle at 38% 32%,#fca5a5,#ef4444);box-shadow:0 0 0 2px rgba(239,68,68,.45),0 0 16px rgba(239,68,68,.6);animation:none}
+@keyframes liveDotIdle{0%,100%{box-shadow:0 0 0 2px rgba(167,139,250,.30),0 0 10px rgba(139,92,246,.4)}50%{box-shadow:0 0 0 4px rgba(167,139,250,.5),0 0 20px rgba(139,92,246,.75)}}
 @keyframes liveDotSpin{to{transform:rotate(360deg)}}
-@keyframes liveDotPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(34,197,94,.18)}50%{transform:scale(1.18);box-shadow:0 0 0 6px rgba(34,197,94,.30)}}
+@keyframes liveDotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
 .live-settings{display:none;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px;border-bottom:1px solid #171717;background:#0c0c0c}
 .live-settings.open{display:grid}
 .live-settings label{font-size:11px;font-weight:900;color:var(--muted)}
@@ -320,8 +321,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
 .ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
 .turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
-.tool-btn{min-height:38px;border:1px solid #2e2e38;border-radius:12px;background:#1a1a21;color:#e8e8f0;font-weight:800;font-size:13px;padding:0 13px;display:inline-flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .1s ease,background .15s ease;cursor:pointer}
-.tool-btn:active{transform:scale(.95);background:#232330}
+.tool-btn{min-height:40px;border:1px solid rgba(139,92,246,.38);border-radius:13px;background:linear-gradient(180deg,#1c1c26,#141419);color:#fff;font-weight:900;font-size:13px;letter-spacing:.15px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .1s ease,box-shadow .15s ease,border-color .15s ease;cursor:pointer}
+.tool-btn:active{transform:scale(.94);border-color:#a78bfa;box-shadow:0 0 14px rgba(139,92,246,.5)}
 .tool-btn.primary,.tool-btn.retry{background:rgba(249,115,22,.14);border-color:#fb923c;color:#fdba74}
 .tool-btn.warn{background:rgba(124,58,237,.15);border-color:#a78bfa;color:#c4b5fd}
 .tool-btn.copy{background:rgba(6,182,212,.13);border-color:#22d3ee;color:#67e8f9}
@@ -590,7 +591,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
   <div class="ptt-panel" id="pttPanel">
     <div class="panel-top">
-      <div class="panel-title" id="pttStatusTitle">Hazır</div>
+      <div class="panel-title" id="pttStatusTitle"><span class="live-state-dot" id="pttStateDot" data-state="idle"></span><span id="pttStatusText">Hazır</span></div>
       <button class="status-pill ptt-voice-toggle on" id="pttAutoSpeakBtn" onclick="togglePttAutoSpeak()" title="Bas-konuş çevirisini seslendir">✓ PTT Ses</button>
     </div>
     <div class="ptt-log" id="pttLog"><div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div></div>
@@ -684,7 +685,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-pro-ui-devicecount-2';
+const APP_VERSION = '2026-07-02-states-revive-ui-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -4493,10 +4494,11 @@ async function speakPttText(text, target, btn=null) {
   if (!text || !target || !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
-    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...', true);
+    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...', true, 'speaking');
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
+    setPttLog('Hazır', false, 'idle');
   }
 }
 
@@ -4598,15 +4600,18 @@ function setupJumpBottomButton() {
 
 function scrollToBottom(force=false) {
   const m = document.getElementById('messages');
+  // Explicit tap (force) always wins: a manual-scroll grace window used to
+  // silently swallow the first tap, so the button seemed to do nothing.
+  if (force) chatManualScrollUntil = 0;
   if (m) setTimeout(() => {
-    if (Date.now() < chatManualScrollUntil) return;
+    if (!force && Date.now() < chatManualScrollUntil) return;
     chatPinnedToBottom = true;
     chatAutoScrollUntil = Date.now() + 900;
     unseenIncomingCount = 0;
     m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
     updateJumpBottomButton();
     requestAnimationFrame(() => {
-      if (Date.now() < chatManualScrollUntil) return;
+      if (!force && Date.now() < chatManualScrollUntil) return;
       if (!chatPinnedToBottom) return;
       m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight);
       updateJumpBottomButton();
@@ -5801,9 +5806,17 @@ function updateModeVoiceControls() {
   if (ownBtn) ownBtn.style.display = (pttOpen || liveOpen || myRole !== 'tr') ? 'none' : '';
 }
 
-function setPttLog(text, beforeLastTurn=false) {
-  const title=document.getElementById('pttStatusTitle');
-  if (title) title.textContent=text || 'Hazır';
+function setPttLog(text, beforeLastTurn=false, state='') {
+  const textEl=document.getElementById('pttStatusText');
+  if (textEl) textEl.textContent=text || 'Hazır';
+  else {
+    const title=document.getElementById('pttStatusTitle');
+    if (title) title.textContent=text || 'Hazır';
+  }
+  if (state) {
+    const dot=document.getElementById('pttStateDot');
+    if (dot) dot.dataset.state = state;
+  }
   const el = document.getElementById('pttLog');
   if (!el) return;
   el.querySelector('.empty')?.remove();
@@ -5822,7 +5835,7 @@ function appendPttLog(text) {
 async function pttTranslate(text, from, transcribeNotice='') {
   const target = from === 'tr' ? 'vi' : 'tr';
   const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
-  setPttLog((transcribeNotice || '') + modelName(baseModel) + ' çeviriyor...');
+  setPttLog((transcribeNotice || '') + modelName(baseModel) + ' çeviriyor...', false, 'working');
   const data = await askVietServer('translate', {
     text,
     fromRole: from,
@@ -5831,7 +5844,7 @@ async function pttTranslate(text, from, transcribeNotice='') {
   const out = String(data.translation || '').trim();
   renderPttTurn(text, out, from, target);
   const usedModel = modelName(data.model || data.usedModel || baseModel);
-  setPttLog((transcribeNotice || '') + usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'), true);
+  setPttLog((transcribeNotice || '') + usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'), true, pttAutoSpeak ? 'working' : 'idle');
   if (out) speakPttText(out, target);
 }
 
@@ -6031,8 +6044,10 @@ function renderTextLists() {
 function clearPttLog() {
   const log = document.getElementById('pttLog');
   if (log) log.innerHTML = '<div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div>';
-  const title=document.getElementById('pttStatusTitle');
-  if (title) title.textContent='Hazır';
+  const textEl=document.getElementById('pttStatusText');
+  if (textEl) textEl.textContent='Hazır';
+  const dot=document.getElementById('pttStateDot');
+  if (dot) dot.dataset.state='idle';
 }
 function pttManual(from) {
   const text = (document.getElementById('pttInput')?.value || '').trim();
@@ -6052,7 +6067,7 @@ async function startPttVoice(from) {
   btn.dataset.recRole = from;
   btn.classList.add('recording');
   const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': Dinliyorum...';
-  setPttLog(listenText);
+  setPttLog(listenText, false, 'idle');
   try {
     await tryRequestWakeLock();
     keepAudioAwake(90000).catch(()=>{});
@@ -6082,13 +6097,13 @@ async function startPttVoice(from) {
       rec=null;
       try {
         const blob=makePseudoLiveWav(pcmChunks,pcmRate);
-        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || blob.size < 1200 || pcmChunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.'); return; }
+        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || blob.size < 1200 || pcmChunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.', false, 'idle'); return; }
         resetNoSpeechStops();
         const firstTranscribe=primaryTranscribeLabel(getTranscribeEngine());
-        setPttLog(firstTranscribe + ' ile ses yazıya çevriliyor...');
+        setPttLog(firstTranscribe + ' ile ses yazıya çevriliyor...', false, 'working');
         const transcribed = await transcribeVoiceDetailed(blob, from);
         const text=transcribed.text;
-        if(!text){ setPttLog('Ses metne çevrilemedi.'); return; }
+        if(!text){ setPttLog('Ses metne çevrilemedi.', false, 'error'); return; }
         const actualTranscribe=actualTranscribeLabel(transcribed.model || firstTranscribe);
         const transcribeNotice=actualTranscribe && actualTranscribe !== firstTranscribe
           ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanıldı. '
@@ -6096,7 +6111,7 @@ async function startPttVoice(from) {
         const input = document.getElementById('pttInput'); if (input) input.value = text;
         await pttTranslate(text, from, transcribeNotice);
       } catch(e) {
-        setPttLog('Bas-konuş hatası: ' + normalizeApiError(e && e.message ? e.message : String(e), from));
+        setPttLog('Bas-konuş hatası: ' + normalizeApiError(e && e.message ? e.message : String(e), from), false, 'error');
       }
     };
     rec.start(120);
@@ -6108,7 +6123,7 @@ async function startPttVoice(from) {
      cleanupRecPcmCapture();
      resetMicrophoneAudioContext();
      releaseWakeLock();
-    setPttLog('Mikrofon izni gerekli: ' + (e.message || e));
+    setPttLog('Mikrofon izni gerekli: ' + (e.message || e), false, 'error');
   }
 }
 
@@ -6987,8 +7002,8 @@ function applyLocaleUI() {
   if (pttBtn) { pttBtn.innerHTML = PTT_ICON + (isVi ? 'Bấm nói' : 'Bas-Konuş'); pttBtn.title = isVi ? 'Chế độ bấm nói' : 'Bas-konuş modu'; }
   const liveBtn = document.getElementById('realLiveBtn');
   if (liveBtn) { liveBtn.innerHTML = LIVE_ICON + 'Live'; liveBtn.title = 'Live'; }
-  const pttTitle = document.querySelector('#pttPanel .panel-title');
-  if (pttTitle) pttTitle.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş';
+  const pttTitleText = document.getElementById('pttStatusText') || document.querySelector('#pttPanel .panel-title');
+  if (pttTitleText) pttTitleText.textContent = isVi ? 'Bấm nói' : 'Bas-Konuş';
   const pttHelp = document.getElementById('pttHelp');
   if (pttHelp) pttHelp.textContent = isVi ? 'Bấm vào cờ, nói; khi im lặng ứng dụng sẽ tự dịch và đọc.' : 'Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.';
   const pttInput = document.getElementById('pttInput');
@@ -7426,7 +7441,7 @@ async function requestMicrophoneStream(kind='mic') {
   const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
   stream.getAudioTracks().forEach(track => {
     track.onended = () => {
-      if (kind === 'ptt') setPttLog('Mikrofon kapandı. Tekrar dene.');
+      if (kind === 'ptt') setPttLog('Mikrofon kapandı. Tekrar dene.', false, 'error');
       else if (kind === 'live') {
         setRealLiveStatus('Mikrofon kapandı. Tekrar başlat.');
         if (typeof stopPseudoLive === 'function') stopPseudoLive(true);
@@ -7457,7 +7472,7 @@ function showRecCountdown(btn, start, now, kind) {
 }
 function clearRecCountdown(btn, kind, listenText) {
   if (kind === 'ptt') {
-    if (listenText) setPttLog(listenText);
+    if (listenText) setPttLog(listenText, false, 'idle');
     if (btn && btn.dataset.defaultHtml) btn.innerHTML = btn.dataset.defaultHtml;
   } else if (btn) {
     btn.innerHTML = MIC_ICON;
@@ -7792,6 +7807,10 @@ function setRealLiveStatus(text, state='') {
     if (title) title.textContent = text || 'Hazır';
   }
   if (state) {
+    // Persist-until-done: while a segment is being processed (transcribe ->
+    // translate -> TTS playback), 'idle' must not repaint the light; the color
+    // stays until the operation truly finishes (processing flag drops).
+    if (state === 'idle' && typeof pseudoLiveProcessing !== 'undefined' && pseudoLiveProcessing) return;
     const dot=document.getElementById('liveStateDot');
     if (dot) dot.dataset.state = state;
     const big=document.getElementById('liveStateBig');
@@ -7849,6 +7868,28 @@ function pickMediaRecorderMime() {
 function speakLastLive() {
   if (pseudoLiveLastText) speak(pseudoLiveLastText, pseudoLiveLastTarget || 'vi', null, true).catch(()=>{});
 }
+
+// After backgrounding a PWA, iOS/Android can silently kill the mic track:
+// Live looks running but hears nothing. On returning to foreground, detect a
+// dead track/context and rebuild the whole capture pipeline automatically.
+async function revivePseudoLiveMic() {
+  if (!pseudoLiveRunning) return;
+  try { if (pseudoLiveCtx && pseudoLiveCtx.state === 'suspended') await pseudoLiveCtx.resume(); } catch {}
+  const t = pseudoLiveStream && pseudoLiveStream.getAudioTracks ? pseudoLiveStream.getAudioTracks()[0] : null;
+  const dead = !t || t.readyState === 'ended' || t.muted === true || !pseudoLiveCtx || pseudoLiveCtx.state === 'closed';
+  if (!dead) return;
+  appendRealLiveLog('Mikrofon arka planda kapanmış, yeniden bağlanıyor...', 'status');
+  try { stopPseudoLive(true); } catch {}
+  try {
+    await startPseudoLive();
+  } catch (e) {
+    setRealLiveStatus('Mikrofon geri alınamadı: ' + normalizeApiError(e && e.message ? e.message : String(e), 'tr'), 'error');
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') setTimeout(revivePseudoLiveMic, 400);
+});
+window.addEventListener('pageshow', () => setTimeout(revivePseudoLiveMic, 400));
 
 async function startPseudoLive() {
   stopPseudoLive(true);
