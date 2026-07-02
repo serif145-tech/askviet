@@ -2920,17 +2920,13 @@ function messageContentSignature(msg) {
 function getMainText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   if (msg.deleted) return deletedMessageLabel();
-  const isMine = msg.role === myRole;
-  if (isMine) return msg.text || '';
-  return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
+  return msg.text || '';
 }
 
 function getSubText(msg) {
   if (msg.type === 'image' || msg.type === 'video') return '';
   if (msg.deleted) return '';
-  const isMine = msg.role === myRole;
-  if (isMine) return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
-  return msg.text || '';
+  return displayTranslationText(msg.translation) || uiText('Çeviriliyor...', 'Đang dịch...');
 }
 
 function parseReplyData(value) {
