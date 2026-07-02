@@ -3209,7 +3209,7 @@ function setMessageContent(el, msg) {
   if (existingReact) el.appendChild(existingReact);
 }
 
-function reactionEmojis(){ return ['👍','❤️','😂','😳','😭','😡']; }
+function reactionEmojis(){ return ['👍','❤️','😂','😱','😭','😡']; }
 
 function addReactionButton(parent, key) {
   const btn = document.createElement('button');
@@ -8123,6 +8123,8 @@ let pseudoLiveLastTickAt=0;
 let pseudoLiveSilenceStartedAt=0;
 let pseudoLiveQueue=[];
 let pseudoLiveProcessing=false;
+let pseudoLiveTtsQueue=[];
+let pseudoLiveTtsPlaying=false;
 let pseudoLiveLastText='';
 let pseudoLiveLastTarget='vi';
 let pseudoLiveLastSpokenText='';
@@ -8422,6 +8424,8 @@ async function startPseudoLive() {
   pseudoLiveLastAudioAt=Date.now();
   pseudoLiveQueue=[];
   pseudoLiveProcessing=false;
+  pseudoLiveTtsQueue=[];
+  pseudoLiveTtsPlaying=false;
   pseudoLiveStream=await requestMicrophoneStream('live');
   pseudoLiveCtx=await ensureAudioCtx();
   pseudoLiveSampleRate=pseudoLiveCtx.sampleRate || 48000;
@@ -8463,6 +8467,8 @@ function stopPseudoLive(silent=false) {
   pseudoLiveStream=null; pseudoLiveCtx=null; pseudoLiveSource=null; pseudoLiveProcessor=null; pseudoLiveMuteGain=null; pseudoLiveAnalyser=null; pseudoLiveData=null;
   pseudoLiveSegmentActive=false; pseudoLiveVoiceMs=0; pseudoLiveSilentMs=0; pseudoLiveCountdownValue=0;
   pseudoLiveCurrentVoiceRunMs=0; pseudoLiveLongestVoiceRunMs=0; pseudoLiveStrongVoiceMs=0; pseudoLivePeakLevel=0; pseudoLiveSpeechAccepted=false;
+  pseudoLiveTtsQueue=[];
+  pseudoLiveTtsPlaying=false;
   pseudoLiveLastTickAt=0; pseudoLiveSilenceStartedAt=0;
   pseudoLiveChunks=[]; pseudoLivePreRollChunks=[]; pseudoLivePreRollSamples=0; pseudoLiveSegmentStartedAt=0; pseudoLiveRecorder=null;
   updateLiveMainButton(false);
@@ -8666,7 +8672,78 @@ async function processPseudoLiveQueue() {
     }
   } finally {
     pseudoLiveProcessing=false;
-    if (pseudoLiveRunning) setRealLiveStatus('Dinliyorum', 'idle');
+    if (pseudoLiveRunning && !pseudoLiveTtsPlaying) setRealLiveStatus('Dinliyorum', 'idle');
+  }
+}
+
+function enqueuePseudoLiveTts(text, target) {
+  text = normalizeTtsInput(text || '');
+  if (!text || !target) return;
+  const item = { text, target, ts:Date.now(), prepared:null, promise:null, failed:false };
+  pseudoLiveTtsQueue.push(item);
+  while (pseudoLiveTtsQueue.length > 8) pseudoLiveTtsQueue.shift();
+  preparePseudoLiveTts(item);
+  processPseudoLiveTtsQueue();
+}
+
+function preparePseudoLiveTts(item) {
+  if (!item || item.promise || item.prepared || item.failed) return;
+  item.promise = (async () => {
+    const settings = getTtsSettings();
+    const voice = item.target === 'vi' ? settings.voiceVi : settings.voiceTr;
+    const speed = item.target === 'vi' ? 0.95 : settings.speed;
+    const key = cacheKey(item.text, item.target, settings.model, voice, speed);
+    let blob = ttsCache.get(key);
+    if (!blob) {
+      const data = await askVietServer('speak', {
+        text:item.text,
+        targetRole:item.target,
+        settings:{ model:settings.model, voiceTr:settings.voiceTr, voiceVi:settings.voiceVi, speed:settings.speed }
+      });
+      blob = new Blob([base64ToBytes(data.audioBase64 || '')], { type:data.mime || 'audio/mpeg' });
+      ttsCache.set(key, blob);
+      if (ttsCache.size > 40) ttsCache.delete(ttsCache.keys().next().value);
+    }
+    item.prepared = { blob, key };
+    return item.prepared;
+  })().catch(err => {
+    item.failed = true;
+    throw err;
+  });
+}
+
+async function processPseudoLiveTtsQueue() {
+  if (pseudoLiveTtsPlaying || !pseudoLiveRunning) return;
+  const item = pseudoLiveTtsQueue[0];
+  if (!item) return;
+  if (item.failed) {
+    pseudoLiveTtsQueue.shift();
+    return processPseudoLiveTtsQueue();
+  }
+  preparePseudoLiveTts(item);
+  let prepared;
+  try {
+    prepared = item.prepared || await item.promise;
+  } catch (err) {
+    pseudoLiveTtsQueue.shift();
+    appendRealLiveLog('Live ses hazirlama hatasi: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    return processPseudoLiveTtsQueue();
+  }
+  pseudoLiveTtsQueue.shift();
+  pseudoLiveTtsPlaying = true;
+  pseudoLiveLastSpokenText = item.text;
+  pseudoLiveLastSpokenAt = Date.now();
+  setRealLiveStatus('Seslendiriliyor: ' + pttTtsLabel(item.target), 'speaking');
+  try {
+    await playBlob(prepared.blob, ++ttsToken, null, item.text, { target:item.target, cacheKey:prepared.key });
+  } catch (err) {
+    appendRealLiveLog('Live ses hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+  } finally {
+    pseudoLiveTtsPlaying = false;
+    if (pseudoLiveRunning) {
+      if (pseudoLiveTtsQueue.length) processPseudoLiveTtsQueue();
+      else if (!pseudoLiveProcessing) setRealLiveStatus('Dinliyorum', 'idle');
+    }
   }
 }
 
@@ -8734,10 +8811,7 @@ async function handlePseudoLiveBlob(blob) {
     pseudoLiveLastText=translated;
     pseudoLiveLastTarget=target;
     if (settings.response === 'TEXT_TTS' || settings.response === 'AUDIO') {
-      setRealLiveStatus('Seslendiriliyor: ' + pttTtsLabel(target), 'speaking');
-      pseudoLiveLastSpokenText=translated;
-      pseudoLiveLastSpokenAt=Date.now();
-      await speak(translated, target, null, true);
+      enqueuePseudoLiveTts(translated, target);
     }
   } catch (err) {
     appendRealLiveLog('Live çeviri hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
