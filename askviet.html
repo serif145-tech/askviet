@@ -101,7 +101,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .online-counter{min-width:26px;height:26px;border-radius:999px;border:2px solid #22c55e;color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(34,197,94,.18);flex:0 0 auto}
-.back-btn{width:38px;height:38px;border:1px solid rgba(167,139,250,.78);border-radius:12px;background:rgba(14,12,24,.86);color:#f8f5ff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(124,58,237,.28),inset 0 1px 0 rgba(255,255,255,.08);transition:transform .1s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease}
+.back-btn{width:38px;height:38px;border:1px solid rgba(139,92,246,.55);border-radius:12px;background:rgba(35,24,55,.72);color:#fff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;transition:transform .1s ease,box-shadow .15s ease,border-color .15s ease}
+.back-btn:active{transform:scale(.92);border-color:#a78bfa;box-shadow:0 0 14px rgba(139,92,246,.5)}
 .back-btn svg{display:block;filter:drop-shadow(0 0 5px rgba(255,255,255,.16))}
 .back-btn:active{transform:scale(.92);background:rgba(124,58,237,.24);border-color:#c4b5fd;box-shadow:0 0 16px rgba(124,58,237,.42),inset 0 1px 0 rgba(255,255,255,.12)}
 
@@ -152,6 +153,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.mine .msg-translation.primary-translation{background:linear-gradient(180deg,#7b4af7,#6c36ee);border-bottom-right-radius:8px}
 .msg.theirs .msg-translation.primary-translation{background:linear-gradient(180deg,#ec4899,#db2777);border-bottom-left-radius:8px}
 .msg-language-toggle{min-height:28px;padding:4px 9px;border-radius:999px;border:1px solid #ddd6fe;background:#fff;color:#6d28d9;font-size:10.5px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:3px}
+.msg .msg-original.original-collapsible{background:#fdfdfd!important;color:#585862!important;font-size:13.5px;font-style:italic;font-weight:500;line-height:1.5;padding:11px 15px;border-radius:7px 7px 20px 20px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:none!important}
+.msg.theirs .msg-original.original-collapsible{border-bottom-left-radius:9px}
 .msg-original.compact-source{padding:5px 7px!important;background:#fff!important;color:#6d28d9!important;border:1px solid #ddd6fe!important;box-shadow:0 1px 4px rgba(0,0,0,.08)!important}
 .msg-original.compact-source .original-content{display:none}
 .msg-original.compact-source .msg-language-toggle{margin:0}
@@ -538,7 +541,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
         <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="Ses ayarları" title="Ses ayarları">
-        <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
+        <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
       </div>
     </div>
     <div class="header-meta">
@@ -758,7 +761,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-remote-media-fix-1';
+const APP_VERSION = '2026-07-03-bubble-toggle-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2725,16 +2728,22 @@ function renderMessage(key, msg) {
       };
       div.insertBefore(languageToggle, trans);
     } else {
+      // Karşı taraf mesajı: pembe balon = çeviri (benim dilim). Orijinal,
+      // balonun altında varsayılan GİZLİ beyaz kart; toggle bağımsız bir
+      // pill olarak balonun altında durur. Açınca "Orijinali gizle" yazar
+      // (eski yapıdaki yanlış "Çeviriyi göster" etiketi ve pembe-balon-
+      // olarak-geri-gelme sorunu bitti).
       div.insertBefore(orig, head.nextSibling);
       head.insertBefore(trans, flag);
-      orig.classList.add('compact-source');
+      orig.classList.remove('compact-source');
+      orig.classList.add('original-collapsible', 'language-collapsed');
       languageToggle.textContent = sourceFlag + ' ' + uiText('Orijinali göster', 'Xem bản gốc');
       languageToggle.onclick = event => {
         event.stopPropagation();
-        const collapsed = orig.classList.toggle('compact-source');
-        languageToggle.textContent = sourceFlag + ' ' + (collapsed ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Orijinali gizle', 'Ẩn bản gốc'));
+        const hidden = orig.classList.toggle('language-collapsed');
+        languageToggle.textContent = sourceFlag + ' ' + (hidden ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Orijinali gizle', 'Ẩn bản gốc'));
       };
-      orig.insertBefore(languageToggle, originalContent);
+      div.insertBefore(languageToggle, orig);
     }
   }
 
@@ -5927,6 +5936,7 @@ function pwaRemoteSilentWavUrl() {
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
 
+let pwaRemoteInternalPause = false;
 function startPwaRemoteKeepalive(ms=20000) {
   if (pwaRemoteKeepaliveTimer) clearTimeout(pwaRemoteKeepaliveTimer);
   try {
@@ -5944,6 +5954,15 @@ function startPwaRemoteKeepalive(ms=20000) {
       pwaRemoteKeepaliveAudio.addEventListener('playing', () => {
         installPwaMediaRemoteHandlers();
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      });
+      // Güvenlik ağı: bazı cihazlarda kumandanın play/pause'u action handler
+      // yerine doğrudan ses öğesini duraklatır. Biz duraklatmadıysak bunu
+      // kumanda sinyali olarak yorumla ve sesi geri başlat.
+      pwaRemoteKeepaliveAudio.addEventListener('pause', () => {
+        if (pwaRemoteInternalPause) return;
+        if (!pwaRemoteAssignRole && !localStorage.getItem('askviet_pwa_remote_tr') && !localStorage.getItem('askviet_pwa_remote_vi')) return;
+        try { pwaRemoteKeepaliveAudio.play().catch(() => {}); } catch {}
+        handlePwaRemoteMediaAction('play');
       });
     }
     const play = pwaRemoteKeepaliveAudio.play();
@@ -5965,8 +5984,10 @@ function startPwaRemoteKeepalive(ms=20000) {
       startPwaRemoteKeepalive(30000);
       return;
     }
+    pwaRemoteInternalPause = true;
     try { pwaRemoteKeepaliveAudio?.pause(); } catch {}
     try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; } catch {}
+    setTimeout(() => { pwaRemoteInternalPause = false; }, 400);
   }, ms);
 }
 
