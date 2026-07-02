@@ -281,7 +281,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-idle-sub{color:#8b8b98;font-size:14px;font-weight:600;line-height:1.5;max-width:300px}
 .live-line{padding:9px 0 12px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word;border-bottom:1px solid rgba(255,255,255,.05)}
 .live-line.tr,.live-line.source{color:#f9fafb}
-.live-line.vi,.live-line.output{color:#d8b4fe}
+.live-line.vi,.live-line.output{color:#a78bfa}
 .live-line.status{color:#9ca3af;font-size:13px;font-weight:900;padding:5px 0 12px}
 .live-top{align-items:center}
 #realLivePanel .live-info-title{display:block;flex:1;min-width:0;font-size:14px;line-height:1.3;color:#f8fafc;white-space:normal}
@@ -296,6 +296,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
 .live-info-title{display:flex;align-items:center;gap:11px}
 .live-beacon{width:28px!important;height:28px!important;margin-right:8px}
+.mic-refresh-btn{width:30px;height:30px;border-radius:10px;background:#17171f;border:1px solid rgba(139,92,246,.45);color:#c4b5fd;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s ease,box-shadow .15s ease}
+.mic-refresh-btn:active{transform:scale(.92);box-shadow:0 0 12px rgba(139,92,246,.5)}
+#blockToast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,14px);z-index:100001;display:flex;align-items:center;gap:12px;background:#17171f;border:1px solid rgba(139,92,246,.5);color:#f3e8ff;font-size:13.5px;font-weight:800;padding:11px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}
+#blockToast.show{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+#blockToast button{background:none;border:none;color:#a78bfa;font-weight:900;font-size:13.5px;cursor:pointer;padding:0}
 #micReviveOverlay{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:rgba(5,5,10,.72);backdrop-filter:blur(3px)}
 #micReviveOverlay.show{display:flex}
 .mic-revive-circle{position:relative;width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%,rgba(124,58,237,.35),rgba(124,58,237,.08));box-shadow:0 0 0 1px rgba(167,139,250,.4),0 0 46px rgba(124,58,237,.45);color:#c4b5fd}
@@ -516,6 +521,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <button class="status-pill remote-voice" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 VN</button>
         </div>
         <div class="right-controls">
+          <button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button>
           <div class="conn-dot off" id="connDot"></div>
           <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
             <option value="openai:gpt-5.5">GPT-5.5</option>
@@ -628,6 +634,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <option value="AUDIO">Sadece ses</option>
       </select>
       <label class="live-check"><input type="checkbox" id="liveSaverToggle" onchange="saveLiveSettings()" checked> Tasarruf</label>
+      <label class="live-check"><input type="checkbox" id="liveNoiseToggle" onchange="saveLiveSettings()"> Gürültülü ortam</label>
     </div>
     <div class="real-live-log" id="realLiveLog"><div class="empty live-idle"><div class="live-breathe"><span class="live-breathe-ring"></span><span class="live-breathe-ring"></span><span class="live-breathe-core"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg></span></div><div class="live-idle-title">Dinlemeye hazır</div><div class="live-idle-sub">Dinle'ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div></div></div>
     <div class="live-bar">
@@ -698,7 +705,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-mic-fix-beacon-1';
+const APP_VERSION = '2026-07-02-blacklist-micbtn-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1417,6 +1424,7 @@ function syncTtsSettingsToFirebase(s) {
     transcriptEngine: 'openai',
     liveResponse: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
     liveSaver: localStorage.getItem('askviet_live_saver') !== '0',
+    liveNoise: localStorage.getItem('askviet_live_noise') === '1',
     updatedAt: ts,
     updatedBy: 'pwa-' + myRole
   }).catch(e => recordConnectionEvent('tts-sync-error', e?.message || e));
@@ -1436,6 +1444,7 @@ function applyRemoteTtsSettings(data) {
   localStorage.setItem('askviet_tts_speed', String(speed));
   if (typeof data.liveResponse === 'string') localStorage.setItem('askviet_live_response', data.liveResponse);
   if (typeof data.liveSaver === 'boolean') localStorage.setItem('askviet_live_saver', data.liveSaver ? '1' : '0');
+  if (typeof data.liveNoise === 'boolean') localStorage.setItem('askviet_live_noise', data.liveNoise ? '1' : '0');
   if (changed) { ttsCache.clear(); ttsBufferCache.clear(); }
   syncTtsSettingsUI();
   if (typeof syncLiveSettingsUI === 'function') syncLiveSettingsUI();
@@ -5988,6 +5997,21 @@ function bindSpeakAction(btn, action) {
   };
 }
 
+// Normalized EXACT-sentence matching: case/punctuation/whitespace differences
+// are ignored, but partial matches never block ("geliyorum" stays fine even if
+// "Tamam anladım ben de geliyorum." is blocked).
+function normalizeBlockText(t) {
+  return String(t || '')
+    .toLocaleLowerCase('tr')
+    .replace(/[.,!?…;:'"()\[\]«»“”‘’\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function isExactBlocked(text) {
+  const n = normalizeBlockText(text);
+  if (!n) return false;
+  return getTextList('blocked').some(b => normalizeBlockText(b) === n);
+}
 function addBlockedText(text) {
   const key = 'askviet_blocked_texts';
   let list = [];
@@ -7701,6 +7725,7 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
 // ── AskViet pseudo Live: Android mantığı, eski canlı motor yerine ─────────
 let pseudoLiveRunning=false;
 let pseudoLiveStream=null;
+let pseudoLiveLastAudioAt=0;
 let pseudoLiveCtx=null;
 let pseudoLiveSource=null;
 let pseudoLiveProcessor=null;
@@ -7735,15 +7760,18 @@ function getLiveSettings() {
   return {
     model: getTranscribeEngine(),
     response: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
-    saver: localStorage.getItem('askviet_live_saver') !== '0'
+    saver: localStorage.getItem('askviet_live_saver') !== '0',
+    noise: localStorage.getItem('askviet_live_noise') === '1'
   };
 }
 
 function saveLiveSettings() {
   const response = document.getElementById('liveResponseSelect')?.value || 'TEXT_TTS';
   const saver = document.getElementById('liveSaverToggle')?.checked !== false;
+  const noise = document.getElementById('liveNoiseToggle')?.checked === true;
   localStorage.setItem('askviet_live_response', response === 'TEXT' || response === 'AUDIO' ? response : 'TEXT_TTS');
   localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
+  localStorage.setItem('askviet_live_noise', noise ? '1' : '0');
   syncLiveSettingsUI();
   if (myRole === 'tr') {
     const s = getTtsSettings();
@@ -7755,8 +7783,10 @@ function syncLiveSettingsUI() {
   const settings = getLiveSettings();
   const response = document.getElementById('liveResponseSelect');
   const saver = document.getElementById('liveSaverToggle');
+  const noise = document.getElementById('liveNoiseToggle');
   if (response) response.value = settings.response;
   if (saver) saver.checked = settings.saver;
+  if (noise) noise.checked = settings.noise;
 }
 
 function toggleRealLive(force) {
@@ -7833,13 +7863,14 @@ function setRealLiveStatus(text, state='') {
   }
 }
 
-function appendRealLiveLog(text, cls='') {
+function appendRealLiveLog(text, cls='', pairTexts=null) {
   const el=document.getElementById('realLiveLog');
   if (!el) return;
   if (el.querySelector('.empty')) el.textContent='';
   const div=document.createElement('div');
   div.className='live-line ' + cls;
   div.textContent=text;
+  if (pairTexts) div.dataset.pair = JSON.stringify(pairTexts);
   el.appendChild(div);
   trimRealLiveLog(el);
   requestAnimationFrame(() => { el.scrollTop=el.scrollHeight; });
@@ -7944,14 +7975,29 @@ async function revivePseudoLiveMic() {
     setTimeout(() => showMicRevive('ok'), 500);
   }
 }
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') setTimeout(revivePseudoLiveMic, 400);
-});
-window.addEventListener('pageshow', () => setTimeout(revivePseudoLiveMic, 400));
-
+// Manual refresh (header button): unconditionally rebuilds EVERY mic path —
+// message mic, Bas-Konuş, Live, recorder refs, AudioContext — with the same
+// spinning-mic -> green-check visual. HTML/PWA only.
+async function manualMicRefresh() {
+  showMicRevive('spin');
+  try { forceAbortRecording(); } catch {}
+  try {
+    if (pseudoLiveRunning) {
+      stopPseudoLive(true);
+      await startPseudoLive();
+    } else {
+      try { resetMicrophoneAudioContext(); } catch {}
+    }
+    setTimeout(() => showMicRevive('ok'), 450);
+  } catch (e) {
+    showMicRevive(false);
+    setRealLiveStatus('Mikrofon geri alınamadı: ' + normalizeApiError(e && e.message ? e.message : String(e), 'tr'), 'error');
+  }
+}
 async function startPseudoLive() {
   stopPseudoLive(true);
   pseudoLiveRunning=true;
+  pseudoLiveLastAudioAt=Date.now();
   pseudoLiveQueue=[];
   pseudoLiveProcessing=false;
   pseudoLiveStream=await requestMicrophoneStream('live');
@@ -8016,9 +8062,13 @@ function tickPseudoLive(event) {
   const elapsed=pseudoLiveLastTickAt ? Math.max(1,Math.min(250,now-pseudoLiveLastTickAt)) : 1;
   pseudoLiveLastTickAt=now;
   const level=livePcmSignalLevel(pcm);
-  const peakThreshold=settings.saver ? (2600 / 32768) : (2000 / 32768);
-  const requiredVoiceMs=settings.saver ? 240 : 210;
+  const noisy=!!settings.noise;
+  const peakThreshold=(noisy ? (settings.saver ? 3300 : 2700) : (settings.saver ? 2600 : 2000)) / 32768;
+  const requiredVoiceMs=noisy ? (settings.saver ? 320 : 280) : (settings.saver ? 240 : 210);
   const silenceLimit=settings.saver ? 1750 : 2500;
+  const nowTick=Date.now();
+  if (level.peak > 0.0009) pseudoLiveLastAudioAt = nowTick;
+  else if (!pseudoLiveLastAudioAt) pseudoLiveLastAudioAt = nowTick;
   const hasVoice=level.peak > peakThreshold;
   if (hasVoice) {
     if (!pseudoLiveSegmentActive) beginPseudoLiveSegment();
@@ -8028,14 +8078,14 @@ function tickPseudoLive(event) {
     pseudoLiveLongestVoiceRunMs=Math.max(pseudoLiveLongestVoiceRunMs,pseudoLiveCurrentVoiceRunMs);
     pseudoLivePeakLevel=Math.max(pseudoLivePeakLevel,level.peak);
     if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += elapsed;
-    const minRunMs=Math.max(150,Math.round(requiredVoiceMs * 2 / 3));
+    const minRunMs=Math.max(noisy ? 190 : 150,Math.round(requiredVoiceMs * 2 / 3));
     // Shape requirements back to strict: the looser gate let noise/silence
     // segments through, and the STT model hallucinates (even echoes its own
     // prompt) on near-empty audio. Short answers still pass thanks to the
     // lowered requiredVoiceMs + latch; noise no longer does.
-    const hasSpeechShape=pseudoLiveStrongVoiceMs >= 70
-      || pseudoLivePeakLevel >= peakThreshold * 2
-      || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 140;
+    const hasSpeechShape=noisy
+      ? (pseudoLiveStrongVoiceMs >= 110 || pseudoLivePeakLevel >= peakThreshold * 2.15 || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 160)
+      : (pseudoLiveStrongVoiceMs >= 70 || pseudoLivePeakLevel >= peakThreshold * 2 || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 140);
     // Latch acceptance: once a segment has enough real speech, keep it accepted
     // so trailing noise can't throw away a segment that began with real talk.
     if (pseudoLiveVoiceMs >= requiredVoiceMs && pseudoLiveLongestVoiceRunMs >= minRunMs && hasSpeechShape) {
@@ -8233,11 +8283,22 @@ async function handlePseudoLiveBlob(blob) {
   const from=guessed || 'tr';
   if (!guessed) setRealLiveStatus('Dil net değildi, Türkçe varsayıldı', 'working');
   const target=from === 'tr' ? 'vi' : 'tr';
+  if (isExactBlocked(srcText)) {
+    setRealLiveStatus('Kara listeye takıldı, atlandı.', 'error');
+    await new Promise(r => setTimeout(r, 1600));
+    return;
+  }
   setRealLiveStatus(transcribeFallbackNotice + 'Çevriliyor: ' + modelName(selectedModel), 'working');
   try {
     const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
     const translated=String(tr.translation || '').trim();
     if (!translated) return;
+    if (isExactBlocked(srcText) || isExactBlocked(translated)) {
+      // Blocked sentence: no display, no TTS, red warning, then back to listening.
+      setRealLiveStatus('Kara listeye takıldı, atlandı.', 'error');
+      await new Promise(r => setTimeout(r, 1600));
+      return;
+    }
     if (settings.response !== 'AUDIO') {
       appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
     }
@@ -8316,8 +8377,66 @@ function guessLiveSourceRole(text) {
 }
 
 function appendPseudoLiveTurn(sourceText, translatedText, from, target, model, engine) {
-  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, 'source');
-  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, 'output');
+  const pair = [sourceText, translatedText];
+  appendRealLiveLog((from === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + sourceText, 'source', pair);
+  appendRealLiveLog((target === 'tr' ? '🇹🇷 ' : '🇻🇳 ') + translatedText, 'output', pair);
+}
+
+// Long-press a Live line -> blocks that EXACT sentence pair (TR + VI both),
+// with a small confirm bubble + undo. No extra button cluttering the screen.
+let liveLongPressTimer = null;
+let liveLongPressTarget = null;
+function cancelLiveLongPress() {
+  if (liveLongPressTimer) { clearTimeout(liveLongPressTimer); liveLongPressTimer = null; }
+  liveLongPressTarget = null;
+}
+document.addEventListener('pointerdown', (e) => {
+  const line = e.target && e.target.closest ? e.target.closest('#realLiveLog .live-line') : null;
+  if (!line || !line.dataset.pair) return;
+  cancelLiveLongPress();
+  liveLongPressTarget = line;
+  liveLongPressTimer = setTimeout(() => {
+    liveLongPressTimer = null;
+    let pair = [];
+    try { pair = JSON.parse(line.dataset.pair || '[]'); } catch {}
+    const added = [];
+    pair.forEach(t => { if (t && !isExactBlocked(t)) { addBlockedText(t); added.push(t); } });
+    try { navigator.vibrate?.(20); } catch {}
+    showBlockToast(added);
+  }, 650);
+}, true);
+['pointerup','pointercancel','pointermove','scroll'].forEach(ev =>
+  document.addEventListener(ev, (e) => {
+    if (ev === 'pointermove' && liveLongPressTarget && e.target && liveLongPressTarget.contains(e.target)) return;
+    cancelLiveLongPress();
+  }, true));
+
+let blockToastTimer = null;
+function showBlockToast(addedTexts) {
+  let t = document.getElementById('blockToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'blockToast';
+    document.body.appendChild(t);
+  }
+  t.innerHTML = '';
+  const msg = document.createElement('span');
+  msg.textContent = addedTexts.length ? 'Kara listeye eklendi' : 'Zaten kara listede';
+  t.appendChild(msg);
+  if (addedTexts.length) {
+    const undo = document.createElement('button');
+    undo.textContent = 'Geri al';
+    undo.onclick = () => {
+      const list = getTextList('blocked').filter(b => !addedTexts.includes(b));
+      saveTextList('blocked', list);
+      renderTextLists();
+      t.classList.remove('show');
+    };
+    t.appendChild(undo);
+  }
+  t.classList.add('show');
+  if (blockToastTimer) clearTimeout(blockToastTimer);
+  blockToastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 function liveFileToBase64(blob) {
@@ -8416,4 +8535,3 @@ clearUnreadCount();
 </div>
 </body>
 </html>
-
