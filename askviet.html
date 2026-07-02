@@ -85,7 +85,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .presence-status.online{color:#22c55e}
 .transient-notice{position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),12px) + 68px);transform:translate(-50%,-12px);z-index:10000;width:max-content;max-width:min(88vw,430px);padding:11px 14px;border-radius:8px;background:#18181b;color:#fff;border:1px solid #3f3f46;box-shadow:0 10px 28px #0007;font-size:13px;font-weight:800;line-height:1.35;text-align:center;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
 .transient-notice.show{opacity:1;transform:translate(-50%,0)}
-.header-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;flex:0 0 auto}
+.header-tools{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex:0 0 auto}
 .witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88}
 .model-row{display:flex;gap:6px;align-items:center;min-width:0}
 .model-vs{color:var(--muted);font-size:10px}
@@ -228,6 +228,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill{font-size:11px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap;cursor:pointer;font-weight:800}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .status-pill.mode-toggle{min-width:78px;border-color:#7c3aed;background:rgba(18,13,28,.64);color:#eadcff;box-shadow:inset 0 0 0 1px rgba(167,139,250,.14),0 4px 14px rgba(0,0,0,.18)}
+.status-pill.mode-toggle.chat-mode{min-width:58px}
 .status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#c4b5fd;background:rgba(124,58,237,.22);color:#fff;box-shadow:0 0 0 1px rgba(196,181,253,.26),0 0 16px rgba(124,58,237,.30)}
 .remote-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
 .remote-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
@@ -262,6 +263,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
 .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:20px;padding:18px 24px calc(28px + env(safe-area-inset-bottom));margin:0}
+.ptt-remote-pair{display:flex;align-items:center;gap:6px}
+.ptt-remote-btn{position:relative;width:42px;height:34px;padding:0;border-radius:999px;border:1px solid rgba(139,92,246,.72);background:rgba(35,24,55,.72);color:#fff;font-size:18px;line-height:1;box-shadow:0 0 10px rgba(124,58,237,.16);cursor:pointer}
+.ptt-remote-btn.saved::after{content:'✓';position:absolute;font-size:9px;margin:-7px 0 0 -2px;color:#86efac}
+.ptt-remote-btn.waiting{border-color:#fbbf24;background:#4a2d08;box-shadow:0 0 14px rgba(251,191,36,.5);animation:pulse 1s infinite}
+.ptt-remote-btn.active{border-color:#f472b6;background:#4a122e;box-shadow:0 0 16px rgba(244,114,182,.56);animation:pulse 1s infinite}
 .roundflag{width:132px;height:132px;min-height:132px;justify-self:center;border-radius:50%;border:2px solid #2d2d2d;background:linear-gradient(145deg,#171717,#0d0d0d);color:#fff;font-size:50px;font-weight:900;cursor:pointer;box-shadow:0 0 0 10px rgba(124,58,237,.1),0 6px 24px rgba(0,0,0,.45)}
 .roundflag small{display:block;font-size:12px;margin-top:7px;color:#ccc;opacity:1;font-weight:700}
 .roundflag.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
@@ -296,7 +302,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-state-big[data-state="error"]::before{content:'!';color:#fff;font-size:15px;font-weight:900;line-height:1}
 .live-info-title{display:flex;align-items:center;gap:11px}
 .live-beacon{width:28px!important;height:28px!important;margin-right:8px}
-.mic-refresh-btn{width:30px;height:30px;border-radius:10px;background:#17171f;border:1px solid rgba(139,92,246,.45);color:#c4b5fd;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s ease,box-shadow .15s ease}
+.mic-refresh-btn{width:38px;height:38px;border-radius:12px;background:#17171f;border:1px solid rgba(139,92,246,.55);color:#c4b5fd;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s ease,box-shadow .15s ease}
 .mic-refresh-btn:active{transform:scale(.92);box-shadow:0 0 12px rgba(139,92,246,.5)}
 #blockToast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,14px);z-index:100001;display:flex;align-items:center;gap:12px;background:#17171f;border:1px solid rgba(139,92,246,.5);color:#f3e8ff;font-size:13.5px;font-weight:800;padding:11px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}
 #blockToast.show{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
@@ -327,6 +333,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-settings select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none}
 .live-check{display:flex!important;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:12px;font-weight:900}
 .live-check input{width:16px;height:16px;accent-color:#7c3aed}
+.live-noise-options{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.live-noise-option{min-height:42px;display:flex!important;align-items:center;justify-content:center;gap:8px;padding:8px 10px;border:1px solid #4c3a68;border-radius:10px;background:#17131f;color:#d4d4d8!important;font-size:12px!important;font-weight:900!important;cursor:pointer;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .12s ease}
+.live-noise-option:active{transform:scale(.97)}
+.live-noise-option input{width:18px;height:18px;margin:0;accent-color:#f97316}
+.live-noise-option.noise-2 input{accent-color:#ef4444}
+.live-noise-option.on.noise-1{border-color:#fb923c;background:#431f0d;color:#fff!important;box-shadow:0 0 14px rgba(249,115,22,.42)}
+.live-noise-option.on.noise-2{border-color:#f87171;background:#450f16;color:#fff!important;box-shadow:0 0 14px rgba(239,68,68,.46)}
 .live-bar{display:grid;grid-template-columns:1fr;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1e1e1e}
 .live-bar{display:flex;justify-content:center;align-items:center}
 .live-listen{width:min(280px,78vw);min-height:56px;border:1px solid #22c55e;border-radius:12px;background:#16a34a;color:#fff;font-weight:950;font-size:16px;padding:0 18px;box-shadow:0 4px 14px rgba(22,163,74,.20)}
@@ -398,7 +411,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   .chat-model-select{max-width:86px}
   .status-pill{padding:5px 7px;font-size:11px}
   .notify-toggle{padding:5px 7px}
-  .status-pill.mode-toggle{min-width:76px}
+  .status-pill.mode-toggle{min-width:58px}
 }
 @media (min-width: 900px){
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
@@ -500,6 +513,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
       </div>
       <div class="header-tools">
+        <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar">Mesaj</button>
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
         <img class="witch-avatar" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="">
@@ -521,7 +535,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <button class="status-pill remote-voice" id="autoReadStatus" onclick="toggleAutoRead()" title="Otomatik ses">🔇 VN</button>
         </div>
         <div class="right-controls">
-          <button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button>
           <div class="conn-dot off" id="connDot"></div>
           <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
             <option value="openai:gpt-5.5">GPT-5.5</option>
@@ -536,6 +549,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
+          <button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button>
         </div>
       </div>
         <div class="tts-panel" id="ttsPanel">
@@ -610,6 +624,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="ptt-panel" id="pttPanel">
     <div class="panel-top">
       <div class="panel-title" id="pttStatusTitle"><span class="live-state-dot" id="pttStateDot" data-state="idle"></span><span id="pttStatusText">Hazır</span></div>
+      <div class="ptt-remote-pair">
+        <button class="ptt-remote-btn" id="pttRemoteTrBtn" onclick="beginPwaRemoteAssign('tr')" title="TR kumanda tuşunu eşleştir">🇹🇷</button>
+        <button class="ptt-remote-btn" id="pttRemoteViBtn" onclick="beginPwaRemoteAssign('vi')" title="VI kumanda tuşunu eşleştir">🇻🇳</button>
+      </div>
       <button class="status-pill ptt-voice-toggle on" id="pttAutoSpeakBtn" onclick="togglePttAutoSpeak()" title="Bas-konuş çevirisini seslendir">✓ PTT Ses</button>
     </div>
     <div class="ptt-log" id="pttLog"><div class="empty">Bayrağa bas, konuş; susunca otomatik çevirip seslendirir.</div></div>
@@ -634,7 +652,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <option value="AUDIO">Sadece ses</option>
       </select>
       <label class="live-check"><input type="checkbox" id="liveSaverToggle" onchange="saveLiveSettings()" checked> Tasarruf</label>
-      <label class="live-check"><input type="checkbox" id="liveNoiseToggle" onchange="saveLiveSettings()"> Gürültülü ortam</label>
+      <label>Gürültü filtresi</label>
+      <div class="live-noise-options">
+        <label class="live-noise-option noise-1" id="liveNoise1Label"><input type="checkbox" id="liveNoise1Toggle" onchange="setLiveNoiseLevelFromCheckbox(1,this.checked)"> Gürültü 1</label>
+        <label class="live-noise-option noise-2" id="liveNoise2Label"><input type="checkbox" id="liveNoise2Toggle" onchange="setLiveNoiseLevelFromCheckbox(2,this.checked)"> Gürültü 2</label>
+      </div>
     </div>
     <div class="real-live-log" id="realLiveLog"><div class="empty live-idle"><div class="live-breathe"><span class="live-breathe-ring"></span><span class="live-breathe-ring"></span><span class="live-breathe-core"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg></span></div><div class="live-idle-title">Dinlemeye hazır</div><div class="live-idle-sub">Dinle'ye basınca ekrandayken dinler; sessizlikte çevirip seslendirir.</div></div></div>
     <div class="live-bar">
@@ -1424,7 +1446,8 @@ function syncTtsSettingsToFirebase(s) {
     transcriptEngine: 'openai',
     liveResponse: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
     liveSaver: localStorage.getItem('askviet_live_saver') !== '0',
-    liveNoise: localStorage.getItem('askviet_live_noise') === '1',
+    liveNoiseLevel: getLiveNoiseLevel(),
+    liveNoise: getLiveNoiseLevel() > 0,
     updatedAt: ts,
     updatedBy: 'pwa-' + myRole
   }).catch(e => recordConnectionEvent('tts-sync-error', e?.message || e));
@@ -1444,7 +1467,11 @@ function applyRemoteTtsSettings(data) {
   localStorage.setItem('askviet_tts_speed', String(speed));
   if (typeof data.liveResponse === 'string') localStorage.setItem('askviet_live_response', data.liveResponse);
   if (typeof data.liveSaver === 'boolean') localStorage.setItem('askviet_live_saver', data.liveSaver ? '1' : '0');
-  if (typeof data.liveNoise === 'boolean') localStorage.setItem('askviet_live_noise', data.liveNoise ? '1' : '0');
+  if (typeof data.liveNoiseLevel !== 'undefined') {
+    localStorage.setItem('askviet_live_noise_level', String(Math.max(0, Math.min(2, parseInt(data.liveNoiseLevel, 10) || 0))));
+  } else if (typeof data.liveNoise === 'boolean') {
+    localStorage.setItem('askviet_live_noise_level', data.liveNoise ? '1' : '0');
+  }
   if (changed) { ttsCache.clear(); ttsBufferCache.clear(); }
   syncTtsSettingsUI();
   if (typeof syncLiveSettingsUI === 'function') syncLiveSettingsUI();
@@ -5760,14 +5787,99 @@ function persistSessionState(modeOverride) {
 }
 
 function togglePttMode(force) {
-  const open = setPanelOpen('pttPanel', 'pttModeBtn', force);
+  const requested = typeof force === 'boolean' ? force : true;
+  const open = setPanelOpen('pttPanel', 'pttModeBtn', requested);
   if (open) {
     toggleRealLive(false);
     suspendChatAutoSpeakForPtt(true);
+    updatePwaRemoteButtons();
   } else {
     updatePttAutoSpeakUI();
   }
 }
+
+function switchToChatMode() {
+  if (typeof stopPseudoLive === 'function') stopPseudoLive(true);
+  setPanelOpen('realLivePanel', 'realLiveBtn', false);
+  setPanelOpen('pttPanel', 'pttModeBtn', false);
+  suspendChatAutoSpeakForPtt(false);
+  updateModePanelState();
+  persistSessionState('chat');
+}
+
+let pwaRemoteAssignRole = '';
+let pwaRemoteActiveRole = '';
+let pwaRemoteLastHandledAt = 0;
+
+function pwaRemoteSignature(event) {
+  return String(event?.code || '') + '|' + String(event?.key || '') + '|' + String(event?.keyCode || 0);
+}
+
+function beginPwaRemoteAssign(role) {
+  pwaRemoteAssignRole = role === 'vi' ? 'vi' : 'tr';
+  updatePwaRemoteButtons();
+  showTransientNotice((pwaRemoteAssignRole === 'vi' ? 'VI' : 'TR') + ' kumanda için şimdi tuşa bas', 5000);
+}
+
+function updatePwaRemoteButtons() {
+  const tr = document.getElementById('pttRemoteTrBtn');
+  const vi = document.getElementById('pttRemoteViBtn');
+  if (tr) {
+    tr.classList.toggle('saved', !!localStorage.getItem('askviet_pwa_remote_tr'));
+    tr.classList.toggle('waiting', pwaRemoteAssignRole === 'tr');
+    tr.classList.toggle('active', pwaRemoteActiveRole === 'tr');
+  }
+  if (vi) {
+    vi.classList.toggle('saved', !!localStorage.getItem('askviet_pwa_remote_vi'));
+    vi.classList.toggle('waiting', pwaRemoteAssignRole === 'vi');
+    vi.classList.toggle('active', pwaRemoteActiveRole === 'vi');
+  }
+}
+
+function pwaRemoteRoleForEvent(event) {
+  const sig = pwaRemoteSignature(event);
+  if (sig && sig === localStorage.getItem('askviet_pwa_remote_tr')) return 'tr';
+  if (sig && sig === localStorage.getItem('askviet_pwa_remote_vi')) return 'vi';
+  return '';
+}
+
+function handlePwaRemoteKey(event) {
+  if (!event || event.isComposing) return;
+  const target = event.target;
+  if (!pwaRemoteAssignRole && target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
+
+  if (pwaRemoteAssignRole && event.type === 'keydown' && !event.repeat) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const role = pwaRemoteAssignRole;
+    localStorage.setItem(role === 'vi' ? 'askviet_pwa_remote_vi' : 'askviet_pwa_remote_tr', pwaRemoteSignature(event));
+    pwaRemoteAssignRole = '';
+    updatePwaRemoteButtons();
+    showTransientNotice((role === 'vi' ? 'VI' : 'TR') + ' kumanda kaydedildi', 2400);
+    return;
+  }
+
+  const role = pwaRemoteRoleForEvent(event);
+  if (!role) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (event.type !== 'keydown' || event.repeat) return;
+
+  const now = Date.now();
+  if (now - pwaRemoteLastHandledAt < 260) return;
+  pwaRemoteLastHandledAt = now;
+  pwaRemoteActiveRole = role;
+  updatePwaRemoteButtons();
+  togglePttMode(true);
+  startPttVoice(role);
+  setTimeout(() => {
+    pwaRemoteActiveRole = '';
+    updatePwaRemoteButtons();
+  }, 900);
+}
+
+window.addEventListener('keydown', handlePwaRemoteKey, true);
+window.addEventListener('keyup', handlePwaRemoteKey, true);
 
 function isPttModeOpen() {
   return !!document.getElementById('pttPanel')?.classList.contains('open');
@@ -5815,6 +5927,8 @@ function updateModePanelState() {
   const chat = document.getElementById('chat');
   const pttOpen = document.getElementById('pttPanel')?.classList.contains('open');
   const liveOpen = document.getElementById('realLivePanel')?.classList.contains('open');
+  const chatBtn = document.getElementById('chatModeBtn');
+  if (chatBtn) chatBtn.classList.toggle('on', !pttOpen && !liveOpen);
   if (chat) chat.classList.toggle('mode-panel-open', !!(pttOpen || liveOpen));
   updateModeVoiceControls();
 }
@@ -6957,6 +7071,8 @@ function setupChatControls() {
   if (modeRow) modeRow.style.display = 'none';
   const pttBtn = document.getElementById('pttModeBtn');
   const realLiveBtn = document.getElementById('realLiveBtn');
+  const chatModeBtn = document.getElementById('chatModeBtn');
+  if (chatModeBtn) chatModeBtn.style.display = myRole === 'tr' ? '' : 'none';
   if (pttBtn) pttBtn.style.display = myRole === 'tr' ? '' : 'none';
   if (realLiveBtn) {
     realLiveBtn.style.display = myRole === 'tr' ? '' : 'none';
@@ -7034,6 +7150,8 @@ function applyLocaleUI() {
   const ct = document.getElementById('chatTitle');
   if (ct) ct.textContent = isVi ? '🇻🇳 → 🇹🇷' : '🇹🇷 → 🇻🇳';
   const pttBtn = document.getElementById('pttModeBtn');
+  const chatModeBtn = document.getElementById('chatModeBtn');
+  if (chatModeBtn) { chatModeBtn.textContent = isVi ? 'Tin nhắn' : 'Mesaj'; chatModeBtn.title = isVi ? 'Tin nhắn' : 'Mesajlar'; }
   const PTT_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
   const LIVE_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>';
   if (pttBtn) { pttBtn.innerHTML = PTT_ICON + (isVi ? 'Bấm nói' : 'Bas-Konuş'); pttBtn.title = isVi ? 'Chế độ bấm nói' : 'Bas-konuş modu'; }
@@ -7756,22 +7874,31 @@ let pseudoLiveLastTarget='vi';
 let pseudoLiveLastSpokenText='';
 let pseudoLiveLastSpokenAt=0;
 
+function getLiveNoiseLevel() {
+  const explicit = localStorage.getItem('askviet_live_noise_level');
+  if (explicit !== null && explicit !== '') return Math.max(0, Math.min(2, parseInt(explicit, 10) || 0));
+  return localStorage.getItem('askviet_live_noise') === '1' ? 1 : 0;
+}
+
 function getLiveSettings() {
   return {
     model: getTranscribeEngine(),
     response: localStorage.getItem('askviet_live_response') || 'TEXT_TTS',
     saver: localStorage.getItem('askviet_live_saver') !== '0',
-    noise: localStorage.getItem('askviet_live_noise') === '1'
+    noiseLevel: getLiveNoiseLevel()
   };
 }
 
 function saveLiveSettings() {
   const response = document.getElementById('liveResponseSelect')?.value || 'TEXT_TTS';
   const saver = document.getElementById('liveSaverToggle')?.checked !== false;
-  const noise = document.getElementById('liveNoiseToggle')?.checked === true;
+  const noiseLevel = document.getElementById('liveNoise2Toggle')?.checked
+    ? 2
+    : (document.getElementById('liveNoise1Toggle')?.checked ? 1 : 0);
   localStorage.setItem('askviet_live_response', response === 'TEXT' || response === 'AUDIO' ? response : 'TEXT_TTS');
   localStorage.setItem('askviet_live_saver', saver ? '1' : '0');
-  localStorage.setItem('askviet_live_noise', noise ? '1' : '0');
+  localStorage.setItem('askviet_live_noise_level', String(noiseLevel));
+  localStorage.setItem('askviet_live_noise', noiseLevel > 0 ? '1' : '0');
   syncLiveSettingsUI();
   if (myRole === 'tr') {
     const s = getTtsSettings();
@@ -7779,14 +7906,30 @@ function saveLiveSettings() {
   }
 }
 
+function setLiveNoiseLevelFromCheckbox(level, checked) {
+  const noiseLevel = checked ? level : 0;
+  localStorage.setItem('askviet_live_noise_level', String(noiseLevel));
+  localStorage.setItem('askviet_live_noise', noiseLevel > 0 ? '1' : '0');
+  syncLiveSettingsUI();
+  saveLiveSettings();
+  showTransientNotice(noiseLevel === 2 ? 'Gürültü 2 aktif' : (noiseLevel === 1 ? 'Gürültü 1 aktif' : 'Normal aktif'), 2200);
+  setRealLiveStatus(noiseLevel === 2 ? 'Gürültü 2 aktif' : (noiseLevel === 1 ? 'Gürültü 1 aktif' : 'Normal aktif'), 'idle');
+}
+
 function syncLiveSettingsUI() {
   const settings = getLiveSettings();
   const response = document.getElementById('liveResponseSelect');
   const saver = document.getElementById('liveSaverToggle');
-  const noise = document.getElementById('liveNoiseToggle');
+  const noise1 = document.getElementById('liveNoise1Toggle');
+  const noise2 = document.getElementById('liveNoise2Toggle');
+  const noise1Label = document.getElementById('liveNoise1Label');
+  const noise2Label = document.getElementById('liveNoise2Label');
   if (response) response.value = settings.response;
   if (saver) saver.checked = settings.saver;
-  if (noise) noise.checked = settings.noise;
+  if (noise1) noise1.checked = settings.noiseLevel === 1;
+  if (noise2) noise2.checked = settings.noiseLevel === 2;
+  if (noise1Label) noise1Label.classList.toggle('on', settings.noiseLevel === 1);
+  if (noise2Label) noise2Label.classList.toggle('on', settings.noiseLevel === 2);
 }
 
 function toggleRealLive(force) {
@@ -7796,7 +7939,7 @@ function toggleRealLive(force) {
     return false;
   }
   const panel = document.getElementById('realLivePanel');
-  const next = typeof force === 'boolean' ? force : !panel?.classList.contains('open');
+  const next = typeof force === 'boolean' ? force : true;
   if (next) {
     togglePttMode(false);
     toggleTtsSettings(false);
@@ -8062,9 +8205,15 @@ function tickPseudoLive(event) {
   const elapsed=pseudoLiveLastTickAt ? Math.max(1,Math.min(250,now-pseudoLiveLastTickAt)) : 1;
   pseudoLiveLastTickAt=now;
   const level=livePcmSignalLevel(pcm);
-  const noisy=!!settings.noise;
-  const peakThreshold=(noisy ? (settings.saver ? 3300 : 2700) : (settings.saver ? 2600 : 2000)) / 32768;
-  const requiredVoiceMs=noisy ? (settings.saver ? 320 : 280) : (settings.saver ? 240 : 210);
+  const noiseLevel=Math.max(0,Math.min(2,settings.noiseLevel || 0));
+  const noiseProfiles=[
+    { threshold:3300, minVoice:320, strong:110, longRun:480 },
+    { threshold:5000, minVoice:340, strong:170, longRun:650 },
+    { threshold:7500, minVoice:360, strong:260, longRun:850 }
+  ];
+  const noiseProfile=noiseProfiles[noiseLevel] || noiseProfiles[0];
+  const peakThreshold=noiseProfile.threshold / 32768;
+  const requiredVoiceMs=noiseProfile.minVoice;
   const silenceLimit=settings.saver ? 1750 : 2500;
   const nowTick=Date.now();
   if (level.peak > 0.0009) pseudoLiveLastAudioAt = nowTick;
@@ -8078,14 +8227,15 @@ function tickPseudoLive(event) {
     pseudoLiveLongestVoiceRunMs=Math.max(pseudoLiveLongestVoiceRunMs,pseudoLiveCurrentVoiceRunMs);
     pseudoLivePeakLevel=Math.max(pseudoLivePeakLevel,level.peak);
     if (level.peak >= peakThreshold * 1.5) pseudoLiveStrongVoiceMs += elapsed;
-    const minRunMs=Math.max(noisy ? 190 : 150,Math.round(requiredVoiceMs * 2 / 3));
+    const minRunMs=Math.max(noiseLevel ? 190 : 150,Math.round(requiredVoiceMs * 2 / 3));
     // Shape requirements back to strict: the looser gate let noise/silence
     // segments through, and the STT model hallucinates (even echoes its own
     // prompt) on near-empty audio. Short answers still pass thanks to the
     // lowered requiredVoiceMs + latch; noise no longer does.
-    const hasSpeechShape=noisy
-      ? (pseudoLiveStrongVoiceMs >= 110 || pseudoLivePeakLevel >= peakThreshold * 2.15 || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 160)
-      : (pseudoLiveStrongVoiceMs >= 70 || pseudoLivePeakLevel >= peakThreshold * 2 || pseudoLiveLongestVoiceRunMs >= requiredVoiceMs + 140);
+    const hasSpeechShape=
+      pseudoLiveStrongVoiceMs >= noiseProfile.strong ||
+      pseudoLivePeakLevel >= peakThreshold * (noiseLevel >= 2 ? 2.35 : (noiseLevel ? 2.2 : 2.15)) ||
+      pseudoLiveLongestVoiceRunMs >= noiseProfile.longRun;
     // Latch acceptance: once a segment has enough real speech, keep it accepted
     // so trailing noise can't throw away a segment that began with real talk.
     if (pseudoLiveVoiceMs >= requiredVoiceMs && pseudoLiveLongestVoiceRunMs >= minRunMs && hasSpeechShape) {
