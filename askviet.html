@@ -100,8 +100,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .online-counter{min-width:26px;height:26px;border-radius:999px;border:2px solid #22c55e;color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(34,197,94,.18);flex:0 0 auto}
-.back-btn{width:38px;height:38px;border:1px solid rgba(167,139,250,.72);border-radius:12px;background:rgba(124,58,237,.16);color:#f5f3ff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(124,58,237,.2);transition:transform .1s ease,box-shadow .15s ease,background .15s ease}
-.back-btn:active{transform:scale(.92);background:rgba(124,58,237,.28);box-shadow:0 0 18px rgba(139,92,246,.5)}
+.back-btn{width:38px;height:38px;border:1px solid rgba(196,181,253,.86);border-radius:12px;background:linear-gradient(135deg,rgba(124,58,237,.86),rgba(109,40,217,.96));color:#fff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 15px rgba(124,58,237,.42),inset 0 1px 0 rgba(255,255,255,.2);transition:transform .1s ease,box-shadow .15s ease,background .15s ease}
+.back-btn:active{transform:scale(.92);background:linear-gradient(135deg,rgba(139,92,246,.96),rgba(124,58,237,1));box-shadow:0 0 20px rgba(139,92,246,.62),inset 0 1px 0 rgba(255,255,255,.25)}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;-webkit-overflow-scrolling:touch;background:#f0ece8;overscroll-behavior:contain;overflow-anchor:none}
 .load-older-btn{display:block;margin:2px auto 12px;padding:7px 12px;border:1px solid #d8c8f5;border-radius:999px;background:#fff;color:#6d28d9;font-size:12px;font-weight:800;box-shadow:0 2px 8px #00000014}
@@ -6090,26 +6090,9 @@ function handlePwaRemoteKey(event) {
 
 window.addEventListener('keydown', handlePwaRemoteKey, true);
 window.addEventListener('keyup', handlePwaRemoteKey, true);
-window.addEventListener('pointerdown', handlePwaRemotePointer, true);
-window.addEventListener('wheel', handlePwaRemoteWheel, {capture:true, passive:false});
-window.addEventListener('click', event => {
-  if (pwaRemoteAssignRole && !event.target?.closest?.('.ptt-remote-btn')) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    savePwaRemoteSignature(pwaRemoteAssignRole, pwaRemoteClickSignature(event));
-    return;
-  }
-  if (Date.now() < pwaRemoteSuppressPointerUntil) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return;
-  }
-  const role = pwaRemoteRoleForSignature(pwaRemoteClickSignature(event));
-  if (!role || event.target?.closest?.('.ptt-remote-btn')) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  triggerPwaRemoteRole(role);
-}, true);
+// iOS AssistiveTouch/remote devices can surface as ordinary page taps or wheel
+// events. Capturing those globally made every normal tap look like a PTT remote
+// press, so only keyboard/media-session remote channels are active here.
 installPwaMediaRemoteHandlers();
 
 function isPttModeOpen() {
@@ -8260,6 +8243,23 @@ function updateLiveMainButton(on=false) {
   btn.classList.toggle('recording', !!on);
 }
 
+let realLiveStatusDetail = '';
+function realLiveQueueInfo() {
+  const count = (Array.isArray(pseudoLiveTtsQueue) ? pseudoLiveTtsQueue.length : 0) + (pseudoLiveTtsPlaying ? 1 : 0);
+  return count > 0 ? ('Sırada ' + count + ' cümle var') : '';
+}
+
+function updateRealLiveInfo(detail='') {
+  if (typeof detail === 'string') realLiveStatusDetail = detail.trim();
+  const info=document.getElementById('liveInfoText');
+  if (!info) return;
+  const queue=realLiveQueueInfo();
+  const parts=[];
+  if (realLiveStatusDetail) parts.push(realLiveStatusDetail);
+  if (queue) parts.push(queue);
+  info.textContent = parts.join('  •  ') || 'Hazır';
+}
+
 function setRealLiveStatus(text, state='') {
   const textEl2=document.getElementById('realLiveStatusText');
   if (textEl2) textEl2.textContent = text || '';
@@ -8267,12 +8267,7 @@ function setRealLiveStatus(text, state='') {
     const el=document.getElementById('realLiveStatus');
     if (el) el.textContent = text || '';
   }
-  const textEl=document.getElementById('liveInfoText');
-  if (textEl) textEl.textContent = text || 'Hazır';
-  else {
-    const title=document.getElementById('liveInfoTitle');
-    if (title) title.textContent = text || 'Hazır';
-  }
+  updateRealLiveInfo('');
   if (state) {
     // Persist-until-done: while a segment is being processed (transcribe ->
     // translate -> TTS playback), 'idle' must not repaint the light; the color
@@ -8682,6 +8677,7 @@ function enqueuePseudoLiveTts(text, target) {
   const item = { text, target, ts:Date.now(), prepared:null, promise:null, failed:false };
   pseudoLiveTtsQueue.push(item);
   while (pseudoLiveTtsQueue.length > 8) pseudoLiveTtsQueue.shift();
+  updateRealLiveInfo(realLiveStatusDetail);
   preparePseudoLiveTts(item);
   processPseudoLiveTtsQueue();
 }
@@ -8718,6 +8714,7 @@ async function processPseudoLiveTtsQueue() {
   if (!item) return;
   if (item.failed) {
     pseudoLiveTtsQueue.shift();
+    updateRealLiveInfo(realLiveStatusDetail);
     return processPseudoLiveTtsQueue();
   }
   preparePseudoLiveTts(item);
@@ -8726,14 +8723,17 @@ async function processPseudoLiveTtsQueue() {
     prepared = item.prepared || await item.promise;
   } catch (err) {
     pseudoLiveTtsQueue.shift();
+    updateRealLiveInfo(realLiveStatusDetail);
     appendRealLiveLog('Live ses hazirlama hatasi: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
     return processPseudoLiveTtsQueue();
   }
   pseudoLiveTtsQueue.shift();
+  updateRealLiveInfo(realLiveStatusDetail);
   pseudoLiveTtsPlaying = true;
   pseudoLiveLastSpokenText = item.text;
   pseudoLiveLastSpokenAt = Date.now();
-  setRealLiveStatus('Seslendiriliyor: ' + pttTtsLabel(item.target), 'speaking');
+  setRealLiveStatus('Seslendiriliyor', 'speaking');
+  updateRealLiveInfo(pttTtsLabel(item.target));
   try {
     await playBlob(prepared.blob, ++ttsToken, null, item.text, { target:item.target, cacheKey:prepared.key });
   } catch (err) {
@@ -8743,6 +8743,7 @@ async function processPseudoLiveTtsQueue() {
     if (pseudoLiveRunning) {
       if (pseudoLiveTtsQueue.length) processPseudoLiveTtsQueue();
       else if (!pseudoLiveProcessing) setRealLiveStatus('Dinliyorum', 'idle');
+      else updateRealLiveInfo(realLiveStatusDetail);
     }
   }
 }
@@ -8751,7 +8752,8 @@ async function handlePseudoLiveBlob(blob) {
   const settings=getLiveSettings();
   const payload=await liveFileToBase64(blob);
   const firstTranscribe=primaryTranscribeLabel(settings.model);
-  setRealLiveStatus('Ses metne çevriliyor: ' + firstTranscribe, 'working');
+  setRealLiveStatus('Ses metne çevriliyor', 'working');
+  updateRealLiveInfo(firstTranscribe);
   let data;
   try {
     data=await askVietServer('transcribe', {
@@ -8770,7 +8772,8 @@ async function handlePseudoLiveBlob(blob) {
     ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' ile metne çevrildi. '
     : '';
   if (actualTranscribe && actualTranscribe !== firstTranscribe) {
-    setRealLiveStatus(firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanıldı', 'working');
+    setRealLiveStatus('Ses metne çevriliyor', 'working');
+    updateRealLiveInfo(firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanılıyor');
   }
   const srcText=String(data.text || '').trim();
   if (!srcText) {
@@ -8794,7 +8797,8 @@ async function handlePseudoLiveBlob(blob) {
     await new Promise(r => setTimeout(r, 1600));
     return;
   }
-  setRealLiveStatus(transcribeFallbackNotice + 'Çevriliyor: ' + modelName(selectedModel), 'working');
+  setRealLiveStatus('Çeviri hazırlanıyor', 'working');
+  updateRealLiveInfo((transcribeFallbackNotice || '') + modelName(selectedModel));
   try {
     const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
     const translated=String(tr.translation || '').trim();
