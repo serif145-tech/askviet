@@ -101,8 +101,9 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .conn-dot.off{background:#ef4444}
 .online-counter{min-width:26px;height:26px;border-radius:999px;border:2px solid #22c55e;color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(34,197,94,.18);flex:0 0 auto}
-.back-btn{width:38px;height:38px;border:1px solid rgba(196,181,253,.78);border-radius:12px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 15px rgba(124,58,237,.45),inset 0 1px 0 rgba(255,255,255,.22);transition:transform .1s ease,box-shadow .15s ease,background .15s ease}
-.back-btn:active{transform:scale(.92);background:linear-gradient(135deg,#a78bfa,#7c3aed);box-shadow:0 0 20px rgba(139,92,246,.66),inset 0 1px 0 rgba(255,255,255,.28)}
+.back-btn{width:38px;height:38px;border:1px solid rgba(167,139,250,.78);border-radius:12px;background:rgba(14,12,24,.86);color:#f8f5ff;font-size:22px;font-weight:950;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(124,58,237,.28),inset 0 1px 0 rgba(255,255,255,.08);transition:transform .1s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease}
+.back-btn svg{display:block;filter:drop-shadow(0 0 5px rgba(255,255,255,.16))}
+.back-btn:active{transform:scale(.92);background:rgba(124,58,237,.24);border-color:#c4b5fd;box-shadow:0 0 16px rgba(124,58,237,.42),inset 0 1px 0 rgba(255,255,255,.12)}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;-webkit-overflow-scrolling:touch;background:#f0ece8;overscroll-behavior:contain;overflow-anchor:none}
 .load-older-btn{display:block;margin:2px auto 12px;padding:7px 12px;border:1px solid #d8c8f5;border-radius:999px;background:#fff;color:#6d28d9;font-size:12px;font-weight:800;box-shadow:0 2px 8px #00000014}
@@ -537,7 +538,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
         <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="Ses ayarları" title="Ses ayarları">
-        <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M10 12h10"/></svg></button>
+        <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
       </div>
     </div>
     <div class="header-meta">
@@ -2731,7 +2732,7 @@ function renderMessage(key, msg) {
       languageToggle.onclick = event => {
         event.stopPropagation();
         const collapsed = orig.classList.toggle('compact-source');
-        languageToggle.textContent = sourceFlag + ' ' + (collapsed ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Çeviriyi göster', 'Xem bản dịch'));
+        languageToggle.textContent = sourceFlag + ' ' + (collapsed ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Orijinali gizle', 'Ẩn bản gốc'));
       };
       orig.insertBefore(languageToggle, originalContent);
     }
