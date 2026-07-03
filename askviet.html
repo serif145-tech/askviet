@@ -183,22 +183,26 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.theirs .msg-translation{border-bottom-left-radius:9px}
 .translation-copy-tick{position:absolute;right:8px;top:8px;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #86efac;box-shadow:0 4px 13px rgba(22,163,74,.46);font:900 15px/1 Arial,sans-serif;pointer-events:none;animation:translationTick 1s ease forwards}
 @keyframes translationTick{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1.18)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82)}}
-.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14);user-select:none;-webkit-user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none}
 .msg-media-video{min-width:min(240px,68vw)}
 .msg-video-wrap{position:relative;display:inline-block;line-height:0;background:#111;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.14);cursor:pointer}
 .msg-video-wrap .msg-media-video{box-shadow:none;border-radius:12px}
 .msg-video-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.56);border:1px solid rgba(255,255,255,.7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;line-height:1;box-shadow:0 5px 18px rgba(0,0,0,.35);pointer-events:none}
 .media-btn{background:#fff!important;border:1px solid #e2e2ea!important;color:#6b7280}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-42px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:8;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;overflow:visible}
-.msg.mine .msg-react-btn{left:-42px;right:auto}
+.msg-react-btn{position:absolute;right:-46px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(229,231,235,.96);background:rgba(255,255,255,.98);color:#ef476f;font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.95);cursor:pointer;z-index:30;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;overflow:visible;isolation:isolate}
+.msg.mine .msg-react-btn{left:-46px;right:auto}
+.msg.media-msg .msg-react-btn{z-index:40}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .reaction-button-main{display:flex;align-items:center;justify-content:center;line-height:1;min-width:1em}
-.reaction-button-badges{position:absolute;top:30px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:2px;pointer-events:none;white-space:nowrap}
-.reaction-button-badges.show{display:flex}
-.reaction-button-chip{display:inline-flex;align-items:center;justify-content:center;gap:1px;min-width:18px;height:17px;padding:0 4px;border-radius:999px;background:rgba(255,255,255,.97);border:1px solid rgba(229,231,235,.95);box-shadow:0 2px 7px rgba(0,0,0,.16);font-size:11px;font-weight:900;color:#4b5563;line-height:1}
-.reaction-button-chip .emoji{font-size:12px;line-height:1}
-.reaction-button-chip .count{font-size:9px;line-height:1;color:#6b7280}
+.reaction-button-badges{position:absolute;top:27px;left:50%;transform:translateX(-50%);display:none;width:58px;height:34px;pointer-events:none;white-space:nowrap}
+.reaction-button-badges.show{display:block}
+.reaction-button-chip{position:absolute;top:7px;display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;padding:0;border-radius:50%;background:rgba(255,255,255,.98);border:1px solid rgba(229,231,235,.96);box-shadow:0 3px 9px rgba(0,0,0,.2),inset 0 1px 0 #fff;font-size:13px;font-weight:900;color:#4b5563;line-height:1}
+.reaction-button-chip:only-child{left:50%;transform:translateX(-50%)}
+.reaction-button-chip:first-child:not(:only-child){left:2px;transform:rotate(-7deg)}
+.reaction-button-chip:nth-child(2){right:2px;transform:rotate(7deg)}
+.reaction-button-chip .emoji{font-size:16px;line-height:1}
+.reaction-button-chip .count{position:absolute;right:-3px;bottom:-3px;display:flex;align-items:center;justify-content:center;min-width:13px;height:13px;padding:0 2px;border-radius:999px;background:#7c3aed;color:#fff;border:1px solid #fff;font-size:8px;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .msg-reactions{display:none!important}
 .reaction-role-row{display:inline-flex;align-items:center;gap:2px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
@@ -209,11 +213,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .reaction-summary-item{display:inline-flex;align-items:center;gap:2px;min-height:21px;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.96);color:#374151;border:1px solid rgba(229,231,235,.95);box-shadow:0 3px 10px rgba(0,0,0,.16);font-style:normal;font-weight:850;white-space:nowrap;backdrop-filter:blur(8px)}
 .reaction-summary-emoji{font-size:15px;line-height:1}
 .reaction-summary-count{min-width:10px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
-.reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
-.reaction-picker.show{display:flex}
-.reaction-picker button{width:32px;height:32px;border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center}
-.reaction-picker .reaction-remove{border-radius:50%;background:#fee2e2;color:#dc2626;font:900 20px/1 Arial,sans-serif}
-.reaction-picker button:active,.reaction-picker button.pressed,.reaction-picker button.flash{transform:none!important;animation:none!important;filter:none!important;box-shadow:none!important}
+.reaction-picker{position:fixed;z-index:100004;display:none;width:238px;height:164px;border:1px solid rgba(196,181,253,.68);border-radius:30px;background:radial-gradient(circle at 50% 90%,rgba(124,58,237,.22),rgba(255,255,255,.96) 58%,rgba(248,250,252,.94));box-shadow:0 18px 46px rgba(30,20,60,.3),inset 0 1px 0 rgba(255,255,255,.95);backdrop-filter:blur(16px);user-select:none;-webkit-user-select:none;touch-action:none;overflow:visible}
+.reaction-picker.show{display:block;animation:reactionPickerIn .18s ease-out}
+.reaction-picker button{position:absolute;width:43px;height:43px;border-radius:50%;border:1px solid rgba(226,232,240,.96);background:rgba(255,255,255,.94);font-size:25px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 17px rgba(30,20,60,.2),inset 0 1px 0 #fff;transition:transform .13s ease,filter .13s ease,box-shadow .13s ease}
+.reaction-picker .reaction-remove{left:94px!important;top:109px!important;width:50px;height:50px;border:2px solid rgba(167,139,250,.72);background:linear-gradient(145deg,#8b5cf6,#6d28d9);color:#fff;font:800 27px/1 Arial,sans-serif;box-shadow:0 0 0 5px rgba(139,92,246,.14),0 9px 24px rgba(109,40,217,.34)}
+.reaction-picker button:active,.reaction-picker button.pressed{filter:brightness(1.08);box-shadow:0 0 0 4px rgba(167,139,250,.22),0 4px 12px rgba(30,20,60,.22)!important}
+.reaction-picker button:active{transform:scale(.86)!important}
+@keyframes reactionPickerIn{from{opacity:0;transform:scale(.88) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .reaction-burst{position:fixed;left:50%;top:47%;width:1px;height:1px;z-index:100003;pointer-events:none;transform:translate(-50%,-50%)}
 .reaction-burst-particle{position:absolute;left:0;top:0;font-size:var(--size,28px);line-height:1;filter:drop-shadow(0 7px 12px rgba(0,0,0,.32));animation:reactionPop var(--duration,1.2s) cubic-bezier(.13,.76,.2,1) forwards}
 .reaction-burst-core{position:absolute;left:0;top:0;font-size:112px;line-height:1;white-space:nowrap;filter:drop-shadow(0 14px 26px rgba(0,0,0,.3));animation:reactionCountPop .86s cubic-bezier(.16,.84,.24,1) forwards}
@@ -795,7 +801,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-stream-stability-visual-2';
+const APP_VERSION = '2026-07-04-html-live-reaction-mic-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2867,10 +2873,6 @@ function renderMessage(key, msg) {
   orig.id = 'orig-' + key;
   orig.style.position = 'relative';
   setMessageContent(orig, msg);
-  const originalContent = document.createElement('span');
-  originalContent.className = 'original-content';
-  while (orig.firstChild) originalContent.appendChild(orig.firstChild);
-  orig.appendChild(originalContent);
   if (!msg.deleted) {
     addReactionButton(orig, key);
     bindBubbleDoubleTap(orig, key);
@@ -3377,11 +3379,14 @@ function setMessageContent(el, msg) {
   el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
   el.classList.toggle('has-reply-quote', !!parseReplyData(msg.replyTo));
   appendReplyQuote(el, msg.replyTo);
+  const originalContent = document.createElement('div');
+  originalContent.className = 'original-content';
   if (msg.deleted) {
     const deleted = document.createElement('div');
     deleted.className = 'msg-deleted';
     deleted.textContent = '💔';
-    el.appendChild(deleted);
+    originalContent.appendChild(deleted);
+    el.appendChild(originalContent);
     return;
   }
   const mediaUrl = msg.mediaUrl || msg.imageUrl || '';
@@ -3389,9 +3394,10 @@ function setMessageContent(el, msg) {
     const img = document.createElement('img');
     img.className = 'msg-media-img';
     img.src = mediaUrl;
+    img.draggable = false;
     img.alt = msg.text || (myRole === 'vi' ? 'Ảnh' : 'Fotoğraf');
     img.onclick = () => openMediaPreview(mediaUrl, 'image');
-    el.appendChild(img);
+    originalContent.appendChild(img);
   } else if (msg.type === 'video' && mediaUrl) {
     const wrap = document.createElement('div');
     wrap.className = 'msg-video-wrap';
@@ -3407,17 +3413,18 @@ function setMessageContent(el, msg) {
     wrap.onclick = () => openMediaPreview(mediaUrl, 'video');
     wrap.appendChild(video);
     wrap.appendChild(play);
-    el.appendChild(wrap);
+    originalContent.appendChild(wrap);
   } else {
     const content = document.createElement('div');
     content.className = 'msg-main-content';
     appendLinkedText(content, getMainText(msg));
-    el.appendChild(content);
+    originalContent.appendChild(content);
   }
+  el.appendChild(originalContent);
   if (existingReact) el.appendChild(existingReact);
 }
 
-function reactionEmojis(){ return ['👍','❤️','😂','😱','😭','😡']; }
+function reactionEmojis(){ return ['👍','❤️','😂','😲','😱','😭','😡']; }
 
 function addReactionButton(parent, key) {
   const btn = document.createElement('button');
@@ -3646,18 +3653,27 @@ function showReactionPicker(key, anchor) {
     picker.classList.remove('show');
   };
   picker.appendChild(remove);
-  reactionEmojis().forEach(emoji => {
+  const emojis = reactionEmojis();
+  emojis.forEach((emoji, index) => {
     const b = document.createElement('button');
+    b.className = 'reaction-option';
     b.textContent = emoji;
+    const angle = (-165 + (150 * index / Math.max(1, emojis.length - 1))) * Math.PI / 180;
+    const radius = 90;
+    b.style.left = (119 + Math.cos(angle) * radius - 21.5) + 'px';
+    b.style.top = (122 + Math.sin(angle) * radius - 21.5) + 'px';
     b.onpointerdown = e => e.preventDefault();
     b.onclick = e => { e.preventDefault(); addMessageReaction(key, emoji); picker.classList.remove('show'); };
     picker.appendChild(b);
   });
   picker.classList.add('show');
   const r = anchor.getBoundingClientRect();
-  const pickerWidth = picker.getBoundingClientRect().width;
-  picker.style.left = Math.min(window.innerWidth - pickerWidth - 8, Math.max(8, r.left + r.width / 2 - pickerWidth / 2)) + 'px';
-  picker.style.top = Math.max(8, r.top - 58) + 'px';
+  const pickerRect = picker.getBoundingClientRect();
+  const left = Math.min(window.innerWidth - pickerRect.width - 8, Math.max(8, r.left + r.width / 2 - pickerRect.width / 2));
+  const above = r.top - pickerRect.height - 10;
+  const top = above >= 8 ? above : Math.min(window.innerHeight - pickerRect.height - 8, r.bottom + 10);
+  picker.style.left = left + 'px';
+  picker.style.top = Math.max(8, top) + 'px';
 }
 
 document.addEventListener('pointerdown', e => {
@@ -5082,7 +5098,8 @@ function scrollToBottom(force=false) {
 function openGallery(){document.getElementById('galleryInput')?.click()}
 function openCamera(){document.getElementById('cameraInput')?.click()}
 
-function showMediaStatus(text) {
+let mediaStatusHideTimer = null;
+function showMediaStatus(text, autoHideMs=0) {
   let box = document.getElementById('mediaUploadStatus');
   if (!box) {
     box = document.createElement('div');
@@ -5090,10 +5107,18 @@ function showMediaStatus(text) {
     box.className = 'media-uploading';
     document.body.appendChild(box);
   }
+  if (mediaStatusHideTimer) { clearTimeout(mediaStatusHideTimer); mediaStatusHideTimer = null; }
   box.textContent = text;
   box.style.display = 'block';
+  if (autoHideMs > 0) {
+    mediaStatusHideTimer = setTimeout(() => hideMediaStatus(), autoHideMs);
+  }
 }
-function hideMediaStatus() { const box = document.getElementById('mediaUploadStatus'); if (box) box.style.display = 'none'; }
+function hideMediaStatus() {
+  if (mediaStatusHideTimer) { clearTimeout(mediaStatusHideTimer); mediaStatusHideTimer = null; }
+  const box = document.getElementById('mediaUploadStatus');
+  if (box) box.style.display = 'none';
+}
 
 async function handleMediaInput(event) {
   const input = event.target;
@@ -6798,7 +6823,7 @@ function addMessageToTranslationBypass(key) {
     if (!list.some(item => normalizeBlockText(item) === normalizeBlockText(value))) list.push(value);
   });
   saveTextList('white', list);
-  showMediaStatus(uiText('Çeviri gerektirmeyenlere eklendi.', 'Đã thêm vào danh sách không cần dịch.'));
+  showMediaStatus(uiText('Çeviri gerektirmeyenlere eklendi.', 'Đã thêm vào danh sách không cần dịch.'), 2600);
 }
 function textListKey(type) { return type === 'white' ? 'askviet_whitelist_texts' : 'askviet_blocked_texts'; }
 function sharedTextListPath(type) { return CONFIG_PATH + '/textLists/' + (type === 'white' ? 'white' : 'blocked'); }
@@ -8380,14 +8405,7 @@ function micPermissionMessage() {
   return uiText('Mikrofon izni gerekli. Ayarlar > İzinler kısmından mikrofonu açmalısın.', 'Cần quyền micro. Hãy mở micro trong Cài đặt > Quyền.');
 }
 async function requestMicrophoneStream(kind='mic') {
-  try {
-    if (navigator.permissions?.query) {
-      const status = await navigator.permissions.query({ name:'microphone' }).catch(() => null);
-      if (status?.state === 'denied') throw new Error(micPermissionMessage());
-    }
-  } catch (e) {
-    if (String(e?.message || e).includes('Mikrofon') || String(e?.message || e).includes('micro')) throw e;
-  }
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error(micPermissionMessage());
   const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
   stream.getAudioTracks().forEach(track => {
     track.onended = () => {
@@ -8640,6 +8658,7 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
 
 // ── AskViet pseudo Live: Android mantığı, eski canlı motor yerine ─────────
 let pseudoLiveRunning=false;
+let pseudoLiveStarting=false;
 let pseudoLiveStream=null;
 let pseudoLiveLastAudioAt=0;
 let pseudoLiveCtx=null;
@@ -8781,19 +8800,31 @@ function toggleRealLive(force) {
 }
 
 async function toggleGeminiLiveMain() {
+  if (pseudoLiveStarting) return;
   if (pseudoLiveRunning) {
     stopPseudoLive(false);
     return;
   }
   if (myRole !== 'tr') return;
+  pseudoLiveStarting = true;
+  let preparedStream = null;
   try {
     primeAudioForGesture();
-    await unlockAudio(true);
-    await keepAudioAwake(90000);
-    await startPseudoLive();
+    updateLiveMainButton(true);
+    setRealLiveStatus('Mikrofon hazırlanıyor...', 'loading');
+    const streamPromise = requestMicrophoneStream('live');
+    await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
+    preparedStream = await streamPromise;
+    await startPseudoLive(preparedStream);
+    preparedStream = null;
   } catch (err) {
+    if (preparedStream) {
+      try { preparedStream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
+    }
     setRealLiveStatus('Live başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'error');
     stopPseudoLive(true);
+  } finally {
+    pseudoLiveStarting = false;
   }
 }
 
@@ -8961,23 +8992,44 @@ async function revivePseudoLiveMic() {
 // Manual refresh (header button): unconditionally rebuilds EVERY mic path —
 // message mic, Bas-Konuş, Live, recorder refs, AudioContext — with the same
 // spinning-mic -> green-check visual. HTML/PWA only.
+let micRefreshInFlight = false;
 async function manualMicRefresh() {
+  if (micRefreshInFlight) return;
+  micRefreshInFlight = true;
   showMicRevive('spin');
-  try { forceAbortRecording(); } catch {}
+  const restartLive = !!pseudoLiveRunning;
+  let freshStream = null;
   try {
-    if (pseudoLiveRunning) {
-      stopPseudoLive(true);
-      await startPseudoLive();
+    try { forceAbortRecording(); } catch {}
+    if (restartLive) stopPseudoLive(true);
+    try { resetMicrophoneAudioContext(); } catch {}
+    primeAudioForGesture();
+    const streamPromise = requestMicrophoneStream(restartLive ? 'live' : 'mic');
+    await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
+    freshStream = await streamPromise;
+    if (restartLive) {
+      await startPseudoLive(freshStream);
+      freshStream = null;
     } else {
-      try { resetMicrophoneAudioContext(); } catch {}
+      const ctx = await ensureAudioCtx();
+      if (!ctx || ctx.state === 'closed') throw new Error('Ses motoru yeniden açılamadı.');
+      const source = ctx.createMediaStreamSource(freshStream);
+      try { source.disconnect(); } catch {}
+      freshStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
+      freshStream = null;
     }
-    setTimeout(() => showMicRevive('ok'), 450);
+    showMicRevive('ok');
   } catch (e) {
+    if (freshStream) {
+      try { freshStream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
+    }
     showMicRevive(false);
     setRealLiveStatus('Mikrofon geri alınamadı: ' + normalizeApiError(e && e.message ? e.message : String(e), 'tr'), 'error');
+  } finally {
+    micRefreshInFlight = false;
   }
 }
-async function startPseudoLive() {
+async function startPseudoLive(preparedStream=null) {
   stopPseudoLive(true);
   pseudoLiveRunning=true;
   pseudoLiveLastAudioAt=Date.now();
@@ -8985,7 +9037,7 @@ async function startPseudoLive() {
   pseudoLiveProcessing=false;
   pseudoLiveTtsQueue=[];
   pseudoLiveTtsPlaying=false;
-  pseudoLiveStream=await requestMicrophoneStream('live');
+  pseudoLiveStream=preparedStream || await requestMicrophoneStream('live');
   pseudoLiveCtx=await ensureAudioCtx();
   pseudoLiveSampleRate=pseudoLiveCtx.sampleRate || 48000;
   pseudoLivePreRollChunks=[];
