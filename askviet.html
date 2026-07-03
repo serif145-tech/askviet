@@ -152,7 +152,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-translation.primary-translation{padding:13px 16px;border-radius:22px;font-size:16.5px;font-style:normal;font-weight:500;letter-spacing:.1px;line-height:1.45;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08);position:relative}
 .msg.mine .msg-translation.primary-translation{background:linear-gradient(180deg,#7b4af7,#6c36ee);border-bottom-right-radius:8px}
 .msg.theirs .msg-translation.primary-translation{background:linear-gradient(180deg,#ec4899,#db2777);border-bottom-left-radius:8px}
-.msg-language-toggle{min-height:28px;padding:4px 9px;border-radius:999px;border:1px solid #ddd6fe;background:#fff;color:#6d28d9;font-size:10.5px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:3px}
+.msg-language-toggle{min-height:26px;padding:3px 6px;border-radius:999px;border:1px solid #ddd6fe;background:#fff;color:#6d28d9;font-size:9px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:3px;white-space:nowrap}
 .msg-language-row{display:flex;align-items:center;gap:6px;margin-top:3px;max-width:100%}
 .msg.mine .msg-language-row{justify-content:flex-end}
 .msg.theirs .msg-language-row{justify-content:flex-start}
@@ -172,7 +172,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-translation.language-collapsed,.msg-original.language-collapsed{display:none!important}
 .msg.mine .msg-translation{border-bottom-right-radius:9px}
 .msg.theirs .msg-translation{border-bottom-left-radius:9px}
-.translation-copy-tick{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #22c55e;box-shadow:0 2px 7px rgba(22,163,74,.35);font:900 10px/1 Arial,sans-serif;vertical-align:middle;pointer-events:none;animation:translationTick .95s ease forwards}
+.translation-copy-tick{position:absolute;right:8px;top:8px;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #86efac;box-shadow:0 4px 13px rgba(22,163,74,.46);font:900 15px/1 Arial,sans-serif;pointer-events:none;animation:translationTick 1s ease forwards}
 @keyframes translationTick{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1.18)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82)}}
 .msg-media-img,.msg-media-video{display:block;max-width:min(260px,70vw);max-height:320px;border-radius:12px;object-fit:cover;background:#111;cursor:pointer;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 .msg-media-video{min-width:min(240px,68vw)}
@@ -185,14 +185,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.mine .msg-react-btn{left:-42px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.msg-reactions{display:none;align-items:center;gap:6px;background:transparent;border:0;padding:0;margin:0 0 0 4px;font-size:12px;box-shadow:none;flex-wrap:wrap;flex:0 0 auto}
+.msg-reactions{display:none;align-items:center;gap:2px;background:transparent;border:0;padding:0;margin:0 0 0 2px;font-size:12px;box-shadow:none;flex-wrap:nowrap;flex:0 0 auto}
 .msg-reactions.show{display:inline-flex}
-.reaction-role-row{display:inline-flex;align-items:center;gap:5px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
-.reaction-role-tag{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;padding:0 7px;border-radius:999px;font-size:10px;line-height:1;font-weight:900;letter-spacing:.2px;flex:0 0 auto}
+.reaction-role-row{display:inline-flex;align-items:center;gap:2px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
+.reaction-role-tag{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 3px;border-radius:999px;font-size:11px;line-height:1;font-weight:900;flex:0 0 auto}
 .reaction-role-tag.tr{background:rgba(124,58,237,.10);color:var(--tr);border:1px solid rgba(124,58,237,.24)}
 .reaction-role-tag.vi{background:rgba(185,28,110,.10);color:var(--vi);border:1px solid rgba(185,28,110,.24)}
 .reaction-role-tag.other{background:#f8fafc;color:#334155;border:1px solid #e2e8f0}
-.reaction-summary-item{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:2px 8px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
+.reaction-summary-item{display:inline-flex;align-items:center;gap:2px;min-height:20px;padding:1px 5px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
 .reaction-summary-emoji{font-size:14px;line-height:1}
 .reaction-summary-count{min-width:14px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
@@ -218,18 +218,23 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-read.show{display:inline-block}
 .msg-delivery-retry{display:none;width:28px;height:25px;border-radius:8px;border:1px solid #f87171;background:#fee2e2;color:#b91c1c;font-size:16px;font-weight:900;line-height:1;align-items:center;justify-content:center;cursor:pointer}
 .msg.delivery-failed .msg-delivery-retry{display:inline-flex}
-.msg-meta-row{display:flex!important;align-items:center;gap:5px;padding:2px 10px 5px;flex-wrap:wrap;max-width:100%}
+.msg-meta-row{display:flex!important;align-items:center;gap:3px;padding:2px 7px 5px;flex-wrap:nowrap;max-width:100%;white-space:nowrap}
 .msg.mine .msg-meta-row{justify-content:flex-end}
 .msg.theirs .msg-meta-row{justify-content:flex-start}
-.msg-action-menu-btn{width:30px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:999px;background:#fff;border:1px solid #ddd6fe;color:#7c3aed;font-size:17px;font-weight:950;box-shadow:0 2px 8px rgba(0,0,0,.11);cursor:pointer;line-height:1}
-.msg-action-pop{position:fixed;z-index:100002;display:none;align-items:center;gap:7px;padding:9px 10px;border-radius:999px;background:rgba(255,255,255,.96);border:1px solid #e5e7eb;box-shadow:0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(10px)}
-.msg-action-pop.show{display:flex}
-.msg-action-pop button{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:50%;background:#fff;border:1px solid #e7e4ef;box-shadow:0 2px 9px rgba(0,0,0,.12);font-size:15px;font-weight:950;cursor:pointer}
-.msg-action-pop .speakBtn{color:#7c3aed}
-.msg-action-pop .warn{color:#d97706}
-.msg-action-pop .retry{color:#ea580c}
-.msg-action-pop .copy{color:#0891b2}
-.msg-action-pop .delete{color:#e11d48}
+.msg-action-menu-btn{width:30px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:999px;background:#fff;border:1px solid #ddd6fe;color:#7c3aed;font-size:15px;font-weight:950;box-shadow:0 2px 8px rgba(124,58,237,.18);cursor:pointer;line-height:1;transition:transform .2s,box-shadow .2s,background .2s}
+.msg-action-menu-btn svg{display:block;pointer-events:none}
+.msg-action-menu-btn.open{transform:rotate(90deg);background:#7c3aed;color:#fff;box-shadow:0 0 16px rgba(124,58,237,.65)}
+.msg-action-pop{position:fixed;z-index:100002;display:none;width:280px;height:166px;border-radius:26px;background:radial-gradient(circle at 50% 88%,rgba(124,58,237,.16),transparent 38%),rgba(248,247,255,.96);border:1px solid #ddd6fe;box-shadow:0 14px 40px rgba(76,29,149,.28);backdrop-filter:blur(16px);overflow:hidden}
+.msg-action-pop::after{content:'';position:absolute;left:50%;bottom:13px;width:54px;height:54px;transform:translateX(-50%);border-radius:50%;background:linear-gradient(145deg,#8b5cf6,#6d28d9);box-shadow:0 0 0 5px rgba(167,139,250,.2),0 0 23px rgba(124,58,237,.62)}
+.msg-action-pop::before{content:'×';position:absolute;z-index:2;left:50%;bottom:25px;transform:translateX(-50%);color:#fff;font:400 34px/1 Arial,sans-serif;pointer-events:none}
+.msg-action-pop.show{display:block}
+.msg-action-pop button{position:absolute;width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:50%;background:rgba(255,255,255,.92);border:2px solid currentColor;box-shadow:0 0 0 5px rgba(255,255,255,.38),0 5px 19px color-mix(in srgb,currentColor 45%,transparent);font-size:19px;font-weight:950;cursor:pointer;animation:radialToolIn .2s both;transition:transform .08s,filter .08s}
+.msg-action-pop button:active{transform:scale(.78)!important;filter:brightness(1.12) saturate(1.18)}
+.msg-action-pop button.radial-selected{animation:radialSelected .2s ease forwards!important;pointer-events:none}
+@keyframes radialSelected{0%{transform:scale(1);filter:brightness(1)}38%{transform:scale(.7);filter:brightness(1.28) saturate(1.25);box-shadow:0 0 0 9px color-mix(in srgb,currentColor 22%,transparent),0 0 26px color-mix(in srgb,currentColor 65%,transparent)}72%{transform:scale(1.12)}100%{transform:scale(1)}}
+.msg-action-pop button:nth-of-type(1){left:18px;top:54px}.msg-action-pop button:nth-of-type(2){left:67px;top:19px;animation-delay:.04s}.msg-action-pop button:nth-of-type(3){left:116px;top:7px;animation-delay:.08s}.msg-action-pop button:nth-of-type(4){left:165px;top:19px;animation-delay:.12s}.msg-action-pop button:nth-of-type(5){left:214px;top:54px;animation-delay:.16s}
+@keyframes radialToolIn{from{opacity:0;transform:translateY(18px) scale(.35)}to{opacity:1;transform:none}}
+.msg-action-pop .speakBtn{color:#7c3aed;background:#f5f0ff}.msg-action-pop .warn{color:#d97706;background:#fff7ed}.msg-action-pop .retry{color:#ea580c;background:#fff7ed}.msg-action-pop .copy{color:#0891b2;background:#ecfeff}.msg-action-pop .allow{color:#16a34a;background:#f0fdf4}.msg-action-pop .delete{color:#e11d48;background:#fff1f2}
 
 .typing-indicator{display:flex;visibility:hidden;opacity:0;width:max-content;min-height:26px;box-sizing:border-box;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px;gap:4px;align-items:center;pointer-events:none}
 .typing-indicator.show{visibility:visible;opacity:1}
@@ -857,6 +862,7 @@ let unsubTyping = null;
 let unsubModel = null;
 let unsubAutoRead = null;
 let unsubPresence = null;
+let unsubTextLists = null;
 let presenceTimer = null;
 let lastReadReceiptPresenceAt = 0;
 let chatPollTimer = null;
@@ -1925,6 +1931,7 @@ async function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
+  syncSharedTextLists();
   loadPersistentQueues();
   isTyping = false;
   lastTypingSignalAt = 0;
@@ -2653,8 +2660,19 @@ function appendLinkedText(el, text) {
   if (last < raw.length) el.appendChild(document.createTextNode(raw.slice(last)));
 }
 
+let activeMessageActionAnchor = null;
+function messageToolToggleIcon(close=false) {
+  return close
+    ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.38.36.72.64 1 .3.3.69.5 1.1.56H21v4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg>';
+}
 function closeMessageActionMenu() {
   document.getElementById('messageActionPop')?.remove();
+  if (activeMessageActionAnchor) {
+    activeMessageActionAnchor.classList.remove('open');
+    activeMessageActionAnchor.innerHTML = messageToolToggleIcon(false);
+  }
+  activeMessageActionAnchor = null;
 }
 
 function makeMessageActionButton(kind, html, title, onClick) {
@@ -2666,19 +2684,27 @@ function makeMessageActionButton(kind, html, title, onClick) {
   btn.onclick = e => {
     e.preventDefault();
     e.stopPropagation();
-    closeMessageActionMenu();
-    onClick?.(btn, e);
+    btn.classList.add('radial-selected');
+    setTimeout(() => {
+      closeMessageActionMenu();
+      onClick?.(btn, e);
+    }, 205);
   };
   return btn;
 }
 
 function showMessageActionMenu(key, anchor, isMedia=false) {
+  if (activeMessageActionAnchor === anchor && document.getElementById('messageActionPop')) { closeMessageActionMenu(); return; }
   closeMessageActionMenu();
   const box = document.getElementById('msg-' + key);
   if (!box || box.dataset.deleted === '1' || !anchor) return;
   const pop = document.createElement('div');
   pop.id = 'messageActionPop';
   pop.className = 'msg-action-pop';
+  activeMessageActionAnchor = anchor;
+  anchor.classList.add('open');
+  anchor.innerHTML = messageToolToggleIcon(true);
+  pop.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"><g stroke="#c4b5fd" stroke-width="1.2" stroke-dasharray="3 5" opacity=".75"><line x1="140" y1="139" x2="42" y2="78"/><line x1="140" y1="139" x2="91" y2="43"/><line x1="140" y1="139" x2="140" y2="31"/><line x1="140" y1="139" x2="189" y2="43"/><line x1="140" y1="139" x2="238" y2="78"/></g></svg>');
 
   if (!isMedia) {
     const spBtn = makeMessageActionButton('speakBtn', '&#9654;', myRole === 'vi' ? 'Phát âm' : 'Seslendir', btn => requestSpeakForMessage(key, btn));
@@ -2689,9 +2715,23 @@ function showMessageActionMenu(key, anchor, isMedia=false) {
 
   const copyBtn = makeMessageActionButton('copy', '&#10697;', myRole === 'vi' ? 'Sao chép' : 'Kopyala', btn => copyOriginalMessage(key, btn));
   const delBtn = makeMessageActionButton('delete', '&times;', myRole === 'vi' ? 'Xóa' : 'Sil', () => deleteMessage(key));
-  pop.append(copyBtn, delBtn);
+  pop.append(copyBtn);
+  if (myRole === 'tr') {
+    const allowBtn = makeMessageActionButton('allow', '&#10003;', 'Çevrilmesin', async () => {
+      if (await askConfirm('translationBypass')) addMessageToTranslationBypass(key);
+    });
+    pop.append(allowBtn);
+  }
+  pop.append(delBtn);
   document.body.appendChild(pop);
   pop.classList.add('show');
+  const buttons = Array.from(pop.querySelectorAll('button'));
+  buttons.forEach((button,index) => {
+    const degree = buttons.length === 1 ? 270 : 195 + (150 * index / (buttons.length - 1));
+    const rad = degree * Math.PI / 180;
+    button.style.left = (140 + Math.cos(rad) * 110 - 24) + 'px';
+    button.style.top = (139 + Math.sin(rad) * 110 - 24) + 'px';
+  });
   const r = anchor.getBoundingClientRect();
   const pr = pop.getBoundingClientRect();
   pop.style.left = Math.min(window.innerWidth - pr.width - 8, Math.max(8, r.left + r.width / 2 - pr.width / 2)) + 'px';
@@ -2821,7 +2861,7 @@ function renderMessage(key, msg) {
     const menuBtn = document.createElement('button');
     menuBtn.type = 'button';
     menuBtn.className = 'msg-action-menu-btn';
-    menuBtn.textContent = '⋯';
+    menuBtn.innerHTML = messageToolToggleIcon(false);
     menuBtn.title = myRole === 'vi' ? 'Công cụ' : 'Araçlar';
     menuBtn.onclick = e => {
       e.preventDefault();
@@ -2835,7 +2875,7 @@ function renderMessage(key, msg) {
     const menuBtn = document.createElement('button');
     menuBtn.type = 'button';
     menuBtn.className = 'msg-action-menu-btn';
-    menuBtn.textContent = '⋯';
+    menuBtn.innerHTML = messageToolToggleIcon(false);
     menuBtn.title = myRole === 'vi' ? 'Công cụ' : 'Araçlar';
     menuBtn.onclick = e => {
       e.preventDefault();
@@ -3435,8 +3475,6 @@ function bindDoubleTapGesture(el, action, ignoreSelector='') {
   el.dataset.doubleTapBound = '1';
   let lastTapAt = 0;
   let pointerStart = null;
-  let suppressPointerUntil = 0;
-  const touchStarts = new Map();
   const ignored = target => !!(ignoreSelector && target?.closest?.(ignoreSelector));
   const registerTap = event => {
     const now = Date.now();
@@ -3447,7 +3485,7 @@ function bindDoubleTapGesture(el, action, ignoreSelector='') {
     Promise.resolve(action()).catch(console.error);
   };
   el.addEventListener('pointerdown', e => {
-    if (Date.now() < suppressPointerUntil || ignored(e.target)) return;
+    if (ignored(e.target)) return;
     pointerStart = { id:e.pointerId, x:e.clientX, y:e.clientY };
   });
   el.addEventListener('pointerup', e => {
@@ -3457,24 +3495,6 @@ function bindDoubleTapGesture(el, action, ignoreSelector='') {
     if (distance <= 10) registerTap(e);
   });
   el.addEventListener('pointercancel', () => { pointerStart = null; });
-  el.addEventListener('touchstart', e => {
-    if (ignored(e.target)) return;
-    suppressPointerUntil = Date.now() + 1000;
-    for (const touch of Array.from(e.changedTouches || [])) {
-      touchStarts.set(touch.identifier, { x:touch.clientX, y:touch.clientY });
-    }
-  }, { passive:true });
-  el.addEventListener('touchend', e => {
-    if (ignored(e.target)) return;
-    for (const touch of Array.from(e.changedTouches || [])) {
-      const start = touchStarts.get(touch.identifier);
-      touchStarts.delete(touch.identifier);
-      if (start && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) <= 10) registerTap(e);
-    }
-  }, { passive:false });
-  el.addEventListener('touchcancel', e => {
-    for (const touch of Array.from(e.changedTouches || [])) touchStarts.delete(touch.identifier);
-  }, { passive:true });
 }
 
 function bindBubbleDoubleTap(el, key) {
@@ -3482,13 +3502,15 @@ function bindBubbleDoubleTap(el, key) {
 }
 
 function showTranslationCopyTick(key) {
-  const trans = document.getElementById('trans-' + key);
-  if (!trans) return;
-  trans.querySelector('.translation-copy-tick')?.remove();
+  const box = document.getElementById('msg-' + key);
+  const target = box?.classList.contains('theirs') ? document.getElementById('trans-' + key) : document.getElementById('orig-' + key);
+  if (!target) return;
+  target.style.position = 'relative';
+  target.querySelector('.translation-copy-tick')?.remove();
   const tick = document.createElement('span');
   tick.className = 'translation-copy-tick';
   tick.textContent = '✓';
-  trans.appendChild(tick);
+  target.appendChild(tick);
   setTimeout(() => tick.remove(), 1000);
 }
 
@@ -3739,7 +3761,7 @@ function renderReactionSummary(el, state={}) {
     row.className = 'reaction-role-row';
     const tag = document.createElement('span');
     tag.className = 'reaction-role-tag ' + (role === 'tr' ? 'tr' : role === 'vi' ? 'vi' : 'other');
-    tag.textContent = role === 'tr' ? 'TR' : role === 'vi' ? 'VI' : String(role).toUpperCase();
+    tag.textContent = role === 'tr' ? '🇹🇷' : role === 'vi' ? '🇻🇳' : String(role).toUpperCase();
     const chip = document.createElement('span');
     chip.className = 'reaction-summary-item';
     chip.title = uiText('Tepki', 'Cảm xúc');
@@ -4971,7 +4993,7 @@ function messagePayloadForServer(msg) {
 }
 function messagePayloadForKeepalive(msg) {
   const payload = messagePayloadForServer(msg);
-  delete payload.translation;
+  if (!payload.translationBypass) delete payload.translation;
   return payload;
 }
 
@@ -5301,7 +5323,8 @@ function sendMessage() {
   resizeMessageInput(input, true);
   if (sendBtn) sendBtn.disabled = false;
   setMyTyping(false);
-  const msg = { role: myRole, text, ts: Date.now(), translation: null };
+  const bypassTranslation = isTranslationBypassText(text);
+  const msg = { role: myRole, text, ts: Date.now(), translation: bypassTranslation ? text : null, translationBypass: bypassTranslation || null };
   const replyTo = replyPayloadForSend();
   if (replyTo) msg.replyTo = replyTo;
   const key = queueOutgoingMessage(msg);
@@ -6561,19 +6584,73 @@ function isExactBlocked(text) {
   return getTextList('blocked').some(b => normalizeBlockText(b) === n);
 }
 function addBlockedText(text) {
-  const key = 'askviet_blocked_texts';
-  let list = [];
-  try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+  let list = getTextList('blocked');
   if (text && !list.includes(text)) list.push(text);
-  localStorage.setItem(key, JSON.stringify(list.slice(-200)));
+  saveTextList('blocked', list.slice(-300));
   renderTextLists();
 }
+function addMessageToTranslationBypass(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const values = [box.dataset.text || '', finalTranslationText(box.dataset.translation || '')].map(value => value.trim()).filter(Boolean);
+  const list = getTextList('white');
+  values.forEach(value => {
+    if (!list.some(item => normalizeBlockText(item) === normalizeBlockText(value))) list.push(value);
+  });
+  saveTextList('white', list);
+  showMediaStatus(uiText('Çeviri gerektirmeyenlere eklendi.', 'Đã thêm vào danh sách không cần dịch.'));
+}
 function textListKey(type) { return type === 'white' ? 'askviet_whitelist_texts' : 'askviet_blocked_texts'; }
+function sharedTextListPath(type) { return CONFIG_PATH + '/textLists/' + (type === 'white' ? 'white' : 'blocked'); }
+function sharedTextListId(text) {
+  const bytes = new TextEncoder().encode(normalizeBlockText(text));
+  let binary = '';
+  bytes.forEach(byte => binary += String.fromCharCode(byte));
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
 function getTextList(type) {
   try { return JSON.parse(localStorage.getItem(textListKey(type)) || '[]').filter(Boolean); } catch { return []; }
 }
-function saveTextList(type, list) {
-  localStorage.setItem(textListKey(type), JSON.stringify((list || []).filter(Boolean).slice(-300)));
+function saveTextList(type, list, syncRemote=true) {
+  const clean = (list || []).filter(Boolean).slice(-300);
+  localStorage.setItem(textListKey(type), JSON.stringify(clean));
+  if (syncRemote && myRole) {
+    const payload = {};
+    clean.forEach(text => payload[sharedTextListId(text)] = text);
+    fbSet(sharedTextListPath(type), payload).catch(()=>{});
+  }
+}
+let textListSyncTimer = null;
+async function refreshSharedTextLists(uploadLocal=false) {
+  for (const type of ['blocked','white']) {
+    const local = getTextList(type);
+    const remote = await fbGet(sharedTextListPath(type), true).catch(()=>null);
+    const merged = [...local];
+    Object.values(remote || {}).forEach(value => {
+      const text = String(value || '').trim();
+      if (text && !merged.some(item => normalizeBlockText(item) === normalizeBlockText(text))) merged.push(text);
+    });
+    saveTextList(type, merged, false);
+    if (uploadLocal && local.length) {
+      for (const text of local) fbSet(sharedTextListPath(type) + '/' + sharedTextListId(text), text).catch(()=>{});
+    }
+  }
+  if (document.getElementById('textListModal')?.classList.contains('show')) renderTextLists();
+}
+function syncSharedTextLists() {
+  refreshSharedTextLists(true);
+  if (unsubTextLists) unsubTextLists();
+  unsubTextLists = fbListen(CONFIG_PATH + '/textLists', () => {
+    clearTimeout(textListSyncTimer);
+    textListSyncTimer = setTimeout(() => refreshSharedTextLists(false), 180);
+  });
+}
+function isTranslationBypassText(text) {
+  const normalized = normalizeBlockText(text);
+  if (!normalized) return true;
+  if (getTextList('white').some(item => normalizeBlockText(item) === normalized)) return true;
+  const withoutUrls = String(text || '').replace(/https?:\/\/\S+|www\.\S+/gi, '');
+  return !/\p{L}/u.test(withoutUrls);
 }
 let textListTab = 'blocked';
 function openTextLists() {
@@ -6598,15 +6675,34 @@ function renderTextLists() {
   const summary = document.getElementById('textListSummary');
   if (title) title.textContent = uiText('Kara / Beyaz Liste', 'Danh sách chặn / cho phép');
   if (blockedBtn) blockedBtn.textContent = uiText('Kara', 'Chặn');
-  if (whiteBtn) whiteBtn.textContent = uiText('Beyaz', 'Cho phép');
+  if (whiteBtn) whiteBtn.textContent = uiText('Çevrilmesin', 'Không dịch');
   if (blockedBtn) blockedBtn.classList.toggle('on', textListTab === 'blocked');
   if (whiteBtn) whiteBtn.classList.toggle('on', textListTab === 'white');
   const type = textListTab === 'white' ? 'white' : 'blocked';
   const list = getTextList(type);
-  if (summary) summary.textContent = uiText('Bas-Konuş ve Live ortak kullanır · ' + list.length + ' kayıt', 'Bas-Konuş và Live dùng chung · ' + list.length + ' mục');
+  if (summary) summary.textContent = uiText('TR / VI · Android / PWA ortak · ' + list.length + ' kayıt', 'TR / VI · Android / PWA dùng chung · ' + list.length + ' mục');
   body.innerHTML = '';
+  if (type === 'white') {
+    const addRow = document.createElement('div');
+    addRow.className = 'list-row';
+    const input = document.createElement('input');
+    input.placeholder = uiText('Çevrilmeyecek tam ifade', 'Cụm từ không cần dịch');
+    input.style.cssText = 'flex:1;min-width:0;border:1px solid #ddd6fe;border-radius:10px;padding:9px;background:#17151f;color:#fff';
+    const add = document.createElement('button');
+    add.textContent = uiText('Ekle','Thêm');
+    add.onclick = () => {
+      const value = input.value.trim();
+      if (!value) return;
+      const fresh = getTextList('white');
+      if (!fresh.some(item => normalizeBlockText(item) === normalizeBlockText(value))) fresh.push(value);
+      saveTextList('white', fresh);
+      renderTextLists();
+    };
+    addRow.append(input, add);
+    body.appendChild(addRow);
+  }
   if (!list.length) {
-    body.innerHTML = '<div style="color:#777;font-size:13px;padding:10px 0">' + (type === 'white' ? uiText('Beyaz liste boş.', 'Danh sách cho phép trống.') : uiText('Engellenen yok.', 'Chưa có mục bị chặn.')) + '</div>';
+    body.insertAdjacentHTML('beforeend','<div style="color:#777;font-size:13px;padding:10px 0">' + (type === 'white' ? uiText('Çeviri gerektirmeyen ifade yok.', 'Chưa có cụm từ bỏ qua dịch.') : uiText('Engellenen yok.', 'Chưa có mục bị chặn.')) + '</div>');
     return;
   }
   list.forEach((item, index) => {
@@ -7570,6 +7666,10 @@ function askConfirm(kind) {
     blockLive: {
       title: 'Kara listeye eklensin mi?',
       text: 'Bu cümlenin Türkçe ve Vietnamca hâli birlikte engellenecek.'
+    },
+    translationBypass: {
+      title: 'Çeviri gerektirmeyenlere eklensin mi?',
+      text: 'Mesajın orijinali ve çevirisi TR / VI, Android / PWA ortak listesine eklenecek.'
     }
   }[kind] || {
     title: isVi ? 'Bạn chắc chứ?' : 'Emin misin?',
