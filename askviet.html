@@ -152,6 +152,21 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.mine .msg-translation.primary-translation{background:linear-gradient(180deg,#7b4af7,#6c36ee);border-bottom-right-radius:8px}
 .msg.theirs .msg-translation.primary-translation{background:linear-gradient(180deg,#ec4899,#db2777);border-bottom-left-radius:8px}
 .msg-language-toggle{min-height:28px;padding:4px 9px;border-radius:999px;border:1px solid #ddd6fe;background:#fff;color:#6d28d9;font-size:10.5px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:3px}
+.msg-language-row{display:flex;align-items:center;gap:6px;margin-top:3px;max-width:100%}
+.msg.mine .msg-language-row{justify-content:flex-end}
+.msg.theirs .msg-language-row{justify-content:flex-start}
+.msg-language-row .msg-language-toggle{margin-top:0}
+.translation-status-indicator{position:relative;display:none;align-items:center;justify-content:center;min-width:18px;width:18px;height:18px;border-radius:999px;color:#fff;font-size:10px;font-weight:950;line-height:1;box-shadow:0 2px 7px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.32);flex:0 0 18px}
+.translation-status-indicator.show{display:inline-flex}
+.translation-status-indicator.loading{background:#f59e0b}
+.translation-status-indicator.loading::after{content:'';position:absolute;inset:-3px;border-radius:999px;border:2px solid rgba(245,158,11,.34);border-top-color:#fbbf24;animation:translationSpin .8s linear infinite}
+.translation-status-indicator.success{background:#22c55e}
+.translation-status-indicator.error{background:#ef4444}
+@keyframes translationSpin{to{transform:rotate(360deg)}}
+.remote-test-log{position:fixed;left:10px;right:10px;bottom:84px;z-index:9998;display:none;max-height:132px;overflow:auto;padding:8px 10px;border-radius:14px;border:1px solid rgba(167,139,250,.6);background:rgba(15,13,25,.94);color:#e9ddff;font-size:11px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.remote-test-log.show{display:block}
+.remote-test-log strong{color:#fff;display:block;margin-bottom:4px}
+.remote-test-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
 .msg .msg-original.original-collapsible{background:#fdfdfd!important;color:#585862!important;font-size:13.5px;font-style:italic;font-weight:500;line-height:1.5;padding:11px 15px;border-radius:7px 7px 20px 20px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:none!important}
 .msg.theirs .msg-original.original-collapsible{border-bottom-left-radius:9px}
 .msg-original.compact-source{padding:5px 7px!important;background:#fff!important;color:#6d28d9!important;border:1px solid #ddd6fe!important;box-shadow:0 1px 4px rgba(0,0,0,.08)!important}
@@ -912,6 +927,8 @@ window.clearDebugLog = function() {
 };
 let translationRunTokens = new Map();
 let completedTranslationCache = new Map();
+let messageTranslationAttemptState = new Map();
+let messageTranslationIndicatorTimers = new Map();
 let serverTranslationRequestCache = new Map();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
@@ -2657,6 +2674,7 @@ function renderMessage(key, msg) {
   div.dataset.readVi = msg.read?.vi || '';
   div.dataset.localPending = msg.localPending ? '1' : '';
   div.dataset.delivery = msg.delivery || '';
+  div.dataset.translationModel = msg.translationModel || msg.model || '';
   div.dataset.replyTo = JSON.stringify(msg.replyTo || {});
   div.dataset.deleted = msg.deleted ? '1' : '';
   const isMedia = msg.type === 'image' || msg.type === 'video';
@@ -2716,6 +2734,11 @@ function renderMessage(key, msg) {
     const languageToggle = document.createElement('button');
     languageToggle.type = 'button';
     languageToggle.className = 'msg-language-toggle';
+    const languageRow = document.createElement('div');
+    languageRow.className = 'msg-language-row';
+    const translationIndicator = document.createElement('span');
+    translationIndicator.className = 'translation-status-indicator';
+    translationIndicator.id = 'translation-ind-' + key;
     const sourceFlag = msg.role === 'tr' ? '🇹🇷' : '🇻🇳';
     const targetFlag = msg.role === 'tr' ? '🇻🇳' : '🇹🇷';
     if (isMine) {
@@ -2725,7 +2748,8 @@ function renderMessage(key, msg) {
         const hidden = trans.classList.toggle('language-collapsed');
         languageToggle.textContent = targetFlag + ' ' + (hidden ? uiText('Çeviriyi göster', 'Xem bản dịch') : uiText('Çeviriyi gizle', 'Ẩn bản dịch'));
       };
-      div.insertBefore(languageToggle, trans);
+      languageRow.append(languageToggle, translationIndicator);
+      div.insertBefore(languageRow, trans);
     } else {
       div.insertBefore(orig, head.nextSibling);
       head.insertBefore(trans, flag);
@@ -2737,8 +2761,10 @@ function renderMessage(key, msg) {
         const hidden = orig.classList.toggle('language-collapsed');
         languageToggle.textContent = sourceFlag + ' ' + (hidden ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Orijinali gizle', 'Ẩn bản gốc'));
       };
-      div.insertBefore(languageToggle, orig);
+      languageRow.append(languageToggle, translationIndicator);
+      div.insertBefore(languageRow, orig);
     }
+    updateMessageTranslationIndicator(key, msg.translation || '', { initial: true });
   }
 
   let btnRow = null;
@@ -2878,6 +2904,7 @@ function updateOrRender(key, msg) {
       }
     }
   if (msg.ts) box.dataset.ts = msg.ts;
+  if (msg.translationModel || msg.model) box.dataset.translationModel = msg.translationModel || msg.model || box.dataset.translationModel || '';
   if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
   if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
   if (Object.prototype.hasOwnProperty.call(msg, 'replyTo')) box.dataset.replyTo = JSON.stringify(msg.replyTo || {});
@@ -5403,6 +5430,83 @@ function finalTranslationText(text) {
   return isPendingTranslationText(clean) ? '' : clean;
 }
 
+function translationAttemptForModel(key, model) {
+  const normalized = normalizeChatModel(model || '');
+  const box = document.getElementById('msg-' + key);
+  const base = normalizeChatModel(box?.dataset?.translationModel || selectedModel || normalized || 'openai:gpt-5.5');
+  const queue = translationModelQueue(base);
+  const index = queue.indexOf(normalized);
+  if (index >= 0) return index + 1;
+  const existing = messageTranslationAttemptState.get(String(key));
+  return existing?.attempt || 1;
+}
+
+function setMessageTranslationIndicator(key, mode, attempt=1, autoHide=false) {
+  const id = String(key || '');
+  const el = document.getElementById('translation-ind-' + id);
+  if (!el) return;
+  const oldTimer = messageTranslationIndicatorTimers.get(id);
+  if (oldTimer) clearTimeout(oldTimer);
+  messageTranslationIndicatorTimers.delete(id);
+  el.className = 'translation-status-indicator';
+  if (!mode) {
+    el.textContent = '';
+    return;
+  }
+  const num = Math.max(1, Number(attempt || 1));
+  el.textContent = num > 1 ? String(num) : '';
+  el.classList.add('show', mode);
+  if (autoHide) {
+    const timer = setTimeout(() => {
+      el.className = 'translation-status-indicator';
+      el.textContent = '';
+      messageTranslationIndicatorTimers.delete(id);
+    }, 1000);
+    messageTranslationIndicatorTimers.set(id, timer);
+  }
+}
+
+function updateMessageTranslationIndicator(key, value, options={}) {
+  const id = String(key || '');
+  const status = parseTranslationStatus(value);
+  if (status) {
+    if (status.kind === 'trying') {
+      const attempt = translationAttemptForModel(id, status.model);
+      messageTranslationAttemptState.set(id, { attempt, model: status.model || '', at: Date.now() });
+      setMessageTranslationIndicator(id, 'loading', attempt, false);
+      return;
+    }
+    if (status.kind === 'retry') {
+      const attempt = translationAttemptForModel(id, status.nextModel || status.failedModel);
+      messageTranslationAttemptState.set(id, { attempt, model: status.nextModel || status.failedModel || '', at: Date.now() });
+      setMessageTranslationIndicator(id, 'loading', attempt, false);
+      return;
+    }
+    if (status.kind === 'error') {
+      const attempt = messageTranslationAttemptState.get(id)?.attempt || 1;
+      setMessageTranslationIndicator(id, 'error', attempt, true);
+      return;
+    }
+  }
+  const text = String(value || '').trim();
+  if (!text) {
+    if (!options.initial) setMessageTranslationIndicator(id, 'loading', messageTranslationAttemptState.get(id)?.attempt || 1, false);
+    return;
+  }
+  const isError = /^(ç|c)eviri hatas[ıi]\s*:|^(lỗi dịch|loi dich)\s*:/i.test(text);
+  if (isError) {
+    setMessageTranslationIndicator(id, 'error', messageTranslationAttemptState.get(id)?.attempt || 1, true);
+    return;
+  }
+  if (isPendingTranslationText(text)) {
+    if (!options.initial) setMessageTranslationIndicator(id, 'loading', messageTranslationAttemptState.get(id)?.attempt || 1, false);
+    return;
+  }
+  if (!options.initial) {
+    setMessageTranslationIndicator(id, 'success', messageTranslationAttemptState.get(id)?.attempt || 1, true);
+  }
+}
+
 async function setTranslationStatus(key, value) {
   const cached = completedTranslationCache.get(String(key));
   if (parseTranslationStatus(value) && cached && cached.value) return;
@@ -5414,6 +5518,7 @@ function updateLocalTranslationDisplay(key, value) {
   const status = parseTranslationStatus(value);
   const cached = completedTranslationCache.get(String(key));
   if (status && cached && cached.value) return;
+  updateMessageTranslationIndicator(key, value);
   const box = document.getElementById('msg-' + key);
   if (box) box.dataset.translation = value || '';
   const trans = document.getElementById('trans-' + key);
@@ -5979,6 +6084,7 @@ function triggerPwaRemoteRole(role) {
 
 function handlePwaRemoteMediaAction(action) {
   const signature = 'media:' + normalizePwaMediaAction(action);
+  logPwaRemoteTestSignal('media', signature);
   if (pwaRemoteAssignRole) {
     savePwaRemoteSignature(pwaRemoteAssignRole, signature);
     return;
@@ -6003,6 +6109,7 @@ function beginPwaRemoteAssign(role) {
   installPwaMediaRemoteHandlers();
   startPwaRemoteKeepalive(20000);
   updatePwaRemoteButtons();
+  showPwaRemoteTestPanel();
   showTransientNotice((pwaRemoteAssignRole === 'vi' ? 'VI' : 'TR') + ' kumanda için şimdi tuşa bas', 8000);
 }
 
@@ -6039,6 +6146,7 @@ function pwaRemotePointerSignature(event) {
 function handlePwaRemotePointer(event) {
   const signature = pwaRemotePointerSignature(event);
   if (!signature) return;
+  logPwaRemoteTestSignal('pointer', signature);
   if (pwaRemoteAssignRole && event.target?.closest?.('.ptt-remote-btn') && Date.now() - pwaRemoteAssignStartedAt < 450) return;
   if (pwaRemoteAssignRole) {
     event.preventDefault();
@@ -6067,6 +6175,7 @@ function pwaRemoteWheelSignature(event) {
 function handlePwaRemoteWheel(event) {
   const signature = pwaRemoteWheelSignature(event);
   if (!signature) return;
+  logPwaRemoteTestSignal('wheel', signature);
   if (pwaRemoteAssignRole) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -6082,6 +6191,7 @@ function handlePwaRemoteWheel(event) {
 
 function handlePwaRemoteKey(event) {
   if (!event || event.isComposing) return;
+  logPwaRemoteTestSignal(event.type || 'key', pwaRemoteSignature(event));
   const target = event.target;
   if (!pwaRemoteAssignRole && target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
 
@@ -6102,10 +6212,46 @@ function handlePwaRemoteKey(event) {
   triggerPwaRemoteRole(role);
 }
 
+function ensurePwaRemoteTestPanel() {
+  let panel = document.getElementById('pwaRemoteTestLog');
+  if (panel) return panel;
+  panel = document.createElement('div');
+  panel.id = 'pwaRemoteTestLog';
+  panel.className = 'remote-test-log';
+  panel.innerHTML = '<strong>Kumanda test günlüğü</strong><div id="pwaRemoteTestLines"></div>';
+  document.body.appendChild(panel);
+  return panel;
+}
+
+function showPwaRemoteTestPanel() {
+  ensurePwaRemoteTestPanel().classList.add('show');
+}
+
+function logPwaRemoteTestSignal(kind, signature) {
+  if (!signature) return;
+  const panel = ensurePwaRemoteTestPanel();
+  const lines = document.getElementById('pwaRemoteTestLines');
+  if (!lines) return;
+  panel.classList.add('show');
+  const row = document.createElement('div');
+  row.className = 'remote-test-line';
+  row.textContent = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }) + '  ' + kind + '  ' + signature;
+  lines.prepend(row);
+  while (lines.children.length > 12) lines.lastChild.remove();
+}
+
+function handlePwaRemoteDebugClick(event) {
+  if (!pwaRemoteAssignRole) return;
+  const target = event.target;
+  if (target?.closest?.('.ptt-remote-btn')) return;
+  logPwaRemoteTestSignal('click', pwaRemoteClickSignature(event));
+}
+
 window.addEventListener('keydown', handlePwaRemoteKey, true);
 window.addEventListener('keyup', handlePwaRemoteKey, true);
 window.addEventListener('pointerdown', handlePwaRemotePointer, true);
 window.addEventListener('wheel', handlePwaRemoteWheel, { capture:true, passive:false });
+window.addEventListener('click', handlePwaRemoteDebugClick, true);
 // Generic click is intentionally not captured: on iOS AssistiveTouch it can be
 // indistinguishable from a normal finger tap, which would make every tap open PTT.
 installPwaMediaRemoteHandlers();
