@@ -791,7 +791,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-stream-stability-1';
+const APP_VERSION = '2026-07-03-firebase-stream-stability-visual-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -8102,13 +8102,13 @@ function updateAutoReadUI() {
   const role = autoReadControlRole();
   const on = getAutoReadState(role);
   if (status) {
-    if (myRole === 'vi') { status.textContent = on ? '✓ Tự đọc' : '🔇 Tự đọc'; status.title = on ? 'Tự động đọc đang bật' : 'Tự động đọc đang tắt'; }
-    else { status.textContent = on ? '✓ VN' : '🔇 VN'; status.title = on ? 'Vietnam tarafı otomatik ses açık' : 'Vietnam tarafı otomatik ses kapalı'; }
+    if (myRole === 'vi') { status.textContent = on ? '✓ 🔊 Tự đọc' : '🔇 Tự đọc'; status.title = on ? 'Tự động đọc đang bật' : 'Tự động đọc đang tắt'; }
+    else { status.textContent = on ? '✓ 🔊 VN' : '🔇 VN'; status.title = on ? 'Vietnam tarafı otomatik ses açık' : 'Vietnam tarafı otomatik ses kapalı'; }
     status.classList.toggle('on', on);
   }
   if (own) {
     const ownOn = getAutoReadState(myRole);
-    own.textContent = myRole === 'vi' ? (ownOn ? '✓ Tự đọc' : '🔇 Tự đọc') : (ownOn ? '✓ TR' : '🔇 TR');
+    own.textContent = myRole === 'vi' ? (ownOn ? '✓ 🔊 Tự đọc' : '🔇 Tự đọc') : (ownOn ? '✓ 🔊 TR' : '🔇 TR');
     own.title = myRole === 'vi' ? (ownOn ? 'Tự động đọc đang bật' : 'Tự động đọc đang tắt') : (ownOn ? 'Türk tarafı otomatik ses açık' : 'Türk tarafı otomatik ses kapalı');
     own.classList.toggle('on', ownOn);
   }
