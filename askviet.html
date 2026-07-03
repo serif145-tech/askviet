@@ -136,9 +136,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.media-msg .msg-original{padding:2px;background:transparent;color:inherit;border-radius:15px;box-shadow:none}
 .msg.media-msg.mine .msg-original{border:1px solid rgba(124,58,237,.36);border-bottom-right-radius:5px}
 .msg.media-msg.theirs .msg-original{border:1px solid rgba(219,39,119,.36);border-bottom-left-radius:5px}
-.msg-deleted{padding:4px 0 2px;font-size:13px;font-weight:900;font-style:italic;opacity:.8;letter-spacing:.1px}
-.msg.mine .msg-deleted{color:rgba(255,255,255,.92)}
-.msg.theirs .msg-deleted{color:rgba(255,255,255,.92)}
+.msg-original.deleted-tombstone-host{width:min(250px,72vw);padding:10px 16px;border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 3px 10px rgba(0,0,0,.06)}
+.msg.mine .msg-original.deleted-tombstone-host{background:rgba(124,58,237,.18);border:1px solid rgba(167,139,250,.26)}
+.msg.theirs .msg-original.deleted-tombstone-host{background:rgba(236,72,153,.18);border:1px solid rgba(244,114,182,.26)}
+.msg-deleted{display:flex;align-items:center;justify-content:center;gap:10px;min-height:30px;font-size:18px;font-style:normal;font-weight:900}
+.msg-deleted::before,.msg-deleted::after{content:"";height:1px;flex:1;border-top:1px dashed currentColor;opacity:.36}
+.msg.mine .msg-deleted{color:#7c3aed}.msg.theirs .msg-deleted{color:#db2777}
+.delete-particle{position:fixed;z-index:99999;pointer-events:none;font-weight:900;animation:deleteParticleFly .34s ease-out forwards}
+@keyframes deleteParticleFly{to{transform:translate(var(--dx),var(--dy)) scale(.35) rotate(var(--rot));opacity:0}}
 .msg-original a,.msg-translation a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:800}
 .msg-original a:active,.msg-translation a:active{opacity:.75}
 .msg-reply-quote{width:100%;max-width:100%;display:block;text-align:left;border:1px solid rgba(255,255,255,.26);border-left:4px solid rgba(255,255,255,.82);border-radius:13px;background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.10));color:inherit;padding:8px 10px;margin:0 0 9px;cursor:pointer;font-family:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 12px rgba(0,0,0,.08);backdrop-filter:blur(8px)}
@@ -781,7 +786,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-02-blacklist-micbtn-1';
+const APP_VERSION = '2026-07-03-firebase-canonical-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1774,11 +1779,9 @@ function fbListen(path, cb, hooks={}, query={}) {
   es.addEventListener('patch', e => deliver('patch', e));
   es.addEventListener('keep-alive', () => hooks.onactivity?.('keep-alive'));
   es.onerror = () => {
-    setConnected(false);
     hooks.onerror?.();
   };
   es.onopen = () => {
-    setConnected(true);
     hooks.onactivity?.('open');
     hooks.onopen?.();
   };
@@ -1833,7 +1836,8 @@ function restoreDeletedMessageTombstones() {
   for (const item of items) {
     deletedMessageKeys.add(String(item.key));
     const ts = Number(item.ts || 0);
-    if (range && ts && ts >= range.min && ts <= range.max && !renderedKeys.has(String(item.key))) {
+    const inRange = !!range && ts && ts >= range.min && ts <= range.max;
+    if (inRange && !renderedKeys.has(String(item.key)) && !document.getElementById('msg-' + item.key)) {
       renderMessage(String(item.key), Object.assign({}, item, { deleted:true }));
     }
   }
@@ -2163,9 +2167,9 @@ function initChat() {
       }
     }
   }, {
-    onactivity: () => { lastMessageStreamActivityAt = Date.now(); },
-    onerror: () => recordConnectionEvent('message-stream-error'),
-    onopen: () => recordConnectionEvent('message-stream-open')
+    onactivity: () => { lastMessageStreamActivityAt = Date.now(); setConnected(true); },
+    onerror: () => { setConnected(false); recordConnectionEvent('message-stream-error'); },
+    onopen: () => { setConnected(true); recordConnectionEvent('message-stream-open'); }
   }, messageQuery(CHAT_PAGE_SIZE));
 
   unsubTyping = fbListen(TYPING_PATH, event => {
@@ -2388,6 +2392,11 @@ function applyMessagesPatch(data) {
       markMessageDeleted(key);
       continue;
     }
+    if (msg && typeof msg === 'object' && msg.deleted) {
+      markMessageDeleted(key, msg);
+      continue;
+    }
+    if (deletedMessageKeys.has(String(key))) continue;
     if (typeof msg === 'object' && (renderedKeys.has(key) || msg.role === 'tr' || msg.role === 'vi')) {
       const isNewRender = !renderedKeys.has(key);
       updateOrRender(key, msg);
@@ -2955,14 +2964,19 @@ function renderMessage(key, msg) {
 }
 
 function updateOrRender(key, msg) {
+  if (msg?.deleted) {
+    markMessageDeleted(key, msg);
+    return;
+  }
+  if (deletedMessageKeys.has(String(key))) return;
   if (!renderedKeys.has(key)) { renderMessage(key, msg); return; }
-  if (pendingMessageQueue.has(key) && msg && msg.role === myRole) confirmOutgoingMessage(key, msg);
   const box = document.getElementById('msg-' + key);
   if (!box) {
     renderedKeys.delete(key);
     renderMessage(key, msg);
     return;
   }
+  if (pendingMessageQueue.has(key) && msg && msg.role === myRole) confirmOutgoingMessage(key, msg);
   let oldContentSig = '';
   oldContentSig = messageContentSignature({
     role: box.dataset.role || '',
@@ -3300,11 +3314,12 @@ function setMessageContent(el, msg) {
   if (!el) return;
   const existingReact = el.querySelector('.msg-react-btn');
   el.textContent = '';
+  el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
   appendReplyQuote(el, msg.replyTo);
   if (msg.deleted) {
     const deleted = document.createElement('div');
     deleted.className = 'msg-deleted';
-    deleted.textContent = deletedMessageLabel();
+    deleted.textContent = '💔';
     el.appendChild(deleted);
     return;
   }
@@ -4077,7 +4092,6 @@ async function flushPendingReadReceipts() {
     }
   } catch (e) {
     debugLog('read_batch_error', { count: pendingReadReceipts.size, err: String(e && e.message || e).slice(0, 200) });
-    setConnected(false);
     recordConnectionEvent('read-receipt-error', e?.message || e);
   } finally {
     readReceiptFlushRunning = false;
@@ -4423,12 +4437,10 @@ async function deleteMessage(key) {
     replyTo: parseReplyData(el.dataset.replyTo)
   } : null;
   stopAudio();
+  await animateMessageDeletion(el);
   if (pendingMessageQueue.has(key)) {
     pendingMessageQueue.delete(key);
-    outgoingInFlight.delete(key);
     persistPendingMessages();
-    markMessageDeleted(key, msg);
-    return;
   }
   deletedMessageKeys.add(key);
   const deletedSnapshot = markMessageDeleted(key, msg);
@@ -4448,8 +4460,36 @@ async function deleteMessage(key) {
     deletedMessageKeys.delete(key);
     deletedMessageSnapshots.delete(String(key));
     persistDeletedMessages();
-    if (msg) updateOrRender(key, Object.assign({}, msg, { deleted:false }));
+    const failedTombstone = document.getElementById('msg-' + key);
+    if (failedTombstone) failedTombstone.remove();
+    renderedKeys.delete(String(key));
+    visibleMessageKeys.delete(String(key));
+    if (msg) renderMessage(String(key), Object.assign({}, msg, { deleted:false }));
   }
+}
+
+function animateMessageDeletion(box) {
+  if (!box) return Promise.resolve();
+  const bubble = box.querySelector('.msg-original') || box;
+  const rect = bubble.getBoundingClientRect();
+  const colors = box.classList.contains('mine') ? ['#7c3aed','#a78bfa'] : ['#db2777','#f472b6'];
+  for (let i = 0; i < 10; i++) {
+    const particle = document.createElement('span');
+    particle.className = 'delete-particle';
+    particle.textContent = i % 3 === 0 ? '💔' : '•';
+    particle.style.left = `${rect.left + rect.width / 2}px`;
+    particle.style.top = `${rect.top + rect.height / 2}px`;
+    particle.style.color = colors[i % colors.length];
+    const angle = Math.PI * 2 * i / 10;
+    const distance = 28 + (i % 3) * 12;
+    particle.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+    particle.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
+    particle.style.setProperty('--rot', `${(i - 5) * 18}deg`);
+    document.body.appendChild(particle);
+    setTimeout(() => particle.remove(), 420);
+  }
+  bubble.animate([{opacity:1,transform:'scale(1)'},{opacity:.15,transform:'scale(.9,.84)'}],{duration:220,easing:'ease-out'});
+  return new Promise(resolve => setTimeout(resolve, 210));
 }
 
 function getReadableLang(senderRole) {
@@ -5259,6 +5299,18 @@ async function sendQueuedItem(item) {
   try {
     const ok = await fbSet(MSGS_PATH + '/' + item.key, messagePayloadForServer(item.msg), timeoutMs);
     if (!ok) throw new Error('Firebase mesajı kaydetmedi');
+    if (deletedMessageKeys.has(String(item.key))) {
+      const deleted = deletedMessageSnapshots.get(String(item.key));
+      await fbSet(MSGS_PATH + '/' + item.key, {
+        role: deleted?.role || item.msg?.role || myRole,
+        ts: deleted?.ts || item.msg?.ts || Date.now(),
+        deleted: true,
+        deletedBy: myRole,
+        deletedAt: { '.sv':'timestamp' },
+        replyTo: deleted?.replyTo || item.msg?.replyTo || null
+      }, timeoutMs);
+      return;
+    }
     setConnected(true);
     confirmOutgoingMessage(item.key);
     scheduleMessageSnapshotReconcile('outgoing-sent');
@@ -5654,11 +5706,12 @@ async function setTranslationStatus(key, value) {
 }
 
 function updateLocalTranslationDisplay(key, value) {
+  const box = document.getElementById('msg-' + key);
+  if (deletedMessageKeys.has(String(key)) || box?.dataset.deleted === '1') return;
   const status = parseTranslationStatus(value);
   const cached = completedTranslationCache.get(String(key));
   if (status && cached && cached.value) return;
   updateMessageTranslationIndicator(key, value);
-  const box = document.getElementById('msg-' + key);
   if (box) box.dataset.translation = value || '';
   const trans = document.getElementById('trans-' + key);
   if (trans) {
@@ -5793,7 +5846,13 @@ function markMessageDeleted(key, msg=null) {
   const box = document.getElementById('msg-' + key);
   const snapshot = Object.assign({}, msg || captureMessageSnapshotFromBox(box, key) || deletedMessageSnapshots.get(String(key)) || {}, {
     key: String(key),
-    deleted: true
+    deleted: true,
+    text: '',
+    translation: '',
+    type: 'text',
+    imageUrl: '',
+    mediaUrl: '',
+    mime: ''
   });
   if (!snapshot.role) return null;
   deletedMessageKeys.add(String(key));
@@ -5804,37 +5863,10 @@ function markMessageDeleted(key, msg=null) {
   messageTranslationFinalSeen.delete(String(key));
   deletedMessageSnapshots.set(String(key), snapshot);
   persistDeletedMessages();
-  if (!box) {
-    renderMessage(key, snapshot);
-    markRepliesToDeleted(key);
-    return snapshot;
-  }
-  box.dataset.deleted = '1';
-  box.dataset.text = '';
-  box.dataset.translation = '';
-  box.dataset.type = 'text';
-  box.dataset.imageUrl = '';
-  box.dataset.mediaUrl = '';
-  box.dataset.mime = '';
-  box.dataset.localPending = '';
-  box.dataset.delivery = 'sent';
-  if (snapshot?.replyTo) box.dataset.replyTo = JSON.stringify(snapshot.replyTo);
-  const orig = document.getElementById('orig-' + key);
-  const trans = document.getElementById('trans-' + key);
-  if (orig) {
-    orig.textContent = '';
-    const del = document.createElement('div');
-    del.className = 'msg-deleted';
-    del.textContent = deletedMessageLabel();
-    orig.appendChild(del);
-    box.querySelectorAll('.btn-row,.msg-meta-row,.msg-language-row,.msg-react-btn,.msg-reactions,.translation-status-indicator').forEach(el => el.remove());
-  }
-  if (trans) {
-    trans.textContent = '';
-    trans.style.display = 'none';
-  }
-  refreshMessageText(key);
-  updateReadStatus(key);
+  if (box) box.remove();
+  renderedKeys.delete(String(key));
+  visibleMessageKeys.delete(String(key));
+  renderMessage(String(key), snapshot);
   persistPendingReads();
   markRepliesToDeleted(key);
   return snapshot;
@@ -8091,10 +8123,10 @@ function listenPresence() {
     safePresenceGet(PRESENCE_PATH + '/sessions'),
     safePresenceGet(PRESENCE_SESSIONS_PATH)
   ]).then(([theirResult, myResult, sessionsResult, altSessionsResult]) => {
-    if (theirResult.ok && theirResult.data && typeof theirResult.data === 'object') lastKnownTheirPresence = theirResult.data;
-    if (myResult.ok && myResult.data && typeof myResult.data === 'object') lastKnownMyPresence = myResult.data;
-    if (sessionsResult.ok && sessionsResult.data && typeof sessionsResult.data === 'object') lastKnownPresenceSessions = sessionsResult.data;
-    if (altSessionsResult.ok && altSessionsResult.data && typeof altSessionsResult.data === 'object') lastKnownAltPresenceSessions = altSessionsResult.data;
+    if (theirResult.ok) lastKnownTheirPresence = theirResult.data && typeof theirResult.data === 'object' ? theirResult.data : null;
+    if (myResult.ok) lastKnownMyPresence = myResult.data && typeof myResult.data === 'object' ? myResult.data : null;
+    if (sessionsResult.ok) lastKnownPresenceSessions = sessionsResult.data && typeof sessionsResult.data === 'object' ? sessionsResult.data : null;
+    if (altSessionsResult.ok) lastKnownAltPresenceSessions = altSessionsResult.data && typeof altSessionsResult.data === 'object' ? altSessionsResult.data : null;
     const theirData = lastKnownTheirPresence;
     const myData = lastKnownMyPresence;
     const sessions = lastKnownPresenceSessions;
