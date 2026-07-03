@@ -290,11 +290,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .ptt-help{flex:1;min-height:0;overflow:auto;color:#707070;text-align:center;font-size:16px;line-height:1.45;padding:36px 18px}
 .flag-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
 .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:20px;padding:18px 24px calc(28px + env(safe-area-inset-bottom));margin:0}
-.ptt-remote-pair{display:flex;align-items:center;gap:6px}
-.ptt-remote-btn{position:relative;width:42px;height:34px;padding:0;border-radius:999px;border:1px solid rgba(139,92,246,.72);background:rgba(35,24,55,.72);color:#fff;font-size:18px;line-height:1;box-shadow:0 0 10px rgba(124,58,237,.16);cursor:pointer}
-.ptt-remote-btn.saved::after{content:'✓';position:absolute;font-size:9px;margin:-7px 0 0 -2px;color:#86efac}
-.ptt-remote-btn.waiting{border-color:#fbbf24;background:#4a2d08;box-shadow:0 0 14px rgba(251,191,36,.5);animation:pulse 1s infinite}
-.ptt-remote-btn.active{border-color:#f472b6;background:#4a122e;box-shadow:0 0 16px rgba(244,114,182,.56);animation:pulse 1s infinite}
 .roundflag{width:132px;height:132px;min-height:132px;justify-self:center;border-radius:50%;border:2px solid #2d2d2d;background:linear-gradient(145deg,#171717,#0d0d0d);color:#fff;font-size:50px;font-weight:900;cursor:pointer;box-shadow:0 0 0 10px rgba(124,58,237,.1),0 6px 24px rgba(0,0,0,.45)}
 .roundflag small{display:block;font-size:12px;margin-top:7px;color:#ccc;opacity:1;font-weight:700}
 .roundflag.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;animation:pulse 1.2s infinite}
@@ -660,10 +655,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="ptt-panel" id="pttPanel">
     <div class="panel-top">
       <div class="panel-title" id="pttStatusTitle"><span class="live-state-dot" id="pttStateDot" data-state="idle"></span><span id="pttStatusText">Hazır</span></div>
-      <div class="ptt-remote-pair">
-        <button class="ptt-remote-btn" id="pttRemoteTrBtn" onclick="beginPwaRemoteAssign('tr')" title="TR kumanda tuşunu eşleştir">🇹🇷</button>
-        <button class="ptt-remote-btn" id="pttRemoteViBtn" onclick="beginPwaRemoteAssign('vi')" title="VI kumanda tuşunu eşleştir">🇻🇳</button>
-      </div>
       <button class="live-mini" onclick="togglePttSettings()" title="Bas-konuş ayarları">&#9881;</button>
     </div>
     <div class="ptt-settings" id="pttSettingsPanel">
