@@ -197,10 +197,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .reaction-button-chip .count{font-size:9px;line-height:1;color:#6b7280}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .msg-reactions{display:none!important}
-.msg-react-cluster{position:absolute;right:-42px;top:calc(50% + 23px);width:38px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:8;pointer-events:none}
-.msg.mine .msg-react-cluster{left:-42px;right:auto}
-.msg-react-cluster .reaction-summary-item{padding:1px 5px;min-height:18px;box-shadow:0 2px 8px rgba(0,0,0,.14)}
-.msg-react-cluster .reaction-summary-emoji{font-size:13px}
 .reaction-role-row{display:inline-flex;align-items:center;gap:2px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
 .reaction-role-tag{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 3px;border-radius:999px;font-size:11px;line-height:1;font-weight:900;flex:0 0 auto}
 .reaction-role-tag.tr{background:rgba(124,58,237,.10);color:var(--tr);border:1px solid rgba(124,58,237,.24)}
@@ -795,7 +791,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-fast-recover-1';
+const APP_VERSION = '2026-07-03-reaction-button-badge-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1716,8 +1712,8 @@ async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQU
   } catch (e) {
     if (!canRetryTimeout || !isFirebaseNetworkError(e)) throw e;
     try { await refreshFirebaseAuth(true); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 450));
-    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs, 8000), 12000));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs + 1500, 4500), 5500));
   }
 }
 
@@ -2303,7 +2299,6 @@ async function recoverFirebaseTransport(reason='transport') {
     await refreshFirebaseAuth(true).catch(() => {});
     restartChatStreams();
     await pollMessagesSnapshot(true);
-    await verifyFirebaseWriteHealth(reason);
     flushOutgoingQueue(true);
     if (hasUnknownOutgoingMessages()) scheduleUnknownOutgoingVerification(700);
     return true;
@@ -3388,7 +3383,6 @@ function updateDeliveryStatus(key, status) {
 function setMessageContent(el, msg) {
   if (!el) return;
   const existingReact = el.querySelector('.msg-react-btn');
-  const existingCluster = el.querySelector(':scope > .msg-react-cluster');
   el.textContent = '';
   el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
   appendReplyQuote(el, msg.replyTo);
@@ -3430,7 +3424,6 @@ function setMessageContent(el, msg) {
     el.appendChild(content);
   }
   if (existingReact) el.appendChild(existingReact);
-  if (existingCluster && !msg.deleted && existingReact) el.appendChild(existingCluster);
 }
 
 function reactionEmojis(){ return ['👍','❤️','😂','😱','😭','😡']; }
@@ -3440,6 +3433,13 @@ function addReactionButton(parent, key) {
   btn.className = 'msg-react-btn';
   btn.textContent = '♡';
   btn.title = myRole === 'vi' ? 'Thả cảm xúc' : 'Tepki ver';
+  btn.textContent = '';
+  const main = document.createElement('span');
+  main.className = 'reaction-button-main';
+  main.textContent = '♡';
+  const badges = document.createElement('span');
+  badges.className = 'reaction-button-badges';
+  btn.append(main, badges);
   let longPress = false, longTimer = null;
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
@@ -3476,7 +3476,6 @@ function ensureMessageReactionButton(key) {
   const type = box.dataset.type || '';
   if (type === 'image' || type === 'video') return;
   box.querySelectorAll('.msg-react-btn').forEach(btn => btn.remove());
-  box.querySelectorAll('.msg-react-cluster').forEach(c => c.remove());
   const target = box.classList.contains('theirs')
     ? document.getElementById('trans-' + key)
     : document.getElementById('orig-' + key);
@@ -3923,50 +3922,44 @@ function renderReactionSummaryCompact(el, state={}) {
   el.classList.toggle('show', !!el.children.length);
 }
 
-function renderReactionClusterOnButton(btn, state={}) {
-  if (!btn || !btn.parentElement) return;
-  const parent = btn.parentElement;
-  const box = btn.closest('.msg');
-  if (box) box.querySelectorAll('.msg-react-cluster').forEach(c => { if (c.parentElement !== parent) c.remove(); });
-  let cluster = parent.querySelector(':scope > .msg-react-cluster');
-  const totals = new Map();
-  for (const [role, item] of Object.entries(state || {})) {
-    if (!item?.emoji) continue;
-    const prev = totals.get(item.emoji) || { count:0, roles:[] };
-    prev.count += Math.max(1, Number(item.count) || 1);
-    prev.roles.push(role);
-    totals.set(item.emoji, prev);
+function renderReactionButtonBadges(btn, state={}) {
+  if (!btn) return;
+  if (!btn.querySelector('.reaction-button-main') || !btn.querySelector('.reaction-button-badges')) {
+    const current = btn.textContent && btn.textContent.trim() ? btn.textContent.trim() : '♡';
+    btn.textContent = '';
+    const main = document.createElement('span');
+    main.className = 'reaction-button-main';
+    main.textContent = current;
+    const badges = document.createElement('span');
+    badges.className = 'reaction-button-badges';
+    btn.append(main, badges);
   }
-  if (!totals.size) {
-    if (cluster) cluster.remove();
-    return;
-  }
-  if (!cluster) {
-    cluster = document.createElement('span');
-    cluster.className = 'msg-react-cluster';
-    parent.appendChild(cluster);
-  }
-  cluster.textContent = '';
-  for (const [emojiValue, item] of totals.entries()) {
+  const badges = btn.querySelector('.reaction-button-badges');
+  if (!badges) return;
+  badges.textContent = '';
+  const entries = Object.values(state || {}).filter(item => item && item.emoji);
+  entries.slice(0, 2).forEach(item => {
     const chip = document.createElement('span');
-    chip.className = 'reaction-summary-item';
+    chip.className = 'reaction-button-chip';
     const emoji = document.createElement('span');
-    emoji.className = 'reaction-summary-emoji';
-    emoji.textContent = emojiValue;
+    emoji.className = 'emoji';
+    emoji.textContent = item.emoji;
     chip.appendChild(emoji);
-    if (item.count > 1) {
+    const countValue = Math.max(1, Number(item.count) || 1);
+    if (countValue > 1) {
       const count = document.createElement('span');
-      count.className = 'reaction-summary-count';
-      count.textContent = String(item.count);
+      count.className = 'count';
+      count.textContent = String(countValue);
       chip.appendChild(count);
     }
-    cluster.appendChild(chip);
-  }
+    badges.appendChild(chip);
+  });
+  badges.classList.toggle('show', entries.length > 0);
 }
 
 function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
-  const btn = document.querySelector('#msg-' + key + ' .msg-react-btn');
+  const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
   if (!el) return;
   const storedReactions = getStoredReactions(key);
   const storedState = getStoredReactionState(key);
@@ -3994,8 +3987,7 @@ function updateReactions(key, reactions, reactionState) {
   const burst = hadSnapshot ? reactionBurstChange(previous, nextState) : null;
   const reactionsJson = JSON.stringify(nextReactions);
   const stateJson = JSON.stringify(nextState);
-  const clusterMissing = btn && btn.parentElement && !btn.parentElement.querySelector(':scope > .msg-react-cluster') && Object.values(nextState).some(item => item?.emoji);
-  if (!burst && !clusterMissing && el.dataset.reactions === reactionsJson && el.dataset.reactionState === stateJson) return;
+  if (!burst && el.dataset.reactions === reactionsJson && el.dataset.reactionState === stateJson) return;
   el.dataset.reactions = reactionsJson;
   el.dataset.reactionState = stateJson;
   const own = nextState[myRole];
@@ -4004,7 +3996,7 @@ function updateReactions(key, reactions, reactionState) {
   if (btn && btn.dataset.copyFlash !== '1') btn.textContent = visibleReaction?.emoji || '♡';
   updateReactionCountBadge(btn, visibleReaction?.count || 0, !!burst && burst.role === visibleRole);
   if (burst) showReactionBurst(burst.emoji, burst.count);
-  renderReactionClusterOnButton(btn, nextState);
+  renderReactionButtonBadges(btn, nextState);
 }
 
 function openMediaPreview(src, type='image') {
