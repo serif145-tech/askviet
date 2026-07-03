@@ -186,20 +186,29 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-video-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.56);border:1px solid rgba(255,255,255,.7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;line-height:1;box-shadow:0 5px 18px rgba(0,0,0,.35);pointer-events:none}
 .media-btn{background:#fff!important;border:1px solid #e2e2ea!important;color:#6b7280}
 .media-uploading{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#111827;color:#fff;border:1px solid #7c3aed;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(0,0,0,.35);white-space:nowrap}
-.msg-react-btn{position:absolute;right:-42px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:8;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.msg-react-btn{position:absolute;right:-42px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#ef476f;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.2);cursor:pointer;z-index:8;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;overflow:visible}
 .msg.mine .msg-react-btn{left:-42px;right:auto}
 .msg-react-btn:active,.msg-react-btn.pressed,.msg-react-btn.flash{transform:translateY(-50%)!important;animation:none!important;filter:brightness(1.08) saturate(1.1);box-shadow:0 0 0 2px #ef476f22,0 3px 12px rgba(0,0,0,.2)}
+.reaction-button-main{display:flex;align-items:center;justify-content:center;line-height:1;min-width:1em}
+.reaction-button-badges{position:absolute;top:30px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:2px;pointer-events:none;white-space:nowrap}
+.reaction-button-badges.show{display:flex}
+.reaction-button-chip{display:inline-flex;align-items:center;justify-content:center;gap:1px;min-width:18px;height:17px;padding:0 4px;border-radius:999px;background:rgba(255,255,255,.97);border:1px solid rgba(229,231,235,.95);box-shadow:0 2px 7px rgba(0,0,0,.16);font-size:11px;font-weight:900;color:#4b5563;line-height:1}
+.reaction-button-chip .emoji{font-size:12px;line-height:1}
+.reaction-button-chip .count{font-size:9px;line-height:1;color:#6b7280}
 .msg-original.react-pressing{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.msg-reactions{display:none;align-items:center;gap:2px;background:transparent;border:0;padding:0;margin:0 0 0 2px;font-size:12px;box-shadow:none;flex-wrap:nowrap;flex:0 0 auto}
-.msg-reactions.show{display:inline-flex}
+.msg-reactions{display:none!important}
+.msg-react-cluster{position:absolute;right:-42px;top:calc(50% + 23px);width:38px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:8;pointer-events:none}
+.msg.mine .msg-react-cluster{left:-42px;right:auto}
+.msg-react-cluster .reaction-summary-item{padding:1px 5px;min-height:18px;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.msg-react-cluster .reaction-summary-emoji{font-size:13px}
 .reaction-role-row{display:inline-flex;align-items:center;gap:2px;max-width:100%;flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
 .reaction-role-tag{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 3px;border-radius:999px;font-size:11px;line-height:1;font-weight:900;flex:0 0 auto}
 .reaction-role-tag.tr{background:rgba(124,58,237,.10);color:var(--tr);border:1px solid rgba(124,58,237,.24)}
 .reaction-role-tag.vi{background:rgba(185,28,110,.10);color:var(--vi);border:1px solid rgba(185,28,110,.24)}
 .reaction-role-tag.other{background:#f8fafc;color:#334155;border:1px solid #e2e8f0}
-.reaction-summary-item{display:inline-flex;align-items:center;gap:2px;min-height:20px;padding:1px 5px;border-radius:999px;background:#fff;color:#374151;border:1px solid #e5e7eb;box-shadow:0 2px 7px rgba(0,0,0,.1);font-style:normal;font-weight:800;white-space:nowrap}
-.reaction-summary-emoji{font-size:14px;line-height:1}
-.reaction-summary-count{min-width:14px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
+.reaction-summary-item{display:inline-flex;align-items:center;gap:2px;min-height:21px;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.96);color:#374151;border:1px solid rgba(229,231,235,.95);box-shadow:0 3px 10px rgba(0,0,0,.16);font-style:normal;font-weight:850;white-space:nowrap;backdrop-filter:blur(8px)}
+.reaction-summary-emoji{font-size:15px;line-height:1}
+.reaction-summary-count{min-width:10px;font-size:10px;line-height:1;color:#6b7280;text-align:center}
 .reaction-picker{position:fixed;z-index:9999;display:none;gap:7px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.22);user-select:none;-webkit-user-select:none;touch-action:none}
 .reaction-picker.show{display:flex}
 .reaction-picker button{width:32px;height:32px;border:none;background:transparent;font-size:24px;line-height:1;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center}
@@ -786,7 +795,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-transport-recover-1';
+const APP_VERSION = '2026-07-03-firebase-fast-recover-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1012,15 +1021,15 @@ sessionStorage.setItem('askviet_session_id', SESSION_ID);
 // phone hopping VN→TR can never count as two.
 const DEVICE_ID = localStorage.getItem('askviet_device_id') || ('d' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 localStorage.setItem('askviet_device_id', DEVICE_ID);
-const FIREBASE_REQUEST_TIMEOUT_MS = 6500;
-const OUTGOING_RETRY_TIMEOUT_MS = 8000;
+const FIREBASE_REQUEST_TIMEOUT_MS = 3500;
+const OUTGOING_RETRY_TIMEOUT_MS = 5000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
-const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 4000;
-const OUTGOING_UNKNOWN_RESEND_GAP_MS = 5000;
+const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 2500;
+const OUTGOING_UNKNOWN_RESEND_GAP_MS = 3500;
 const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
-const CHAT_STREAM_STALE_MS = 22000;
+const CHAT_STREAM_STALE_MS = 35000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
 const MAX_PERSISTED_READ_RECEIPTS = 120;
 const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -2983,7 +2992,7 @@ function renderMessage(key, msg) {
     div.appendChild(btnRow);
   }
 
-  if (btnRow && !msg.deleted) btnRow.appendChild(reactions);
+  if (!msg.deleted) div.appendChild(reactions);
 
   const time = document.createElement('div');
   time.className = 'msg-time';
@@ -3379,6 +3388,7 @@ function updateDeliveryStatus(key, status) {
 function setMessageContent(el, msg) {
   if (!el) return;
   const existingReact = el.querySelector('.msg-react-btn');
+  const existingCluster = el.querySelector(':scope > .msg-react-cluster');
   el.textContent = '';
   el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
   appendReplyQuote(el, msg.replyTo);
@@ -3420,6 +3430,7 @@ function setMessageContent(el, msg) {
     el.appendChild(content);
   }
   if (existingReact) el.appendChild(existingReact);
+  if (existingCluster && !msg.deleted && existingReact) el.appendChild(existingCluster);
 }
 
 function reactionEmojis(){ return ['👍','❤️','😂','😱','😭','😡']; }
@@ -3465,6 +3476,7 @@ function ensureMessageReactionButton(key) {
   const type = box.dataset.type || '';
   if (type === 'image' || type === 'video') return;
   box.querySelectorAll('.msg-react-btn').forEach(btn => btn.remove());
+  box.querySelectorAll('.msg-react-cluster').forEach(c => c.remove());
   const target = box.classList.contains('theirs')
     ? document.getElementById('trans-' + key)
     : document.getElementById('orig-' + key);
@@ -3881,9 +3893,80 @@ function renderReactionSummary(el, state={}) {
   el.classList.toggle('show', !!el.children.length);
 }
 
+function renderReactionSummaryCompact(el, state={}) {
+  if (!el) return;
+  el.textContent = '';
+  const totals = new Map();
+  for (const [role, item] of Object.entries(state || {})) {
+    if (!item?.emoji) continue;
+    const prev = totals.get(item.emoji) || { count:0, roles:[] };
+    prev.count += Math.max(1, Number(item.count) || 1);
+    prev.roles.push(role);
+    totals.set(item.emoji, prev);
+  }
+  for (const [emojiValue, item] of totals.entries()) {
+    const chip = document.createElement('span');
+    chip.className = 'reaction-summary-item';
+    chip.title = item.roles.map(role => role === 'tr' ? 'TR' : role === 'vi' ? 'VI' : String(role).toUpperCase()).join(' + ');
+    const emoji = document.createElement('span');
+    emoji.className = 'reaction-summary-emoji';
+    emoji.textContent = emojiValue;
+    chip.appendChild(emoji);
+    if (item.count > 1) {
+      const count = document.createElement('span');
+      count.className = 'reaction-summary-count';
+      count.textContent = String(item.count);
+      chip.appendChild(count);
+    }
+    el.appendChild(chip);
+  }
+  el.classList.toggle('show', !!el.children.length);
+}
+
+function renderReactionClusterOnButton(btn, state={}) {
+  if (!btn || !btn.parentElement) return;
+  const parent = btn.parentElement;
+  const box = btn.closest('.msg');
+  if (box) box.querySelectorAll('.msg-react-cluster').forEach(c => { if (c.parentElement !== parent) c.remove(); });
+  let cluster = parent.querySelector(':scope > .msg-react-cluster');
+  const totals = new Map();
+  for (const [role, item] of Object.entries(state || {})) {
+    if (!item?.emoji) continue;
+    const prev = totals.get(item.emoji) || { count:0, roles:[] };
+    prev.count += Math.max(1, Number(item.count) || 1);
+    prev.roles.push(role);
+    totals.set(item.emoji, prev);
+  }
+  if (!totals.size) {
+    if (cluster) cluster.remove();
+    return;
+  }
+  if (!cluster) {
+    cluster = document.createElement('span');
+    cluster.className = 'msg-react-cluster';
+    parent.appendChild(cluster);
+  }
+  cluster.textContent = '';
+  for (const [emojiValue, item] of totals.entries()) {
+    const chip = document.createElement('span');
+    chip.className = 'reaction-summary-item';
+    const emoji = document.createElement('span');
+    emoji.className = 'reaction-summary-emoji';
+    emoji.textContent = emojiValue;
+    chip.appendChild(emoji);
+    if (item.count > 1) {
+      const count = document.createElement('span');
+      count.className = 'reaction-summary-count';
+      count.textContent = String(item.count);
+      chip.appendChild(count);
+    }
+    cluster.appendChild(chip);
+  }
+}
+
 function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
-  const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
+  const btn = document.querySelector('#msg-' + key + ' .msg-react-btn');
   if (!el) return;
   const storedReactions = getStoredReactions(key);
   const storedState = getStoredReactionState(key);
@@ -3911,7 +3994,8 @@ function updateReactions(key, reactions, reactionState) {
   const burst = hadSnapshot ? reactionBurstChange(previous, nextState) : null;
   const reactionsJson = JSON.stringify(nextReactions);
   const stateJson = JSON.stringify(nextState);
-  if (!burst && el.dataset.reactions === reactionsJson && el.dataset.reactionState === stateJson) return;
+  const clusterMissing = btn && btn.parentElement && !btn.parentElement.querySelector(':scope > .msg-react-cluster') && Object.values(nextState).some(item => item?.emoji);
+  if (!burst && !clusterMissing && el.dataset.reactions === reactionsJson && el.dataset.reactionState === stateJson) return;
   el.dataset.reactions = reactionsJson;
   el.dataset.reactionState = stateJson;
   const own = nextState[myRole];
@@ -3920,7 +4004,7 @@ function updateReactions(key, reactions, reactionState) {
   if (btn && btn.dataset.copyFlash !== '1') btn.textContent = visibleReaction?.emoji || '♡';
   updateReactionCountBadge(btn, visibleReaction?.count || 0, !!burst && burst.role === visibleRole);
   if (burst) showReactionBurst(burst.emoji, burst.count);
-  renderReactionSummary(el, nextState);
+  renderReactionClusterOnButton(btn, nextState);
 }
 
 function openMediaPreview(src, type='image') {
