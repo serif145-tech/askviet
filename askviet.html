@@ -175,6 +175,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-original.compact-source .original-content{display:none}
 .msg-original.compact-source .msg-language-toggle{margin:0}
 .msg-translation.language-collapsed,.msg-original.language-collapsed{display:none!important}
+.msg-original.original-collapsible.language-collapsed.has-reply-quote{display:block!important;padding:0!important;background:transparent!important;box-shadow:none!important}
+.msg-original.original-collapsible.language-collapsed.has-reply-quote .original-content{display:none!important}
+.msg-original.original-collapsible.language-collapsed.has-reply-quote .msg-reply-quote{margin:0;background:linear-gradient(180deg,rgba(236,72,153,.15),rgba(219,39,119,.08));border-color:rgba(219,39,119,.2);border-left-color:#ec4899;color:#585862}
+.msg-original.original-collapsible.language-collapsed.has-reply-quote .msg-reply-quote strong{color:#be185d}
 .msg.mine .msg-translation{border-bottom-right-radius:9px}
 .msg.theirs .msg-translation{border-bottom-left-radius:9px}
 .translation-copy-tick{position:absolute;right:8px;top:8px;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #86efac;box-shadow:0 4px 13px rgba(22,163,74,.46);font:900 15px/1 Arial,sans-serif;pointer-events:none;animation:translationTick 1s ease forwards}
@@ -791,7 +795,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-stream-stability-visual-1';
+const APP_VERSION = '2026-07-03-firebase-stream-stability-visual-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -3371,6 +3375,7 @@ function setMessageContent(el, msg) {
   const existingReact = el.querySelector('.msg-react-btn');
   el.textContent = '';
   el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
+  el.classList.toggle('has-reply-quote', !!parseReplyData(msg.replyTo));
   appendReplyQuote(el, msg.replyTo);
   if (msg.deleted) {
     const deleted = document.createElement('div');
@@ -3947,7 +3952,7 @@ function renderReactionButtonBadges(btn, state={}) {
 
 function updateReactions(key, reactions, reactionState) {
   const el = document.getElementById('react-' + key);
-  const btn = document.querySelector('#orig-' + key + ' .msg-react-btn');
+  const btn = document.querySelector('#msg-' + key + ' .msg-react-btn');
   if (!el) return;
   const storedReactions = getStoredReactions(key);
   const storedState = getStoredReactionState(key);
@@ -3975,13 +3980,16 @@ function updateReactions(key, reactions, reactionState) {
   const burst = hadSnapshot ? reactionBurstChange(previous, nextState) : null;
   const reactionsJson = JSON.stringify(nextReactions);
   const stateJson = JSON.stringify(nextState);
-  if (!burst && el.dataset.reactions === reactionsJson && el.dataset.reactionState === stateJson) return;
   el.dataset.reactions = reactionsJson;
   el.dataset.reactionState = stateJson;
   const own = nextState[myRole];
   const visibleRole = own ? myRole : Object.keys(nextState).find(role => nextState[role]?.emoji);
   const visibleReaction = visibleRole ? nextState[visibleRole] : null;
-  if (btn && btn.dataset.copyFlash !== '1') btn.textContent = visibleReaction?.emoji || '♡';
+  if (btn && btn.dataset.copyFlash !== '1') {
+    const main = btn.querySelector('.reaction-button-main');
+    if (main) main.textContent = visibleReaction?.emoji || '♡';
+    else btn.textContent = visibleReaction?.emoji || '♡';
+  }
   updateReactionCountBadge(btn, visibleReaction?.count || 0, !!burst && burst.role === visibleRole);
   if (burst) showReactionBurst(burst.emoji, burst.count);
   renderReactionButtonBadges(btn, nextState);
@@ -4175,6 +4183,7 @@ function refreshMessageText(key) {
     setMessageLanguageExpanded(key, false, true);
   }
   ensureMessageReactionButton(key);
+  updateReactions(key);
 }
 
 function scheduleReadReceiptFlush(delay=0) {
