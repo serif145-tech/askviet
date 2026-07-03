@@ -221,7 +221,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-meta-row{display:flex!important;align-items:center;gap:3px;padding:2px 7px 5px;flex-wrap:nowrap;max-width:100%;white-space:nowrap}
 .msg.mine .msg-meta-row{justify-content:flex-end}
 .msg.theirs .msg-meta-row{justify-content:flex-start}
-.msg-action-menu-btn{width:30px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:999px;background:#fff;border:1px solid #ddd6fe;color:#7c3aed;font-size:15px;font-weight:950;box-shadow:0 2px 8px rgba(124,58,237,.18);cursor:pointer;line-height:1;transition:transform .2s,box-shadow .2s,background .2s}
+.msg-action-menu-btn{width:30px;min-width:30px;height:26px;flex:0 0 30px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:999px;background:#fff;border:1px solid #ddd6fe;color:#7c3aed;font-size:15px;font-weight:950;box-shadow:0 2px 8px rgba(124,58,237,.18);cursor:pointer;line-height:1;transition:transform .2s,box-shadow .2s,background .2s}
 .msg-action-menu-btn svg{display:block;pointer-events:none}
 .msg-action-menu-btn.open{transform:rotate(90deg);background:#7c3aed;color:#fff;box-shadow:0 0 16px rgba(124,58,237,.65)}
 .msg-action-pop{position:fixed;z-index:100002;display:none;width:280px;height:166px;border-radius:26px;background:radial-gradient(circle at 50% 88%,rgba(124,58,237,.16),transparent 38%),rgba(248,247,255,.96);border:1px solid #ddd6fe;box-shadow:0 14px 40px rgba(76,29,149,.28);backdrop-filter:blur(16px);overflow:hidden}
@@ -274,6 +274,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .status-pill.mode-toggle{min-width:78px;border-color:#7c3aed;background:rgba(18,13,28,.64);color:#eadcff;box-shadow:inset 0 0 0 1px rgba(167,139,250,.14),0 4px 14px rgba(0,0,0,.18)}
 .status-pill.mode-toggle.chat-mode{min-width:58px}
+.mode-chat-icon{width:17px;height:17px;border:1px solid currentColor;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:900 7px/1 Arial,sans-serif;letter-spacing:0;margin-right:5px;flex:0 0 17px}
 .status-pill.mode-toggle.on,.status-pill.mode-toggle.live-on{border-color:#c4b5fd;background:rgba(124,58,237,.22);color:#fff;box-shadow:0 0 0 1px rgba(196,181,253,.26),0 0 16px rgba(124,58,237,.30)}
 .remote-voice{border-radius:999px;border-color:#f87171;background:#2a131a;color:#fca5a5;min-width:58px}
 .remote-voice.on{border-color:#22c55e;background:#16351f;color:#86efac}
@@ -560,7 +561,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <div class="chat-subtitle" id="chatSubtitle">Bağlanıyor...</div>
       </div>
       <div class="header-tools">
-        <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar">Mesaj</button>
+        <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar"><span class="mode-chat-icon">•••</span><span class="mode-chat-label">Mesaj</span></button>
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
         <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="Ses ayarları" title="Ses ayarları">
@@ -1943,6 +1944,10 @@ async function start(role) {
   localStorage.setItem('askviet_last_role', role);
   localStorage.setItem('askviet_last_mode', localStorage.getItem('askviet_last_mode') || 'chat');
   theirRole = role === 'tr' ? 'vi' : 'tr';
+  lastKnownTheirPresence = null;
+  lastKnownMyPresence = null;
+  lastKnownPresenceSessions = null;
+  lastKnownAltPresenceSessions = null;
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'flex';
   syncChatVisualViewport();
@@ -2626,9 +2631,26 @@ function runAutoRefreshCheck() {
   autoRefreshTimer = setTimeout(runAutoRefreshCheck, 30 * 1000);
 }
 
-function setConnected(v) {
+let lastFirebaseHealthyAt = Date.now();
+let firebaseDisconnectTimer = null;
+function setConnected(v, force=false) {
   const dot = document.getElementById('connDot');
-  if (dot) dot.classList.toggle('off', !v);
+  if (v) {
+    lastFirebaseHealthyAt = Date.now();
+    if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
+    firebaseDisconnectTimer = null;
+    if (dot) dot.classList.remove('off');
+    return;
+  }
+  if (!force && navigator.onLine !== false) {
+    const remaining = Math.max(0, 25000 - (Date.now() - lastFirebaseHealthyAt));
+    if (remaining > 0) {
+      if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
+      firebaseDisconnectTimer = setTimeout(() => setConnected(false, true), remaining);
+      return;
+    }
+  }
+  if (dot) dot.classList.add('off');
 }
 
 function appendLinkedText(el, text) {
@@ -4405,7 +4427,7 @@ async function deleteMessage(key) {
     pendingMessageQueue.delete(key);
     outgoingInFlight.delete(key);
     persistPendingMessages();
-    removeMessageElement(key);
+    markMessageDeleted(key, msg);
     return;
   }
   deletedMessageKeys.add(key);
@@ -5775,6 +5797,11 @@ function markMessageDeleted(key, msg=null) {
   });
   if (!snapshot.role) return null;
   deletedMessageKeys.add(String(key));
+  const indicatorTimer = messageTranslationIndicatorTimers.get(String(key));
+  if (indicatorTimer) clearTimeout(indicatorTimer);
+  messageTranslationIndicatorTimers.delete(String(key));
+  messageTranslationAttemptState.delete(String(key));
+  messageTranslationFinalSeen.delete(String(key));
   deletedMessageSnapshots.set(String(key), snapshot);
   persistDeletedMessages();
   if (!box) {
@@ -5800,7 +5827,7 @@ function markMessageDeleted(key, msg=null) {
     del.className = 'msg-deleted';
     del.textContent = deletedMessageLabel();
     orig.appendChild(del);
-    box.querySelectorAll('.btn-row,.msg-react-btn').forEach(el => el.remove());
+    box.querySelectorAll('.btn-row,.msg-meta-row,.msg-language-row,.msg-react-btn,.msg-reactions,.translation-status-indicator').forEach(el => el.remove());
   }
   if (trans) {
     trans.textContent = '';
@@ -7711,7 +7738,7 @@ function applyLocaleUI() {
   if (ct) ct.textContent = isVi ? '🇻🇳 → 🇹🇷' : '🇹🇷 → 🇻🇳';
   const pttBtn = document.getElementById('pttModeBtn');
   const chatModeBtn = document.getElementById('chatModeBtn');
-  if (chatModeBtn) { chatModeBtn.textContent = isVi ? 'Tin nhắn' : 'Mesaj'; chatModeBtn.title = isVi ? 'Tin nhắn' : 'Mesajlar'; }
+  if (chatModeBtn) { const label=chatModeBtn.querySelector('.mode-chat-label'); if(label) label.textContent=isVi?'Tin nhắn':'Mesaj'; chatModeBtn.title = isVi ? 'Tin nhắn' : 'Mesajlar'; }
   const PTT_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
   const LIVE_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>';
   if (pttBtn) { pttBtn.innerHTML = PTT_ICON + (isVi ? 'Bấm nói' : 'Bas-Konuş'); pttBtn.title = isVi ? 'Chế độ bấm nói' : 'Bas-konuş modu'; }
@@ -8000,7 +8027,7 @@ function clearMyOtherRolePresence() {
   if (!theirRole) return;
   fbGet(PRESENCE_PATH + '/' + theirRole, true).then(d => {
     if (d && d.deviceId === DEVICE_ID && d.online) {
-      fbSet(PRESENCE_PATH + '/' + theirRole, { online:false, lastActive:0, deviceId: DEVICE_ID });
+      fbSet(PRESENCE_PATH + '/' + theirRole, { online:false, lastActive:Number(d.lastActive || Date.now()), deviceId: DEVICE_ID });
     }
   }).catch(()=>{});
   Promise.all([
@@ -8050,15 +8077,28 @@ function stopPresenceHeartbeat(keepalive=false) {
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
   if (myRole) updateMyPresence(false, keepalive);
 }
+let lastKnownTheirPresence = null;
+let lastKnownMyPresence = null;
+let lastKnownPresenceSessions = null;
+let lastKnownAltPresenceSessions = null;
 function listenPresence() {
   if (unsubPresence) unsubPresence();
   if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
+  const safePresenceGet = path => fbGet(path).then(data => ({ok:true,data})).catch(()=>({ok:false,data:null}));
   const poll = () => Promise.all([
-    fbGet(PRESENCE_PATH + '/' + theirRole).catch(()=>null),
-    fbGet(PRESENCE_PATH + '/' + myRole).catch(()=>null),
-    fbGet(PRESENCE_PATH + '/sessions').catch(()=>null),
-    fbGet(PRESENCE_SESSIONS_PATH).catch(()=>null)
-  ]).then(([theirData, myData, sessions, altSessions]) => {
+    safePresenceGet(PRESENCE_PATH + '/' + theirRole),
+    safePresenceGet(PRESENCE_PATH + '/' + myRole),
+    safePresenceGet(PRESENCE_PATH + '/sessions'),
+    safePresenceGet(PRESENCE_SESSIONS_PATH)
+  ]).then(([theirResult, myResult, sessionsResult, altSessionsResult]) => {
+    if (theirResult.ok && theirResult.data && typeof theirResult.data === 'object') lastKnownTheirPresence = theirResult.data;
+    if (myResult.ok && myResult.data && typeof myResult.data === 'object') lastKnownMyPresence = myResult.data;
+    if (sessionsResult.ok && sessionsResult.data && typeof sessionsResult.data === 'object') lastKnownPresenceSessions = sessionsResult.data;
+    if (altSessionsResult.ok && altSessionsResult.data && typeof altSessionsResult.data === 'object') lastKnownAltPresenceSessions = altSessionsResult.data;
+    const theirData = lastKnownTheirPresence;
+    const myData = lastKnownMyPresence;
+    const sessions = lastKnownPresenceSessions;
+    const altSessions = lastKnownAltPresenceSessions;
     const now = Date.now();
     const allSessions = Object.assign({}, sessions && typeof sessions === 'object' ? sessions : {}, altSessions && typeof altSessions === 'object' ? altSessions : {});
     const freshSessions = Object.values(allSessions).filter(s => s && s.online && Number(s.lastActive || 0) && now - Number(s.lastActive || 0) <= PRESENCE_STALE_MS);
@@ -9358,7 +9398,7 @@ window.addEventListener('online', () => {
   setConnected(true);
   if (myRole) resumeChatTransport();
 });
-window.addEventListener('offline', () => setConnected(false));
+window.addEventListener('offline', () => setConnected(false, true));
 clearUnreadCount();
 </script>
 <div id="micReviveOverlay" aria-hidden="true">
