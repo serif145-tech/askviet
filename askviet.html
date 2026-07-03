@@ -218,6 +218,18 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-read.show{display:inline-block}
 .msg-delivery-retry{display:none;width:28px;height:25px;border-radius:8px;border:1px solid #f87171;background:#fee2e2;color:#b91c1c;font-size:16px;font-weight:900;line-height:1;align-items:center;justify-content:center;cursor:pointer}
 .msg.delivery-failed .msg-delivery-retry{display:inline-flex}
+.msg-meta-row{display:flex!important;align-items:center;gap:5px;padding:2px 10px 5px;flex-wrap:wrap;max-width:100%}
+.msg.mine .msg-meta-row{justify-content:flex-end}
+.msg.theirs .msg-meta-row{justify-content:flex-start}
+.msg-action-menu-btn{width:30px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:999px;background:#fff;border:1px solid #ddd6fe;color:#7c3aed;font-size:17px;font-weight:950;box-shadow:0 2px 8px rgba(0,0,0,.11);cursor:pointer;line-height:1}
+.msg-action-pop{position:fixed;z-index:100002;display:none;align-items:center;gap:7px;padding:9px 10px;border-radius:999px;background:rgba(255,255,255,.96);border:1px solid #e5e7eb;box-shadow:0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(10px)}
+.msg-action-pop.show{display:flex}
+.msg-action-pop button{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0;border-radius:50%;background:#fff;border:1px solid #e7e4ef;box-shadow:0 2px 9px rgba(0,0,0,.12);font-size:15px;font-weight:950;cursor:pointer}
+.msg-action-pop .speakBtn{color:#7c3aed}
+.msg-action-pop .warn{color:#d97706}
+.msg-action-pop .retry{color:#ea580c}
+.msg-action-pop .copy{color:#0891b2}
+.msg-action-pop .delete{color:#e11d48}
 
 .typing-indicator{display:flex;visibility:hidden;opacity:0;width:max-content;min-height:26px;box-sizing:border-box;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px;gap:4px;align-items:center;pointer-events:none}
 .typing-indicator.show{visibility:visible;opacity:1}
@@ -2641,6 +2653,51 @@ function appendLinkedText(el, text) {
   if (last < raw.length) el.appendChild(document.createTextNode(raw.slice(last)));
 }
 
+function closeMessageActionMenu() {
+  document.getElementById('messageActionPop')?.remove();
+}
+
+function makeMessageActionButton(kind, html, title, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = kind || '';
+  btn.innerHTML = html;
+  btn.title = title || '';
+  btn.onclick = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMessageActionMenu();
+    onClick?.(btn, e);
+  };
+  return btn;
+}
+
+function showMessageActionMenu(key, anchor, isMedia=false) {
+  closeMessageActionMenu();
+  const box = document.getElementById('msg-' + key);
+  if (!box || box.dataset.deleted === '1' || !anchor) return;
+  const pop = document.createElement('div');
+  pop.id = 'messageActionPop';
+  pop.className = 'msg-action-pop';
+
+  if (!isMedia) {
+    const spBtn = makeMessageActionButton('speakBtn', '&#9654;', myRole === 'vi' ? 'Phát âm' : 'Seslendir', btn => requestSpeakForMessage(key, btn));
+    const misBtn = makeMessageActionButton('warn', '&#9888;', myRole === 'vi' ? 'Không hiểu, nói lại được không?' : 'Anlamadım, tekrar söyler misin?', () => sendQuickMisunderstood());
+    const retryBtn = makeMessageActionButton('retry', '&#8635;', myRole === 'vi' ? 'Dịch lại' : 'Tekrar çevir', btn => retryMessageTranslation(key, btn));
+    pop.append(spBtn, misBtn, retryBtn);
+  }
+
+  const copyBtn = makeMessageActionButton('copy', '&#10697;', myRole === 'vi' ? 'Sao chép' : 'Kopyala', btn => copyOriginalMessage(key, btn));
+  const delBtn = makeMessageActionButton('delete', '&times;', myRole === 'vi' ? 'Xóa' : 'Sil', () => deleteMessage(key));
+  pop.append(copyBtn, delBtn);
+  document.body.appendChild(pop);
+  pop.classList.add('show');
+  const r = anchor.getBoundingClientRect();
+  const pr = pop.getBoundingClientRect();
+  pop.style.left = Math.min(window.innerWidth - pr.width - 8, Math.max(8, r.left + r.width / 2 - pr.width / 2)) + 'px';
+  pop.style.top = Math.max(8, r.top - pr.height - 10) + 'px';
+}
+
 function renderMessage(key, msg) {
   if (renderedKeys.has(key)) { updateOrRender(key, msg); return; }
   renderedKeys.add(key);
@@ -2720,12 +2777,13 @@ function renderMessage(key, msg) {
   }
   div.appendChild(trans);
 
+  let btnRow = null;
   if (!isMedia && !msg.deleted) {
     const languageToggle = document.createElement('button');
     languageToggle.type = 'button';
     languageToggle.className = 'msg-language-toggle';
     const languageRow = document.createElement('div');
-    languageRow.className = 'msg-language-row';
+    languageRow.className = 'msg-language-row msg-meta-row';
     const translationIndicator = document.createElement('span');
     translationIndicator.className = 'translation-status-indicator';
     translationIndicator.id = 'translation-ind-' + key;
@@ -2740,6 +2798,7 @@ function renderMessage(key, msg) {
       };
       languageRow.append(languageToggle, translationIndicator);
       div.insertBefore(languageRow, trans);
+      btnRow = languageRow;
     } else {
       div.insertBefore(orig, head.nextSibling);
       head.insertBefore(trans, flag);
@@ -2753,57 +2812,37 @@ function renderMessage(key, msg) {
       };
       languageRow.append(languageToggle, translationIndicator);
       div.insertBefore(languageRow, orig);
+      btnRow = languageRow;
     }
     updateMessageTranslationIndicator(key, msg.translation || '', { initial: true });
   }
 
-  let btnRow = null;
   if (!isMedia && !msg.deleted) {
-  btnRow = document.createElement('div');
-  btnRow.className = 'btn-row';
-  btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
-
-  const spBtn = document.createElement('button');
-  spBtn.className = 'speakBtn';
-  spBtn.innerHTML = '&#9654;';
-  spBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#7c3aed';
-  bindSpeakAction(spBtn, () => requestSpeakForMessage(key, spBtn));
-
-  const misBtn = document.createElement('button');
-  misBtn.innerHTML = '&#9888;';
-  misBtn.title = myRole === 'vi' ? 'Không hiểu, nói lại được không?' : 'Anlamadım, tekrar söyler misin?';
-  misBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#d97706';
-  misBtn.onclick = () => sendQuickMisunderstood();
-
-  const retryBtn = document.createElement('button');
-  retryBtn.innerHTML = '&#8635;';
-  retryBtn.title = myRole === 'vi' ? 'Dịch lại' : 'Tekrar çevir';
-  retryBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#ea580c';
-  retryBtn.onclick = () => retryMessageTranslation(key, retryBtn);
-
-  const copyBtn = document.createElement('button');
-  copyBtn.innerHTML = '&#10697;';
-  copyBtn.title = myRole === 'vi' ? 'Sao chép' : 'Kopyala';
-  copyBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#0891b2';
-  copyBtn.onclick = () => copyOriginalMessage(key, copyBtn);
-
-  const delBtn = document.createElement('button');
-  delBtn.innerHTML = '&times;';
-  delBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#e11d48';
-  delBtn.onclick = () => deleteMessage(key);
-
-  btnRow.append(spBtn, misBtn, retryBtn, copyBtn, delBtn);
-  div.appendChild(btnRow);
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'msg-action-menu-btn';
+    menuBtn.textContent = '⋯';
+    menuBtn.title = myRole === 'vi' ? 'Công cụ' : 'Araçlar';
+    menuBtn.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showMessageActionMenu(key, menuBtn, false);
+    };
+    btnRow.appendChild(menuBtn);
   } else if (!msg.deleted) {
     btnRow = document.createElement('div');
-    btnRow.className = 'btn-row';
-    btnRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px 6px;flex-wrap:wrap';
-    const delBtn = document.createElement('button');
-    delBtn.innerHTML = '&times;';
-    delBtn.title = myRole === 'vi' ? 'Xóa' : 'Sil';
-    delBtn.style.cssText = 'width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;padding:0;border-radius:12px;background:#fff;border:1px solid #e7e4ef;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.07);color:#e11d48';
-    delBtn.onclick = e => { e.preventDefault(); e.stopPropagation(); deleteMessage(key); };
-    btnRow.appendChild(delBtn);
+    btnRow.className = 'btn-row msg-meta-row';
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'msg-action-menu-btn';
+    menuBtn.textContent = '⋯';
+    menuBtn.title = myRole === 'vi' ? 'Công cụ' : 'Araçlar';
+    menuBtn.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showMessageActionMenu(key, menuBtn, true);
+    };
+    btnRow.appendChild(menuBtn);
     div.appendChild(btnRow);
   }
 
@@ -3495,6 +3534,8 @@ function showReactionPicker(key, anchor) {
 document.addEventListener('pointerdown', e => {
   const picker = document.getElementById('reactionPicker');
   if (picker && picker.classList.contains('show') && !picker.contains(e.target) && !e.target.closest('.msg-react-btn')) picker.classList.remove('show');
+  const actionPop = document.getElementById('messageActionPop');
+  if (actionPop && !actionPop.contains(e.target) && !e.target.closest('.msg-action-menu-btn')) closeMessageActionMenu();
 }, { passive: true });
 
 function getStoredReactions(key) {
