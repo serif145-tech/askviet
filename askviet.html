@@ -151,6 +151,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-reply-quote span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:11.5px;line-height:1.35;font-weight:750;opacity:.96;word-break:break-word}
 .msg.theirs .msg-reply-quote{background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.13));border-color:rgba(255,255,255,.34);border-left-color:rgba(255,255,255,.86)}
 .msg.media-msg .msg-reply-quote{margin:2px 2px 4px;width:calc(100% - 4px);background:rgba(17,24,39,.88);color:#fff;border-left-color:#f9a8d4}
+.msg-reply-context{display:flex;width:100%;max-width:100%;margin:0 0 4px;position:relative;z-index:2}
+.msg.mine .msg-reply-context{justify-content:flex-end}
+.msg.theirs .msg-reply-context{justify-content:flex-start}
+.msg-reply-context .msg-reply-quote{width:100%;margin:0;padding:7px 10px;border-radius:13px;background:rgba(124,58,237,.10);border:1px solid rgba(124,58,237,.2);border-left:4px solid #7c3aed;color:#4c1d95;box-shadow:0 2px 7px rgba(76,29,149,.08);backdrop-filter:blur(7px)}
+.msg.theirs .msg-reply-context .msg-reply-quote{background:rgba(236,72,153,.10);border-color:rgba(219,39,119,.2);border-left-color:#ec4899;color:#831843}
+.msg-reply-context .msg-reply-quote strong{color:#6d28d9}
+.msg.theirs .msg-reply-context .msg-reply-quote strong{color:#be185d}
 
 /* Çeviri — küçük ve soluk */
 .msg-translation{font-size:13.5px;color:#585862;padding:11px 15px;margin-top:3px;font-style:italic;font-weight:500;line-height:1.5;touch-action:manipulation;background:#fdfdfd;border-radius:7px 7px 20px 20px;max-width:100%;word-break:break-word;overflow-wrap:anywhere;box-shadow:0 1px 3px rgba(0,0,0,.07)}
@@ -175,10 +182,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-original.compact-source .original-content{display:none}
 .msg-original.compact-source .msg-language-toggle{margin:0}
 .msg-translation.language-collapsed,.msg-original.language-collapsed{display:none!important}
-.msg-original.original-collapsible.language-collapsed.has-reply-quote{display:block!important;padding:0!important;background:transparent!important;box-shadow:none!important}
-.msg-original.original-collapsible.language-collapsed.has-reply-quote .original-content{display:none!important}
-.msg-original.original-collapsible.language-collapsed.has-reply-quote .msg-reply-quote{margin:0;background:linear-gradient(180deg,rgba(236,72,153,.15),rgba(219,39,119,.08));border-color:rgba(219,39,119,.2);border-left-color:#ec4899;color:#585862}
-.msg-original.original-collapsible.language-collapsed.has-reply-quote .msg-reply-quote strong{color:#be185d}
 .msg.mine .msg-translation{border-bottom-right-radius:9px}
 .msg.theirs .msg-translation{border-bottom-left-radius:9px}
 .translation-copy-tick{position:absolute;right:8px;top:8px;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;border:1px solid #86efac;box-shadow:0 4px 13px rgba(22,163,74,.46);font:900 15px/1 Arial,sans-serif;pointer-events:none;animation:translationTick 1s ease forwards}
@@ -801,7 +804,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-04-html-live-reaction-mic-1';
+const APP_VERSION = '2026-07-04-html-live-45s-segment-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -2878,6 +2881,7 @@ function renderMessage(key, msg) {
     bindBubbleDoubleTap(orig, key);
   }
   head.append(orig, flag);
+  syncMessageReplyContext(div, msg.replyTo);
   div.appendChild(head);
   if (!msg.deleted) bindSwipeReply(div, head, key);
 
@@ -3183,6 +3187,25 @@ function appendReplyQuote(parent, replyValue) {
   parent.appendChild(quote);
 }
 
+function syncMessageReplyContext(box, replyValue) {
+  if (!box) return;
+  const reply = parseReplyData(replyValue);
+  let host = Array.from(box.children || []).find(child => child.classList?.contains('msg-reply-context')) || null;
+  if (!reply) {
+    if (host) host.remove();
+    return;
+  }
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'msg-reply-context';
+  }
+  host.textContent = '';
+  appendReplyQuote(host, reply);
+  const head = Array.from(box.children || []).find(child => child.classList?.contains('msg-head')) || null;
+  if (head) box.insertBefore(host, head);
+  else if (!host.parentNode) box.appendChild(host);
+}
+
 function buildReplySnapshot(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return null;
@@ -3377,8 +3400,6 @@ function setMessageContent(el, msg) {
   const existingReact = el.querySelector('.msg-react-btn');
   el.textContent = '';
   el.classList.toggle('deleted-tombstone-host', !!msg.deleted);
-  el.classList.toggle('has-reply-quote', !!parseReplyData(msg.replyTo));
-  appendReplyQuote(el, msg.replyTo);
   const originalContent = document.createElement('div');
   originalContent.className = 'original-content';
   if (msg.deleted) {
@@ -4177,6 +4198,7 @@ function refreshMessageText(key) {
   };
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
+  syncMessageReplyContext(box, msg.replyTo);
   if (orig) setMessageContent(orig, msg);
   if (trans) {
     if (msg.deleted) {
@@ -8421,6 +8443,21 @@ async function requestMicrophoneStream(kind='mic') {
   });
   return stream;
 }
+async function requestMicrophoneStreamWithTimeout(kind='mic', timeoutMs=8000) {
+  let acceptStream = true;
+  const pending = requestMicrophoneStream(kind).then(stream => {
+    if (!acceptStream) {
+      try { stream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
+    }
+    return stream;
+  });
+  try {
+    return await withTimeout(pending, timeoutMs, 'Mikrofon');
+  } catch (e) {
+    acceptStream = false;
+    throw e;
+  }
+}
 function silenceCountdownText(start, now, silenceMs=REC_SILENCE_MS) {
   if (!start) return '';
   const remaining = silenceMs - (now - start);
@@ -8686,12 +8723,22 @@ let pseudoLiveLastTickAt=0;
 let pseudoLiveSilenceStartedAt=0;
 let pseudoLiveQueue=[];
 let pseudoLiveProcessing=false;
+let pseudoLiveActiveWorkers=0;
+let pseudoLiveDispatchSeq=0;
+let pseudoLiveNextCommitSeq=1;
+let pseudoLiveCompletedResults=new Map();
+let pseudoLiveSessionId=0;
 let pseudoLiveTtsQueue=[];
 let pseudoLiveTtsPlaying=false;
 let pseudoLiveLastText='';
 let pseudoLiveLastTarget='vi';
 let pseudoLiveLastSpokenText='';
 let pseudoLiveLastSpokenAt=0;
+const PSEUDO_LIVE_MAX_SEGMENT_MS=45000;
+const PSEUDO_LIVE_QUEUE_MAX=10;
+const PSEUDO_LIVE_QUEUE_MAX_AGE_MS=60000;
+const PSEUDO_LIVE_MAX_WORKERS=2;
+const PSEUDO_LIVE_TTS_MAX=10;
 
 function getLiveNoiseLevel() {
   const explicit = localStorage.getItem('askviet_live_noise_level');
@@ -8812,7 +8859,7 @@ async function toggleGeminiLiveMain() {
     primeAudioForGesture();
     updateLiveMainButton(true);
     setRealLiveStatus('Mikrofon hazırlanıyor...', 'loading');
-    const streamPromise = requestMicrophoneStream('live');
+    const streamPromise = requestMicrophoneStreamWithTimeout('live', 8000);
     await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
     preparedStream = await streamPromise;
     await startPseudoLive(preparedStream);
@@ -9004,7 +9051,7 @@ async function manualMicRefresh() {
     if (restartLive) stopPseudoLive(true);
     try { resetMicrophoneAudioContext(); } catch {}
     primeAudioForGesture();
-    const streamPromise = requestMicrophoneStream(restartLive ? 'live' : 'mic');
+    const streamPromise = requestMicrophoneStreamWithTimeout(restartLive ? 'live' : 'mic', 8000);
     await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
     freshStream = await streamPromise;
     if (restartLive) {
@@ -9035,9 +9082,13 @@ async function startPseudoLive(preparedStream=null) {
   pseudoLiveLastAudioAt=Date.now();
   pseudoLiveQueue=[];
   pseudoLiveProcessing=false;
+  pseudoLiveActiveWorkers=0;
+  pseudoLiveDispatchSeq=0;
+  pseudoLiveNextCommitSeq=1;
+  pseudoLiveCompletedResults=new Map();
   pseudoLiveTtsQueue=[];
   pseudoLiveTtsPlaying=false;
-  pseudoLiveStream=preparedStream || await requestMicrophoneStream('live');
+  pseudoLiveStream=preparedStream || await requestMicrophoneStreamWithTimeout('live', 8000);
   pseudoLiveCtx=await ensureAudioCtx();
   pseudoLiveSampleRate=pseudoLiveCtx.sampleRate || 48000;
   pseudoLivePreRollChunks=[];
@@ -9066,6 +9117,7 @@ async function startGeminiLive() {
 }
 
 function stopPseudoLive(silent=false) {
+  pseudoLiveSessionId++;
   pseudoLiveRunning=false;
   stopAudio();
   try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
@@ -9080,6 +9132,12 @@ function stopPseudoLive(silent=false) {
   pseudoLiveCurrentVoiceRunMs=0; pseudoLiveLongestVoiceRunMs=0; pseudoLiveStrongVoiceMs=0; pseudoLivePeakLevel=0; pseudoLiveSpeechAccepted=false;
   pseudoLiveTtsQueue=[];
   pseudoLiveTtsPlaying=false;
+  pseudoLiveQueue=[];
+  pseudoLiveProcessing=false;
+  pseudoLiveActiveWorkers=0;
+  pseudoLiveDispatchSeq=0;
+  pseudoLiveNextCommitSeq=1;
+  pseudoLiveCompletedResults=new Map();
   pseudoLiveLastTickAt=0; pseudoLiveSilenceStartedAt=0;
   pseudoLiveChunks=[]; pseudoLivePreRollChunks=[]; pseudoLivePreRollSamples=0; pseudoLiveSegmentStartedAt=0; pseudoLiveRecorder=null;
   updateLiveMainButton(false);
@@ -9155,7 +9213,7 @@ function tickPseudoLive(event) {
       }
     }
   }
-  if (pseudoLiveSegmentActive && (pseudoLiveSilentMs >= silenceLimit || pseudoLiveSegmentAge() > 22000)) {
+  if (pseudoLiveSegmentActive && (pseudoLiveSilentMs >= silenceLimit || pseudoLiveSegmentAge() > PSEUDO_LIVE_MAX_SEGMENT_MS)) {
     finishPseudoLiveSegment();
   }
 }
@@ -9263,7 +9321,7 @@ function finishPseudoLiveSegment() {
   if (accepted && chunks.length) {
     const blob=makePseudoLiveWav(chunks,pseudoLiveSampleRate);
     if (blob.size >= 1200) {
-      if (pseudoLiveQueue.length > 4) pseudoLiveQueue.shift();
+      while (pseudoLiveQueue.length >= PSEUDO_LIVE_QUEUE_MAX) pseudoLiveQueue.shift();
       pseudoLiveQueue.push({blob,ts:Date.now()});
       processPseudoLiveQueue();
       return;
@@ -9272,29 +9330,54 @@ function finishPseudoLiveSegment() {
   if (pseudoLiveRunning && !pseudoLiveProcessing) setRealLiveStatus('Dinliyorum', 'idle');
 }
 
-async function processPseudoLiveQueue() {
-  if (pseudoLiveProcessing) return;
-  pseudoLiveProcessing=true;
-  try {
-    while (pseudoLiveRunning && pseudoLiveQueue.length) {
-      const item=pseudoLiveQueue.shift();
-      if (!item || Date.now() - item.ts > 45000) continue;
-      await handlePseudoLiveBlob(item.blob);
-    }
-  } finally {
-    pseudoLiveProcessing=false;
-    if (pseudoLiveRunning && !pseudoLiveTtsPlaying) setRealLiveStatus('Dinliyorum', 'idle');
+function processPseudoLiveQueue() {
+  if (!pseudoLiveRunning) return;
+  while (pseudoLiveActiveWorkers < PSEUDO_LIVE_MAX_WORKERS && pseudoLiveQueue.length) {
+    const item=pseudoLiveQueue.shift();
+    if (!item || Date.now() - item.ts > PSEUDO_LIVE_QUEUE_MAX_AGE_MS) continue;
+    const seq=++pseudoLiveDispatchSeq;
+    const session=pseudoLiveSessionId;
+    pseudoLiveActiveWorkers++;
+    pseudoLiveProcessing=true;
+    buildPseudoLiveResult(item.blob, session).then(result => {
+      if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return;
+      pseudoLiveCompletedResults.set(seq, result || {type:'skip'});
+      flushPseudoLiveCompletedResults();
+    }).catch(err => {
+      if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return;
+      pseudoLiveCompletedResults.set(seq, {
+        type:'error',
+        message:'Live işlem hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr')
+      });
+      flushPseudoLiveCompletedResults();
+    }).finally(() => {
+      if (session !== pseudoLiveSessionId) return;
+      pseudoLiveActiveWorkers=Math.max(0,pseudoLiveActiveWorkers-1);
+      pseudoLiveProcessing=pseudoLiveActiveWorkers>0;
+      processPseudoLiveQueue();
+      if (!pseudoLiveProcessing && !pseudoLiveQueue.length && pseudoLiveRunning && !pseudoLiveTtsPlaying) {
+        setRealLiveStatus('Dinliyorum', 'idle');
+      }
+    });
   }
+  pseudoLiveProcessing=pseudoLiveActiveWorkers>0;
 }
 
-function enqueuePseudoLiveTts(text, target) {
+function createPseudoLiveTtsItem(text, target) {
   text = normalizeTtsInput(text || '');
-  if (!text || !target) return;
+  if (!text || !target) return null;
   const item = { text, target, ts:Date.now(), prepared:null, promise:null, failed:false };
-  pseudoLiveTtsQueue.push(item);
-  while (pseudoLiveTtsQueue.length > 8) pseudoLiveTtsQueue.shift();
-  updateRealLiveInfo(realLiveStatusDetail);
   preparePseudoLiveTts(item);
+  return item;
+}
+
+function enqueuePseudoLiveTts(text, target, preparedItem=null) {
+  const item = preparedItem || createPseudoLiveTtsItem(text, target);
+  if (!item) return;
+  pseudoLiveTtsQueue.push(item);
+  while (pseudoLiveTtsQueue.length > PSEUDO_LIVE_TTS_MAX) pseudoLiveTtsQueue.shift();
+  updateRealLiveInfo(realLiveStatusDetail);
+  if (!item.promise && !item.prepared && !item.failed) preparePseudoLiveTts(item);
   processPseudoLiveTtsQueue();
 }
 
@@ -9364,7 +9447,7 @@ async function processPseudoLiveTtsQueue() {
   }
 }
 
-async function handlePseudoLiveBlob(blob) {
+async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
   const settings=getLiveSettings();
   const payload=await liveFileToBase64(blob);
   const firstTranscribe=primaryTranscribeLabel(settings.model);
@@ -9380,8 +9463,7 @@ async function handlePseudoLiveBlob(blob) {
       transcribeEngine: settings.model
     });
   } catch (err) {
-    setRealLiveStatus('Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'error');
-    return;
+    return { type:'error', message:'Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr') };
   }
   const actualTranscribe=actualTranscribeLabel(data.model || firstTranscribe);
   const transcribeFallbackNotice = actualTranscribe && actualTranscribe !== firstTranscribe
@@ -9392,49 +9474,73 @@ async function handlePseudoLiveBlob(blob) {
     updateRealLiveInfo(firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanılıyor');
   }
   const srcText=String(data.text || '').trim();
+  if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return {type:'skip'};
   if (!srcText) {
-    setRealLiveStatus('Ses algılanmadı', 'idle');
-    return;
+    return { type:'notice', message:'Ses algılanmadı', state:'idle' };
   }
   if (isBadLiveTranscript(srcText)) {
-    setRealLiveStatus('Şüpheli transkript yok sayıldı', 'idle');
-    return;
+    return { type:'notice', message:'Şüpheli transkript yok sayıldı', state:'idle' };
   }
   if (isLikelyPseudoLiveEcho(srcText)) {
-    setRealLiveStatus('Kendi sesimi duydum, dinlemeye devam ediyorum', 'idle');
-    return;
+    return { type:'notice', message:'Kendi sesimi duydum, dinlemeye devam ediyorum', state:'idle' };
   }
   const guessed=guessLiveSourceRole(srcText);
   const from=guessed || 'tr';
   if (!guessed) setRealLiveStatus('Dil net değildi, Türkçe varsayıldı', 'working');
   const target=from === 'tr' ? 'vi' : 'tr';
   if (isExactBlocked(srcText)) {
-    setRealLiveStatus('Kara listeye takıldı, atlandı.', 'error');
-    await new Promise(r => setTimeout(r, 1600));
-    return;
+    return { type:'notice', message:'Kara listeye takıldı, atlandı.', state:'error' };
   }
   setRealLiveStatus('Çeviri hazırlanıyor', 'working');
   updateRealLiveInfo((transcribeFallbackNotice || '') + modelName(selectedModel));
   try {
     const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
+    if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return {type:'skip'};
     const translated=String(tr.translation || '').trim();
-    if (!translated) return;
+    if (!translated) return { type:'notice', message:'Çeviri boş döndü', state:'error' };
     if (isExactBlocked(srcText) || isExactBlocked(translated)) {
-      // Blocked sentence: no display, no TTS, red warning, then back to listening.
-      setRealLiveStatus('Kara listeye takıldı, atlandı.', 'error');
-      await new Promise(r => setTimeout(r, 1600));
-      return;
+      return { type:'notice', message:'Kara listeye takıldı, atlandı.', state:'error' };
     }
-    if (settings.response !== 'AUDIO') {
-      appendPseudoLiveTurn(srcText, translated, from, target, tr.model || selectedModel, data.model || '');
-    }
-    pseudoLiveLastText=translated;
-    pseudoLiveLastTarget=target;
-    if (settings.response === 'TEXT_TTS' || settings.response === 'AUDIO') {
-      enqueuePseudoLiveTts(translated, target);
-    }
+    const shouldSpeak=settings.response === 'TEXT_TTS' || settings.response === 'AUDIO';
+    const ttsItem=shouldSpeak ? createPseudoLiveTtsItem(translated, target) : null;
+    return {
+      type:'turn', srcText, translated, from, target,
+      translationModel:tr.model || selectedModel,
+      transcribeModel:data.model || '',
+      response:settings.response,
+      ttsItem
+    };
   } catch (err) {
-    appendRealLiveLog('Live çeviri hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    return { type:'error', message:'Live çeviri hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr') };
+  }
+}
+
+function commitPseudoLiveResult(result) {
+  if (!result || result.type === 'skip') return;
+  if (result.type === 'notice') {
+    setRealLiveStatus(result.message || 'Dinliyorum', result.state || 'idle');
+    return;
+  }
+  if (result.type === 'error') {
+    setRealLiveStatus(result.message || 'Live hatası', 'error');
+    appendRealLiveLog(result.message || 'Live hatası', 'status');
+    return;
+  }
+  if (result.type !== 'turn') return;
+  if (result.response !== 'AUDIO') {
+    appendPseudoLiveTurn(result.srcText, result.translated, result.from, result.target, result.translationModel, result.transcribeModel);
+  }
+  pseudoLiveLastText=result.translated;
+  pseudoLiveLastTarget=result.target;
+  if (result.ttsItem) enqueuePseudoLiveTts(result.translated, result.target, result.ttsItem);
+}
+
+function flushPseudoLiveCompletedResults() {
+  while (pseudoLiveCompletedResults.has(pseudoLiveNextCommitSeq)) {
+    const result=pseudoLiveCompletedResults.get(pseudoLiveNextCommitSeq);
+    pseudoLiveCompletedResults.delete(pseudoLiveNextCommitSeq);
+    pseudoLiveNextCommitSeq++;
+    commitPseudoLiveResult(result);
   }
 }
 
