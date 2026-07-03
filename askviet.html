@@ -791,7 +791,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-reaction-button-badge-1';
+const APP_VERSION = '2026-07-03-firebase-stream-stability-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -961,7 +961,7 @@ let transientNoticeTimer = null;
 const AUDIO_REQUEST_ACK_TIMEOUT_MS = 10000;
 const CHAT_RENDER_LIMIT = 50;
 const CHAT_PAGE_SIZE = 50;
-const CHAT_POLL_LIMIT = 20;
+const CHAT_POLL_LIMIT = 10;
 let currentMessageLimit = CHAT_RENDER_LIMIT;
 const MESSAGE_RECONCILE_DELAY_MS = 900;
 const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
@@ -1017,15 +1017,15 @@ sessionStorage.setItem('askviet_session_id', SESSION_ID);
 // phone hopping VN→TR can never count as two.
 const DEVICE_ID = localStorage.getItem('askviet_device_id') || ('d' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 localStorage.setItem('askviet_device_id', DEVICE_ID);
-const FIREBASE_REQUEST_TIMEOUT_MS = 3500;
-const OUTGOING_RETRY_TIMEOUT_MS = 5000;
+const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
+const OUTGOING_RETRY_TIMEOUT_MS = 8000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
-const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 2500;
-const OUTGOING_UNKNOWN_RESEND_GAP_MS = 3500;
+const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 15000;
+const OUTGOING_UNKNOWN_RESEND_GAP_MS = 15000;
 const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
-const CHAT_STREAM_STALE_MS = 35000;
+const CHAT_STREAM_STALE_MS = 50000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
 const MAX_PERSISTED_READ_RECEIPTS = 120;
 const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1553,31 +1553,28 @@ function applyRemoteTtsSettings(data) {
 
 let unsubTtsSettings = null;
 let ttsSettingsPollTimer = null;
-function listenTtsSettings() {
-  if (unsubTtsSettings) unsubTtsSettings();
-  if (ttsSettingsPollTimer) { clearInterval(ttsSettingsPollTimer); ttsSettingsPollTimer = null; }
-  const poll = () => fbGet(TTS_SETTINGS_PATH, true).then(d => {
-    if (!d) return;
-    // TR is the source of truth: don't let stale remote overwrite a newer local TR change.
+let ttsSettingsLastFetchAt = 0;
+function refreshTtsSettingsFromRemote(force=false) {
+  if (!myRole) return Promise.resolve(false);
+  if (!force && Date.now() - ttsSettingsLastFetchAt < 10000) return Promise.resolve(false);
+  ttsSettingsLastFetchAt = Date.now();
+  return fbGet(TTS_SETTINGS_PATH, true).then(d => {
+    if (!d) return false;
     if (myRole === 'tr') {
       const localTs = Number(localStorage.getItem('askviet_tts_settings_updated_at') || 0);
       const remoteTs = Number(d.updatedAt || 0);
-      if (localTs && remoteTs && remoteTs < localTs) return;
+      if (localTs && remoteTs && remoteTs < localTs) return false;
     }
     applyRemoteTtsSettings(d);
-  }).catch(()=>{});
-  poll();
-  ttsSettingsPollTimer = setInterval(poll, 4000);
-  let stop = null;
-  try {
-    stop = fbListen(TTS_SETTINGS_PATH, event => {
-      if (event.path === '/') applyRemoteTtsSettings(event.data);
-      else poll();
-    }, { onerror: () => {} });
-  } catch {}
+    return true;
+  }).catch(() => false);
+}
+function listenTtsSettings() {
+  if (unsubTtsSettings) unsubTtsSettings();
+  if (ttsSettingsPollTimer) { clearInterval(ttsSettingsPollTimer); ttsSettingsPollTimer = null; }
+  refreshTtsSettingsFromRemote(true);
   unsubTtsSettings = () => {
     if (ttsSettingsPollTimer) { clearInterval(ttsSettingsPollTimer); ttsSettingsPollTimer = null; }
-    if (stop) stop();
   };
 }
 function normalizeChatModel(model) {
@@ -1611,6 +1608,7 @@ function toggleTtsSettings(force) {
   syncTtsSettingsUI();
   const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
   panel.classList.toggle('open', open);
+  if (open) refreshTtsSettingsFromRemote(false);
 }
 
 function loadSaved() {
@@ -1710,10 +1708,9 @@ async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQU
     }
     return r;
   } catch (e) {
-    if (!canRetryTimeout || !isFirebaseNetworkError(e)) throw e;
-    try { await refreshFirebaseAuth(true); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 220));
-    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs + 1500, 4500), 5500));
+    if (!canRetryTimeout || !isFirebaseTimeoutError(e)) throw e;
+    await new Promise(resolve => setTimeout(resolve, 450));
+    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs, 6500), 10000));
   }
 }
 
@@ -1949,7 +1946,6 @@ async function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
-  syncSharedTextLists();
   loadPersistentQueues();
   isTyping = false;
   lastTypingSignalAt = 0;
@@ -1978,7 +1974,6 @@ async function start(role) {
   setTimeout(()=>{const emptyT = document.getElementById('emptyText');if (emptyT) emptyT.innerHTML = role === 'tr' ? 'Henuz mesaj yok.<br>Ilk mesaji gonder!' : 'Chua co tin nhan.<br>Gui tin nhan dau tien!';},100);
   try{ const myBadge = document.getElementById('myModelBadge'); if (myBadge) myBadge.textContent = MODEL_NAMES[selectedModel] || selectedModel.split(':')[1]; }catch(e){}
   listenAutoReadConfig();
-  listenTtsSettings();
   startPresence();
   listenPresence();
   applyLocaleUI();
@@ -1995,6 +1990,8 @@ async function start(role) {
   }).catch(() => updateWebPushButton());
   listenModelConfig();
   initChat();
+  setTimeout(() => listenTtsSettings(), 1800);
+  setTimeout(() => syncSharedTextLists(), 2600);
   setTimeout(restoreChatScrollState, 500);
   restorePendingMessages();
   flushOutgoingQueue(true);
@@ -2182,12 +2179,9 @@ function initChat() {
       }
     }
   }, {
-    onactivity: type => {
-      lastMessageStreamActivityAt = Date.now();
-      if (type === 'put' || type === 'patch') setConnected(true);
-    },
-    onerror: () => { setConnected(false, true); recordConnectionEvent('message-stream-error'); scheduleFirebaseTransportRecovery('message-stream-error', 1200); },
-    onopen: () => { recordConnectionEvent('message-stream-open'); }
+    onactivity: () => { lastMessageStreamActivityAt = Date.now(); },
+    onerror: () => { setConnected(false); recordConnectionEvent('message-stream-error'); },
+    onopen: () => { setConnected(true); recordConnectionEvent('message-stream-open'); }
   }, messageQuery(CHAT_PAGE_SIZE));
 
   unsubTyping = fbListen(TYPING_PATH, event => {
@@ -2236,12 +2230,11 @@ async function pollMessagesSnapshot(fresh=false) {
   try {
     const data = await fetchLatestMessages(CHAT_POLL_LIMIT);
     if (data) applyMessagesSnapshot(data, false);
-    if (!messageWriteBlocked) setConnected(true);
+    setConnected(true);
     return true;
   } catch (e) {
-    setConnected(false, true);
+    setConnected(false);
     recordConnectionEvent('message-poll-error', e?.message || e);
-    scheduleFirebaseTransportRecovery('message-poll-error', 1800);
     return false;
   } finally {
     scheduleChatWatchdog();
@@ -2267,7 +2260,7 @@ function startChatHealthWatchdog() {
   chatHealthTimer = setInterval(() => {
     if (!myRole || document.visibilityState === 'hidden' || chatStreamRestarting) return;
     if (Date.now() - lastMessageStreamActivityAt <= CHAT_STREAM_STALE_MS) return;
-    scheduleFirebaseTransportRecovery('stale-message-stream', 0);
+    restartChatStreams();
   }, 12000);
 }
 
@@ -2693,17 +2686,8 @@ let firebaseDisconnectTimer = null;
 let messageWriteBlocked = false;
 function setConnected(v, force=false) {
   const dot = document.getElementById('connDot');
-  if (v) {
-    if (messageWriteBlocked && !force) return;
-    lastFirebaseHealthyAt = Date.now();
-    if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
-    firebaseDisconnectTimer = null;
-    if (dot) dot.classList.remove('off');
-    return;
-  }
-  if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
-  firebaseDisconnectTimer = null;
-  if (dot) dot.classList.add('off');
+  if (v) lastFirebaseHealthyAt = Date.now();
+  if (dot) dot.classList.toggle('off', !v);
 }
 
 async function verifyFirebaseWriteHealth(reason='health') {
@@ -2935,6 +2919,7 @@ function renderMessage(key, msg) {
       languageToggle.textContent = targetFlag + ' ' + uiText('Çeviriyi göster', 'Xem bản dịch');
       languageToggle.onclick = () => {
         const hidden = trans.classList.toggle('language-collapsed');
+        div.dataset.languageUser = hidden ? '' : '1';
         languageToggle.textContent = targetFlag + ' ' + (hidden ? uiText('Çeviriyi göster', 'Xem bản dịch') : uiText('Çeviriyi gizle', 'Ẩn bản dịch'));
       };
       languageRow.append(languageToggle, translationIndicator);
@@ -2949,6 +2934,7 @@ function renderMessage(key, msg) {
       languageToggle.onclick = event => {
         event.stopPropagation();
         const hidden = orig.classList.toggle('language-collapsed');
+        div.dataset.languageUser = hidden ? '' : '1';
         languageToggle.textContent = sourceFlag + ' ' + (hidden ? uiText('Orijinali göster', 'Xem bản gốc') : uiText('Orijinali gizle', 'Ẩn bản gốc'));
       };
       languageRow.append(languageToggle, translationIndicator);
@@ -3482,10 +3468,12 @@ function ensureMessageReactionButton(key) {
   if (target) addReactionButton(target, key);
 }
 
-function setMessageLanguageExpanded(key, expanded) {
+function setMessageLanguageExpanded(key, expanded, automatic=false) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
+  if (automatic && box.dataset.languageUser === '1') return;
   expanded = !!expanded;
+  if (!automatic) box.dataset.languageUser = expanded ? '1' : '';
   const isMine = box.classList.contains('mine');
   const role = box.dataset.role || '';
   const sourceFlag = role === 'tr' ? '🇹🇷' : '🇻🇳';
@@ -4184,7 +4172,7 @@ function refreshMessageText(key) {
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
   }
   if (msg.translation && !parseTranslationStatus(msg.translation) && !isPendingTranslationText(msg.translation)) {
-    setMessageLanguageExpanded(key, false);
+    setMessageLanguageExpanded(key, false, true);
   }
   ensureMessageReactionButton(key);
 }
@@ -5382,7 +5370,7 @@ async function verifyUnknownOutgoingMessages() {
           continue;
         }
         const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
-        if (!messageWriteBlocked) setConnected(true);
+        setConnected(true);
         if (remote && typeof remote === 'object') {
           confirmOutgoingMessage(item.key, remote);
           scheduleMessageSnapshotReconcile('outgoing-unknown-confirmed');
@@ -5421,9 +5409,8 @@ async function verifyUnknownOutgoingMessages() {
         updateDeliveryStatus(item.key, 'pending');
         debugLog('message_send_unknown_waiting_remote', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
       } catch (e) {
-        setConnected(false, true);
+        setConnected(false);
         recordConnectionEvent('message-unknown-verify-error', e?.message || e);
-        scheduleFirebaseTransportRecovery('unknown-verify-error', 900);
       }
     }
   } finally {
@@ -5481,18 +5468,17 @@ async function sendQueuedItem(item) {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleFirebaseTransportRecovery('message-send-verify-timeout', 600);
-        scheduleUnknownOutgoingVerification(1200);
+        scheduleUnknownOutgoingVerification();
       } else if (ageMs > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification(2500);
+        scheduleUnknownOutgoingVerification();
       } else {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification(1800);
+        scheduleUnknownOutgoingVerification(OUTGOING_UNKNOWN_VERIFY_DELAY_MS);
       }
       persistPendingMessages();
     }
@@ -5780,7 +5766,7 @@ function setMessageTranslationIndicator(key, mode, attempt=1, autoHide=false) {
       el.className = 'translation-status-indicator';
       el.textContent = '';
       messageTranslationIndicatorTimers.delete(id);
-      setMessageLanguageExpanded(id, false);
+      setMessageLanguageExpanded(id, false, true);
     }, 1000);
     messageTranslationIndicatorTimers.set(id, timer);
   }
@@ -5794,7 +5780,7 @@ function updateMessageTranslationIndicator(key, value, options={}) {
       const attempt = translationAttemptForModel(id, status.model);
       messageTranslationAttemptState.set(id, { attempt, model: status.model || '', at: Date.now() });
       messageTranslationFinalSeen.delete(id);
-      setMessageLanguageExpanded(id, true);
+      setMessageLanguageExpanded(id, true, true);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
@@ -5802,7 +5788,7 @@ function updateMessageTranslationIndicator(key, value, options={}) {
       const attempt = translationAttemptForModel(id, status.nextModel || status.failedModel);
       messageTranslationAttemptState.set(id, { attempt, model: status.nextModel || status.failedModel || '', at: Date.now() });
       messageTranslationFinalSeen.delete(id);
-      setMessageLanguageExpanded(id, true);
+      setMessageLanguageExpanded(id, true, true);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
@@ -5826,7 +5812,7 @@ function updateMessageTranslationIndicator(key, value, options={}) {
     if (options.initial) return;
     if (text === messageTranslationFinalSeen.get(id)) return;
     messageTranslationFinalSeen.set(id, text);
-    setMessageLanguageExpanded(id, false);
+    setMessageLanguageExpanded(id, false, true);
     setMessageTranslationIndicator(id, 'error', messageTranslationAttemptState.get(id)?.attempt || 1, true);
     return;
   }
@@ -5836,10 +5822,10 @@ function updateMessageTranslationIndicator(key, value, options={}) {
   }
   if (!options.initial && text !== messageTranslationFinalSeen.get(id)) {
     messageTranslationFinalSeen.set(id, text);
-    setMessageLanguageExpanded(id, false);
+    setMessageLanguageExpanded(id, false, true);
     setMessageTranslationIndicator(id, 'success', messageTranslationAttemptState.get(id)?.attempt || 1, true);
   } else if (options.initial || text === messageTranslationFinalSeen.get(id)) {
-    setMessageLanguageExpanded(id, false);
+    setMessageLanguageExpanded(id, false, true);
     setMessageTranslationIndicator(id, '', 1, false);
   }
 }
@@ -6820,35 +6806,56 @@ function saveTextList(type, list, syncRemote=true) {
   const clean = (list || []).filter(Boolean).slice(-300);
   localStorage.setItem(textListKey(type), JSON.stringify(clean));
   if (syncRemote && myRole) {
-    const payload = {};
-    clean.forEach(text => payload[sharedTextListId(text)] = text);
-    fbSet(sharedTextListPath(type), payload).catch(()=>{});
+    syncTextListToRemote(type, clean);
   }
 }
 let textListSyncTimer = null;
+let textListRemoteSyncing = false;
+let textListLastRemoteWriteAt = 0;
+function textListPayload(list) {
+  const payload = {};
+  (list || []).filter(Boolean).slice(-300).forEach(text => payload[sharedTextListId(text)] = text);
+  return payload;
+}
+function sameTextListSet(a, b) {
+  const aa = (a || []).map(normalizeBlockText).filter(Boolean).sort();
+  const bb = (b || []).map(normalizeBlockText).filter(Boolean).sort();
+  return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
+}
+function syncTextListToRemote(type, list) {
+  if (!myRole || textListRemoteSyncing) return;
+  textListLastRemoteWriteAt = Date.now();
+  fbSet(sharedTextListPath(type), textListPayload(list)).catch(()=>{});
+}
 async function refreshSharedTextLists(uploadLocal=false) {
+  if (textListRemoteSyncing) return;
+  textListRemoteSyncing = true;
   for (const type of ['blocked','white']) {
-    const local = getTextList(type);
-    const remote = await fbGet(sharedTextListPath(type), true).catch(()=>null);
-    const merged = [...local];
-    Object.values(remote || {}).forEach(value => {
-      const text = String(value || '').trim();
-      if (text && !merged.some(item => normalizeBlockText(item) === normalizeBlockText(text))) merged.push(text);
-    });
-    saveTextList(type, merged, false);
-    if (uploadLocal && local.length) {
-      for (const text of local) fbSet(sharedTextListPath(type) + '/' + sharedTextListId(text), text).catch(()=>{});
-    }
+    try {
+      const local = getTextList(type);
+      const remote = await fbGet(sharedTextListPath(type), true).catch(()=>null);
+      const remoteList = Object.values(remote || {}).map(value => String(value || '').trim()).filter(Boolean);
+      const merged = [...local];
+      remoteList.forEach(text => {
+        if (text && !merged.some(item => normalizeBlockText(item) === normalizeBlockText(text))) merged.push(text);
+      });
+      const trimmed = merged.slice(-300);
+      saveTextList(type, trimmed, false);
+      if (uploadLocal && local.length && !sameTextListSet(trimmed, remoteList)) {
+        textListLastRemoteWriteAt = Date.now();
+        await fbSet(sharedTextListPath(type), textListPayload(trimmed)).catch(()=>{});
+      }
+    } catch {}
   }
+  textListRemoteSyncing = false;
   if (document.getElementById('textListModal')?.classList.contains('show')) renderTextLists();
 }
 function syncSharedTextLists() {
   refreshSharedTextLists(true);
-  if (unsubTextLists) unsubTextLists();
-  unsubTextLists = fbListen(CONFIG_PATH + '/textLists', () => {
-    clearTimeout(textListSyncTimer);
-    textListSyncTimer = setTimeout(() => refreshSharedTextLists(false), 180);
-  });
+  if (unsubTextLists) {
+    unsubTextLists();
+    unsubTextLists = null;
+  }
 }
 function isTranslationBypassText(text) {
   const normalized = normalizeBlockText(text);
@@ -6862,6 +6869,7 @@ function openTextLists() {
   const modal = document.getElementById('textListModal');
   if (modal) modal.classList.add('show');
   renderTextLists();
+  refreshSharedTextLists(false);
 }
 function closeTextLists() {
   const modal = document.getElementById('textListModal');
@@ -9573,12 +9581,12 @@ window.addEventListener('focus', () => {
   settleChatVisualViewport();
 });
 window.addEventListener('online', () => {
+  setConnected(true);
   if (myRole) {
-    scheduleFirebaseTransportRecovery('browser-online', 0);
     resumeChatTransport();
   }
 });
-window.addEventListener('offline', () => setConnected(false, true));
+window.addEventListener('offline', () => setConnected(false));
 clearUnreadCount();
 </script>
 <div id="micReviveOverlay" aria-hidden="true">
