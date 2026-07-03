@@ -786,7 +786,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-03-firebase-canonical-1';
+const APP_VERSION = '2026-07-03-firebase-transport-recover-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -956,7 +956,7 @@ let transientNoticeTimer = null;
 const AUDIO_REQUEST_ACK_TIMEOUT_MS = 10000;
 const CHAT_RENDER_LIMIT = 50;
 const CHAT_PAGE_SIZE = 50;
-const CHAT_POLL_LIMIT = 10;
+const CHAT_POLL_LIMIT = 20;
 let currentMessageLimit = CHAT_RENDER_LIMIT;
 const MESSAGE_RECONCILE_DELAY_MS = 900;
 const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
@@ -972,6 +972,8 @@ let chatReloading = false;
 let chatHealthTimer = null;
 let lastMessageStreamActivityAt = 0;
 let chatStreamRestarting = false;
+let firebaseTransportRecovering = false;
+let firebaseTransportRecoverTimer = null;
 let messageReconcileTimer = null;
 let lastMessageReconcileAt = 0;
 let readReceiptFlushRunning = false;
@@ -1010,15 +1012,15 @@ sessionStorage.setItem('askviet_session_id', SESSION_ID);
 // phone hopping VN→TR can never count as two.
 const DEVICE_ID = localStorage.getItem('askviet_device_id') || ('d' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 localStorage.setItem('askviet_device_id', DEVICE_ID);
-const FIREBASE_REQUEST_TIMEOUT_MS = 4500;
+const FIREBASE_REQUEST_TIMEOUT_MS = 6500;
 const OUTGOING_RETRY_TIMEOUT_MS = 8000;
 const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
-const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 15000;
-const OUTGOING_UNKNOWN_RESEND_GAP_MS = 15000;
+const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 4000;
+const OUTGOING_UNKNOWN_RESEND_GAP_MS = 5000;
 const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
-const CHAT_STREAM_STALE_MS = 50000;
+const CHAT_STREAM_STALE_MS = 22000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
 const MAX_PERSISTED_READ_RECEIPTS = 120;
 const PENDING_ITEM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1686,6 +1688,11 @@ function isFirebaseTimeoutError(err) {
   return String(err && err.message || err || '').includes('Firebase bağlantısı zaman aşımına uğradı');
 }
 
+function isFirebaseNetworkError(err) {
+  const msg = String(err && err.message || err || '').toLowerCase();
+  return isFirebaseTimeoutError(err) || msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed');
+}
+
 async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS, retryOptions={}) {
   const method = String(options.method || 'GET').toUpperCase();
   const canRetryTimeout = retryOptions.retryTimeout === true || method === 'GET' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
@@ -1698,9 +1705,10 @@ async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQU
     }
     return r;
   } catch (e) {
-    if (!canRetryTimeout || !isFirebaseTimeoutError(e)) throw e;
+    if (!canRetryTimeout || !isFirebaseNetworkError(e)) throw e;
+    try { await refreshFirebaseAuth(true); } catch {}
     await new Promise(resolve => setTimeout(resolve, 450));
-    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs, 6500), 10000));
+    return fetchWithTimeout(await buildUrl(), options, Math.min(Math.max(timeoutMs, 8000), 12000));
   }
 }
 
@@ -2005,6 +2013,8 @@ function goBack() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   if (chatWatchdogTimer) { clearTimeout(chatWatchdogTimer); chatWatchdogTimer = null; }
   if (chatHealthTimer) { clearInterval(chatHealthTimer); chatHealthTimer = null; }
+  if (firebaseTransportRecoverTimer) { clearTimeout(firebaseTransportRecoverTimer); firebaseTransportRecoverTimer = null; }
+  firebaseTransportRecovering = false;
   if (outgoingRetryTimer) { clearTimeout(outgoingRetryTimer); outgoingRetryTimer = null; }
   if (outgoingUnknownTimer) { clearTimeout(outgoingUnknownTimer); outgoingUnknownTimer = null; }
   outgoingUnknownVerifying = false;
@@ -2167,9 +2177,12 @@ function initChat() {
       }
     }
   }, {
-    onactivity: () => { lastMessageStreamActivityAt = Date.now(); setConnected(true); },
-    onerror: () => { setConnected(false); recordConnectionEvent('message-stream-error'); },
-    onopen: () => { setConnected(true); recordConnectionEvent('message-stream-open'); }
+    onactivity: type => {
+      lastMessageStreamActivityAt = Date.now();
+      if (type === 'put' || type === 'patch') setConnected(true);
+    },
+    onerror: () => { setConnected(false, true); recordConnectionEvent('message-stream-error'); scheduleFirebaseTransportRecovery('message-stream-error', 1200); },
+    onopen: () => { recordConnectionEvent('message-stream-open'); }
   }, messageQuery(CHAT_PAGE_SIZE));
 
   unsubTyping = fbListen(TYPING_PATH, event => {
@@ -2218,11 +2231,12 @@ async function pollMessagesSnapshot(fresh=false) {
   try {
     const data = await fetchLatestMessages(CHAT_POLL_LIMIT);
     if (data) applyMessagesSnapshot(data, false);
-    setConnected(true);
+    if (!messageWriteBlocked) setConnected(true);
     return true;
   } catch (e) {
-    setConnected(false);
+    setConnected(false, true);
     recordConnectionEvent('message-poll-error', e?.message || e);
+    scheduleFirebaseTransportRecovery('message-poll-error', 1800);
     return false;
   } finally {
     scheduleChatWatchdog();
@@ -2248,7 +2262,7 @@ function startChatHealthWatchdog() {
   chatHealthTimer = setInterval(() => {
     if (!myRole || document.visibilityState === 'hidden' || chatStreamRestarting) return;
     if (Date.now() - lastMessageStreamActivityAt <= CHAT_STREAM_STALE_MS) return;
-    restartChatStreams();
+    scheduleFirebaseTransportRecovery('stale-message-stream', 0);
   }, 12000);
 }
 
@@ -2260,6 +2274,36 @@ function restartChatStreams() {
     initChat();
   } finally {
     setTimeout(() => { chatStreamRestarting = false; }, 1000);
+  }
+}
+
+function scheduleFirebaseTransportRecovery(reason='transport', delay=900) {
+  if (!myRole || document.visibilityState === 'hidden') return;
+  if (firebaseTransportRecoverTimer) clearTimeout(firebaseTransportRecoverTimer);
+  firebaseTransportRecoverTimer = setTimeout(() => {
+    firebaseTransportRecoverTimer = null;
+    recoverFirebaseTransport(reason);
+  }, Math.max(0, Number(delay) || 0));
+}
+
+async function recoverFirebaseTransport(reason='transport') {
+  if (!myRole || document.visibilityState === 'hidden' || firebaseTransportRecovering) return false;
+  firebaseTransportRecovering = true;
+  try {
+    recordConnectionEvent('firebase-transport-recover-' + reason);
+    await refreshFirebaseAuth(true).catch(() => {});
+    restartChatStreams();
+    await pollMessagesSnapshot(true);
+    await verifyFirebaseWriteHealth(reason);
+    flushOutgoingQueue(true);
+    if (hasUnknownOutgoingMessages()) scheduleUnknownOutgoingVerification(700);
+    return true;
+  } catch (e) {
+    setConnected(false, true);
+    recordConnectionEvent('firebase-transport-recover-error', e?.message || e);
+    return false;
+  } finally {
+    setTimeout(() => { firebaseTransportRecovering = false; }, 900);
   }
 }
 
@@ -2642,24 +2686,46 @@ function runAutoRefreshCheck() {
 
 let lastFirebaseHealthyAt = Date.now();
 let firebaseDisconnectTimer = null;
+let messageWriteBlocked = false;
 function setConnected(v, force=false) {
   const dot = document.getElementById('connDot');
   if (v) {
+    if (messageWriteBlocked && !force) return;
     lastFirebaseHealthyAt = Date.now();
     if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
     firebaseDisconnectTimer = null;
     if (dot) dot.classList.remove('off');
     return;
   }
-  if (!force && navigator.onLine !== false) {
-    const remaining = Math.max(0, 25000 - (Date.now() - lastFirebaseHealthyAt));
-    if (remaining > 0) {
-      if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
-      firebaseDisconnectTimer = setTimeout(() => setConnected(false, true), remaining);
-      return;
-    }
-  }
+  if (firebaseDisconnectTimer) clearTimeout(firebaseDisconnectTimer);
+  firebaseDisconnectTimer = null;
   if (dot) dot.classList.add('off');
+}
+
+async function verifyFirebaseWriteHealth(reason='health') {
+  if (!myRole || !firebaseAuth?.idToken) return false;
+  const key = String(SESSION_ID || 'web').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || ('web_' + Date.now());
+  const path = '/rooms/' + ROOM + '/clientHealth/' + key;
+  try {
+    const ok = await fbSet(path, {
+      role: myRole,
+      deviceId: DEVICE_ID,
+      reason,
+      at: { '.sv':'timestamp' }
+    }, 6500);
+    if (!ok) throw new Error('health-write-failed');
+    const probe = await fbGet(path, true);
+    if (!probe || probe.role !== myRole) throw new Error('health-read-mismatch');
+    await fbRemove(path).catch(() => {});
+    messageWriteBlocked = false;
+    setConnected(true, true);
+    return true;
+  } catch (e) {
+    messageWriteBlocked = true;
+    setConnected(false, true);
+    recordConnectionEvent('firebase-health-failed-' + reason, e?.message || e);
+    return false;
+  }
 }
 
 function appendLinkedText(el, text) {
@@ -5240,7 +5306,7 @@ async function verifyUnknownOutgoingMessages() {
           continue;
         }
         const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
-        setConnected(true);
+        if (!messageWriteBlocked) setConnected(true);
         if (remote && typeof remote === 'object') {
           confirmOutgoingMessage(item.key, remote);
           scheduleMessageSnapshotReconcile('outgoing-unknown-confirmed');
@@ -5279,8 +5345,9 @@ async function verifyUnknownOutgoingMessages() {
         updateDeliveryStatus(item.key, 'pending');
         debugLog('message_send_unknown_waiting_remote', { key:item.key, ageMs:age, attempts:Number(item.attempts || 0) });
       } catch (e) {
-        setConnected(false);
+        setConnected(false, true);
         recordConnectionEvent('message-unknown-verify-error', e?.message || e);
+        scheduleFirebaseTransportRecovery('unknown-verify-error', 900);
       }
     }
   } finally {
@@ -5311,11 +5378,13 @@ async function sendQueuedItem(item) {
       }, timeoutMs);
       return;
     }
-    setConnected(true);
+    messageWriteBlocked = false;
+    setConnected(true, true);
     confirmOutgoingMessage(item.key);
     scheduleMessageSnapshotReconcile('outgoing-sent');
   } catch (e) {
-    setConnected(false);
+    messageWriteBlocked = true;
+    setConnected(false, true);
     let remote = null;
     let verifyFailed = false;
     try { remote = await fbGet(MSGS_PATH + '/' + item.key, true); } catch { verifyFailed = true; }
@@ -5336,17 +5405,18 @@ async function sendQueuedItem(item) {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification();
+        scheduleFirebaseTransportRecovery('message-send-verify-timeout', 600);
+        scheduleUnknownOutgoingVerification(1200);
       } else if (ageMs > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification();
+        scheduleUnknownOutgoingVerification(2500);
       } else {
         item.state = 'unknown';
         item.nextRetryAt = 0;
         updateDeliveryStatus(item.key, 'pending');
-        scheduleUnknownOutgoingVerification(OUTGOING_UNKNOWN_VERIFY_DELAY_MS);
+        scheduleUnknownOutgoingVerification(1800);
       }
       persistPendingMessages();
     }
@@ -9427,8 +9497,10 @@ window.addEventListener('focus', () => {
   settleChatVisualViewport();
 });
 window.addEventListener('online', () => {
-  setConnected(true);
-  if (myRole) resumeChatTransport();
+  if (myRole) {
+    scheduleFirebaseTransportRecovery('browser-online', 0);
+    resumeChatTransport();
+  }
 });
 window.addEventListener('offline', () => setConnected(false, true));
 clearUnreadCount();
