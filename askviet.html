@@ -163,10 +163,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .translation-status-indicator.success{background:#22c55e}
 .translation-status-indicator.error{background:#ef4444}
 @keyframes translationSpin{to{transform:rotate(360deg)}}
-.remote-test-log{position:fixed;left:10px;right:10px;bottom:84px;z-index:9998;display:none;max-height:132px;overflow:auto;padding:8px 10px;border-radius:14px;border:1px solid rgba(167,139,250,.6);background:rgba(15,13,25,.94);color:#e9ddff;font-size:11px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-.remote-test-log.show{display:block}
-.remote-test-log strong{color:#fff;display:block;margin-bottom:4px}
-.remote-test-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
 .msg .msg-original.original-collapsible{background:#fdfdfd!important;color:#585862!important;font-size:13.5px;font-style:italic;font-weight:500;line-height:1.5;padding:11px 15px;border-radius:7px 7px 20px 20px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:none!important}
 .msg.theirs .msg-original.original-collapsible{border-bottom-left-radius:9px}
 .msg-original.compact-source{padding:5px 7px!important;background:#fff!important;color:#6d28d9!important;border:1px solid #ddd6fe!important;box-shadow:0 1px 4px rgba(0,0,0,.08)!important}
@@ -929,6 +925,7 @@ let translationRunTokens = new Map();
 let completedTranslationCache = new Map();
 let messageTranslationAttemptState = new Map();
 let messageTranslationIndicatorTimers = new Map();
+let messageTranslationFinalSeen = new Map();
 let serverTranslationRequestCache = new Map();
 let oldestVisibleMessage = null;
 let autoReadDone = new Set();
@@ -2726,6 +2723,7 @@ function renderMessage(key, msg) {
     trans.classList.add('primary-translation');
     const react = orig.querySelector('.msg-react-btn');
     if (react) trans.appendChild(react);
+    else addReactionButton(trans, key);
     bindBubbleDoubleTap(trans, key);
   }
   div.appendChild(trans);
@@ -2905,6 +2903,7 @@ function updateOrRender(key, msg) {
     }
   if (msg.ts) box.dataset.ts = msg.ts;
   if (msg.translationModel || msg.model) box.dataset.translationModel = msg.translationModel || msg.model || box.dataset.translationModel || '';
+  updateMessageTranslationIndicator(key, box.dataset.translation || '');
   if (msg.read?.tr) box.dataset.readTr = msg.read.tr;
   if (msg.read?.vi) box.dataset.readVi = msg.read.vi;
   if (Object.prototype.hasOwnProperty.call(msg, 'replyTo')) box.dataset.replyTo = JSON.stringify(msg.replyTo || {});
@@ -5473,16 +5472,22 @@ function updateMessageTranslationIndicator(key, value, options={}) {
     if (status.kind === 'trying') {
       const attempt = translationAttemptForModel(id, status.model);
       messageTranslationAttemptState.set(id, { attempt, model: status.model || '', at: Date.now() });
+      messageTranslationFinalSeen.delete(id);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
     if (status.kind === 'retry') {
       const attempt = translationAttemptForModel(id, status.nextModel || status.failedModel);
       messageTranslationAttemptState.set(id, { attempt, model: status.nextModel || status.failedModel || '', at: Date.now() });
+      messageTranslationFinalSeen.delete(id);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
     if (status.kind === 'error') {
+      if (options.initial) return;
+      const marker = String(value || '').trim();
+      if (marker && marker === messageTranslationFinalSeen.get(id)) return;
+      if (marker) messageTranslationFinalSeen.set(id, marker);
       const attempt = messageTranslationAttemptState.get(id)?.attempt || 1;
       setMessageTranslationIndicator(id, 'error', attempt, true);
       return;
@@ -5495,6 +5500,9 @@ function updateMessageTranslationIndicator(key, value, options={}) {
   }
   const isError = /^(ç|c)eviri hatas[ıi]\s*:|^(lỗi dịch|loi dich)\s*:/i.test(text);
   if (isError) {
+    if (options.initial) return;
+    if (text === messageTranslationFinalSeen.get(id)) return;
+    messageTranslationFinalSeen.set(id, text);
     setMessageTranslationIndicator(id, 'error', messageTranslationAttemptState.get(id)?.attempt || 1, true);
     return;
   }
@@ -5502,8 +5510,11 @@ function updateMessageTranslationIndicator(key, value, options={}) {
     if (!options.initial) setMessageTranslationIndicator(id, 'loading', messageTranslationAttemptState.get(id)?.attempt || 1, false);
     return;
   }
-  if (!options.initial) {
+  if (!options.initial && text !== messageTranslationFinalSeen.get(id)) {
+    messageTranslationFinalSeen.set(id, text);
     setMessageTranslationIndicator(id, 'success', messageTranslationAttemptState.get(id)?.attempt || 1, true);
+  } else if (options.initial || text === messageTranslationFinalSeen.get(id)) {
+    setMessageTranslationIndicator(id, '', 1, false);
   }
 }
 
@@ -6084,7 +6095,6 @@ function triggerPwaRemoteRole(role) {
 
 function handlePwaRemoteMediaAction(action) {
   const signature = 'media:' + normalizePwaMediaAction(action);
-  logPwaRemoteTestSignal('media', signature);
   if (pwaRemoteAssignRole) {
     savePwaRemoteSignature(pwaRemoteAssignRole, signature);
     return;
@@ -6109,7 +6119,6 @@ function beginPwaRemoteAssign(role) {
   installPwaMediaRemoteHandlers();
   startPwaRemoteKeepalive(20000);
   updatePwaRemoteButtons();
-  showPwaRemoteTestPanel();
   showTransientNotice((pwaRemoteAssignRole === 'vi' ? 'VI' : 'TR') + ' kumanda için şimdi tuşa bas', 8000);
 }
 
@@ -6146,7 +6155,6 @@ function pwaRemotePointerSignature(event) {
 function handlePwaRemotePointer(event) {
   const signature = pwaRemotePointerSignature(event);
   if (!signature) return;
-  logPwaRemoteTestSignal('pointer', signature);
   if (pwaRemoteAssignRole && event.target?.closest?.('.ptt-remote-btn') && Date.now() - pwaRemoteAssignStartedAt < 450) return;
   if (pwaRemoteAssignRole) {
     event.preventDefault();
@@ -6175,7 +6183,6 @@ function pwaRemoteWheelSignature(event) {
 function handlePwaRemoteWheel(event) {
   const signature = pwaRemoteWheelSignature(event);
   if (!signature) return;
-  logPwaRemoteTestSignal('wheel', signature);
   if (pwaRemoteAssignRole) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -6191,7 +6198,6 @@ function handlePwaRemoteWheel(event) {
 
 function handlePwaRemoteKey(event) {
   if (!event || event.isComposing) return;
-  logPwaRemoteTestSignal(event.type || 'key', pwaRemoteSignature(event));
   const target = event.target;
   if (!pwaRemoteAssignRole && target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
 
@@ -6212,46 +6218,10 @@ function handlePwaRemoteKey(event) {
   triggerPwaRemoteRole(role);
 }
 
-function ensurePwaRemoteTestPanel() {
-  let panel = document.getElementById('pwaRemoteTestLog');
-  if (panel) return panel;
-  panel = document.createElement('div');
-  panel.id = 'pwaRemoteTestLog';
-  panel.className = 'remote-test-log';
-  panel.innerHTML = '<strong>Kumanda test günlüğü</strong><div id="pwaRemoteTestLines"></div>';
-  document.body.appendChild(panel);
-  return panel;
-}
-
-function showPwaRemoteTestPanel() {
-  ensurePwaRemoteTestPanel().classList.add('show');
-}
-
-function logPwaRemoteTestSignal(kind, signature) {
-  if (!signature) return;
-  const panel = ensurePwaRemoteTestPanel();
-  const lines = document.getElementById('pwaRemoteTestLines');
-  if (!lines) return;
-  panel.classList.add('show');
-  const row = document.createElement('div');
-  row.className = 'remote-test-line';
-  row.textContent = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }) + '  ' + kind + '  ' + signature;
-  lines.prepend(row);
-  while (lines.children.length > 12) lines.lastChild.remove();
-}
-
-function handlePwaRemoteDebugClick(event) {
-  if (!pwaRemoteAssignRole) return;
-  const target = event.target;
-  if (target?.closest?.('.ptt-remote-btn')) return;
-  logPwaRemoteTestSignal('click', pwaRemoteClickSignature(event));
-}
-
 window.addEventListener('keydown', handlePwaRemoteKey, true);
 window.addEventListener('keyup', handlePwaRemoteKey, true);
 window.addEventListener('pointerdown', handlePwaRemotePointer, true);
 window.addEventListener('wheel', handlePwaRemoteWheel, { capture:true, passive:false });
-window.addEventListener('click', handlePwaRemoteDebugClick, true);
 // Generic click is intentionally not captured: on iOS AssistiveTouch it can be
 // indistinguishable from a normal finger tap, which would make every tap open PTT.
 installPwaMediaRemoteHandlers();
