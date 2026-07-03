@@ -2845,6 +2845,7 @@ function renderMessage(key, msg) {
   const typing = document.getElementById('typingIndicator');
   document.getElementById('messages').insertBefore(div, typing);
   refreshMessageText(key);
+  ensureMessageReactionButton(key);
   updateReactions(key, msg.reactions, msg.reactionState);
   updateDeliveryStatus(key, msg.delivery || (msg.localPending ? 'pending' : 'sent'));
   updateReadStatus(key);
@@ -3282,6 +3283,38 @@ function addReactionButton(parent, key) {
   btn.addEventListener('selectstart', e => e.preventDefault());
   btn.onclick = e => { e.preventDefault(); e.stopPropagation(); };
   parent.appendChild(btn);
+}
+
+function ensureMessageReactionButton(key) {
+  const box = document.getElementById('msg-' + key);
+  if (!box || box.dataset.deleted === '1') return;
+  const type = box.dataset.type || '';
+  if (type === 'image' || type === 'video') return;
+  box.querySelectorAll('.msg-react-btn').forEach(btn => btn.remove());
+  const target = box.classList.contains('theirs')
+    ? document.getElementById('trans-' + key)
+    : document.getElementById('orig-' + key);
+  if (target) addReactionButton(target, key);
+}
+
+function setMessageLanguageExpanded(key, expanded) {
+  const box = document.getElementById('msg-' + key);
+  if (!box) return;
+  const isMine = box.classList.contains('mine');
+  const role = box.dataset.role || '';
+  const sourceFlag = role === 'tr' ? '🇹🇷' : '🇻🇳';
+  const targetFlag = role === 'tr' ? '🇻🇳' : '🇹🇷';
+  const row = box.querySelector('.msg-language-row');
+  const toggle = row?.querySelector?.('.msg-language-toggle');
+  const trans = document.getElementById('trans-' + key);
+  const orig = document.getElementById('orig-' + key);
+  if (isMine) {
+    if (trans) trans.classList.toggle('language-collapsed', !expanded);
+    if (toggle) toggle.textContent = targetFlag + ' ' + (expanded ? uiText('Çeviriyi gizle', 'Ẩn bản dịch') : uiText('Çeviriyi göster', 'Xem bản dịch'));
+  } else {
+    if (orig) orig.classList.toggle('language-collapsed', !expanded);
+    if (toggle) toggle.textContent = sourceFlag + ' ' + (expanded ? uiText('Orijinali gizle', 'Ẩn bản gốc') : uiText('Orijinali göster', 'Xem bản gốc'));
+  }
 }
 
 async function copyTextFallback(text) {
@@ -3909,6 +3942,7 @@ function refreshMessageText(key) {
     trans.style.color = waiting ? 'var(--tr2)' : '';
     trans.style.fontStyle = waiting ? 'normal' : 'italic';
   }
+  ensureMessageReactionButton(key);
 }
 
 function scheduleReadReceiptFlush(delay=0) {
@@ -5460,6 +5494,7 @@ function setMessageTranslationIndicator(key, mode, attempt=1, autoHide=false) {
       el.className = 'translation-status-indicator';
       el.textContent = '';
       messageTranslationIndicatorTimers.delete(id);
+      setMessageLanguageExpanded(id, false);
     }, 1000);
     messageTranslationIndicatorTimers.set(id, timer);
   }
@@ -5473,6 +5508,7 @@ function updateMessageTranslationIndicator(key, value, options={}) {
       const attempt = translationAttemptForModel(id, status.model);
       messageTranslationAttemptState.set(id, { attempt, model: status.model || '', at: Date.now() });
       messageTranslationFinalSeen.delete(id);
+      setMessageLanguageExpanded(id, true);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
@@ -5480,6 +5516,7 @@ function updateMessageTranslationIndicator(key, value, options={}) {
       const attempt = translationAttemptForModel(id, status.nextModel || status.failedModel);
       messageTranslationAttemptState.set(id, { attempt, model: status.nextModel || status.failedModel || '', at: Date.now() });
       messageTranslationFinalSeen.delete(id);
+      setMessageLanguageExpanded(id, true);
       setMessageTranslationIndicator(id, 'loading', attempt, false);
       return;
     }
