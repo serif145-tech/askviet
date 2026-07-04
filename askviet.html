@@ -8576,7 +8576,7 @@ function resetMicrophoneAudioContext() {
 async function ensureAudioCtx(){
   try{
     if(!recAudioCtx||recAudioCtx.state==='closed') recAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    if(recAudioCtx.state==='suspended') await recAudioCtx.resume();
+    if(recAudioCtx.state==='suspended') await withTimeout(recAudioCtx.resume(), 3000, 'Ses motoru').catch(()=>{});
   }catch{}
   return recAudioCtx;
 }
@@ -8696,6 +8696,7 @@ async function transcribeVoiceOpenAI(blob, voiceRoleOverride, keyOverride) {
 // ── AskViet pseudo Live: Android mantığı, eski canlı motor yerine ─────────
 let pseudoLiveRunning=false;
 let pseudoLiveStarting=false;
+let pseudoLiveStartToken=0;
 let pseudoLiveStream=null;
 let pseudoLiveLastAudioAt=0;
 let pseudoLiveCtx=null;
@@ -8847,12 +8848,18 @@ function toggleRealLive(force) {
 }
 
 async function toggleGeminiLiveMain() {
-  if (pseudoLiveStarting) return;
+  if (pseudoLiveStarting) {
+    pseudoLiveStartToken++;
+    pseudoLiveStarting = false;
+    stopPseudoLive(false);
+    return;
+  }
   if (pseudoLiveRunning) {
     stopPseudoLive(false);
     return;
   }
   if (myRole !== 'tr') return;
+  const startToken = ++pseudoLiveStartToken;
   pseudoLiveStarting = true;
   let preparedStream = null;
   try {
@@ -8860,18 +8867,30 @@ async function toggleGeminiLiveMain() {
     updateLiveMainButton(true);
     setRealLiveStatus('Mikrofon hazırlanıyor...', 'loading');
     const streamPromise = requestMicrophoneStreamWithTimeout('live', 8000);
-    await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
+    unlockAudio(true).catch(()=>{});
+    keepAudioAwake(90000).catch(()=>{});
     preparedStream = await streamPromise;
+    if (startToken !== pseudoLiveStartToken || !pseudoLiveStarting) {
+      try { preparedStream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
+      preparedStream = null;
+      return;
+    }
     await startPseudoLive(preparedStream);
     preparedStream = null;
   } catch (err) {
+    if (startToken !== pseudoLiveStartToken || !pseudoLiveStarting) {
+      if (preparedStream) {
+        try { preparedStream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
+      }
+      return;
+    }
     if (preparedStream) {
       try { preparedStream.getTracks().forEach(track => { track.onended = null; track.stop(); }); } catch {}
     }
     setRealLiveStatus('Live başlatılamadı: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'error');
     stopPseudoLive(true);
   } finally {
-    pseudoLiveStarting = false;
+    if (startToken === pseudoLiveStartToken) pseudoLiveStarting = false;
   }
 }
 
@@ -8980,11 +8999,20 @@ function speakLastLive() {
 // Live looks running but hears nothing. On returning to foreground, detect a
 // dead track/context and rebuild the whole capture pipeline automatically.
 let micReviveHideTimer = null;
+let micReviveSpinTimer = null;
 function showMicRevive(mode) {
   const o = document.getElementById('micReviveOverlay');
   if (!o) return;
   if (micReviveHideTimer) { clearTimeout(micReviveHideTimer); micReviveHideTimer = null; }
-  if (mode === 'spin') { o.classList.remove('ok'); o.classList.add('show'); }
+  if (micReviveSpinTimer) { clearTimeout(micReviveSpinTimer); micReviveSpinTimer = null; }
+  if (mode === 'spin') {
+    o.classList.remove('ok');
+    o.classList.add('show');
+    micReviveSpinTimer = setTimeout(() => {
+      o.classList.remove('show', 'ok');
+      micReviveSpinTimer = null;
+    }, 12000);
+  }
   else if (mode === 'ok') {
     o.classList.add('show', 'ok');
     micReviveHideTimer = setTimeout(() => { o.classList.remove('show', 'ok'); }, 1400);
@@ -9052,7 +9080,8 @@ async function manualMicRefresh() {
     try { resetMicrophoneAudioContext(); } catch {}
     primeAudioForGesture();
     const streamPromise = requestMicrophoneStreamWithTimeout(restartLive ? 'live' : 'mic', 8000);
-    await Promise.allSettled([unlockAudio(true), keepAudioAwake(90000)]);
+    unlockAudio(true).catch(()=>{});
+    keepAudioAwake(90000).catch(()=>{});
     freshStream = await streamPromise;
     if (restartLive) {
       await startPseudoLive(freshStream);
