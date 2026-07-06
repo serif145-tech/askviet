@@ -803,7 +803,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-06-phone-tts-voices-witch-fix-1';
+const APP_VERSION = '2026-07-06-stt-timeout-cue-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -980,6 +980,7 @@ const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
 const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
+const STT_TIMEOUT_MS = 14000;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const AUTO_REFRESH_IDLE_MS = 4 * 60 * 1000;
 let autoRefreshTimer = null;
@@ -1254,16 +1255,27 @@ async function dbUrl(path, extra='') {
   return dbUrlWithToken(path, await getFirebaseIdToken(), extra);
 }
 
-async function askVietServer(action, payload={}) {
+async function askVietServer(action, payload={}, timeoutMs=0) {
   const token = await getFirebaseIdToken();
-  const r = await fetch(ASKVIET_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token
-    },
-    body: JSON.stringify(Object.assign({ action }, payload))
-  });
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  let r;
+  try {
+    r = await fetch(ASKVIET_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      signal: controller ? controller.signal : undefined,
+      body: JSON.stringify(Object.assign({ action }, payload))
+    });
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error((action === 'transcribe' ? 'Ses metne çevirme' : 'İstek') + ' zaman aşımına uğradı');
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.ok === false) throw new Error(data.error || r.statusText || ('HTTP ' + r.status));
   return data;
@@ -1433,18 +1445,11 @@ function availablePhoneTtsVoices(role) {
 }
 
 function phoneTtsVoiceOptions(role) {
-  const values = ['Sistem'];
-  availablePhoneTtsVoices(role).forEach(voice => {
-    const id = phoneTtsVoiceId(voice);
-    if (id && !values.includes(id)) values.push(id);
-  });
-  return values;
+  return ['Sistem', 'Erkek 1', 'Erkek 2', 'Erkek 3', 'Kadın 1', 'Kadın 2', 'Kadın 3'];
 }
 
 function phoneTtsVoiceLabel(id, role) {
-  if (!id || id === 'Sistem') return 'Sistem';
-  const voice = availablePhoneTtsVoices(role).find(v => phoneTtsVoiceId(v) === id);
-  return voice ? `${voice.name} (${voice.lang})` : id;
+  return id || 'Sistem';
 }
 
 function ttsVoiceStorageKey(model, role) {
@@ -7828,11 +7833,27 @@ function pickPhoneTtsVoice(target, preferred) {
   const langPrefix = target === 'vi' ? 'vi' : 'tr';
   const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
   const wanted = String(preferred || '').trim();
+  const matching = voices
+    .filter(v => String(v.lang || '').toLowerCase().startsWith(langPrefix))
+    .sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
   if (wanted && wanted !== 'Sistem') {
-    const selected = voices.find(v => phoneTtsVoiceId(v) === wanted);
-    if (selected) return selected;
+    const lower = wanted.toLocaleLowerCase('tr');
+    const female = lower.startsWith('kad');
+    const male = lower.startsWith('erk');
+    const n = Math.max(1, Math.min(3, parseInt(wanted.replace(/\D+/g, ''), 10) || 1));
+    const genderHints = female
+      ? ['female', 'woman', 'fem', 'kad', 'kadin', 'nữ', 'nu']
+      : ['male', 'man', 'masc', 'erk', 'nam'];
+    const gendered = (female || male)
+      ? matching.filter(v => genderHints.some(h => String((v.name || '') + ' ' + (v.voiceURI || '')).toLocaleLowerCase('tr').includes(h)))
+      : [];
+    const source = gendered.length ? gendered : matching;
+    if (source.length) {
+      const index = gendered.length ? n - 1 : ((n - 1) * 2 + (male ? 1 : 0));
+      return source[index] || source[(n - 1) % source.length] || source[0];
+    }
   }
-  return voices.find(v => String(v.lang || '').toLowerCase().startsWith(langPrefix))
+  return matching[0]
     || voices.find(v => target === 'vi'
       ? /vietnam|viet|vi-/i.test((v.name || '') + ' ' + (v.lang || ''))
       : /turk|tr-/i.test((v.name || '') + ' ' + (v.lang || '')))
@@ -8832,7 +8853,7 @@ async function transcribeVoiceDetailed(blob, sourceOverride) {
     mime: blob.type || 'audio/webm',
     sourceRole: voiceRole,
     transcribeEngine: getTranscribeEngine()
-  });
+  }, STT_TIMEOUT_MS);
   const text = String(data.text || '').trim();
   if (!text) throw new Error('Ses metne çevrilemedi');
   return {text,model:String(data.model || '')};
@@ -9672,7 +9693,7 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
       sourceRole: 'auto',
       live: true,
       transcribeEngine: settings.model
-    });
+    }, STT_TIMEOUT_MS);
   } catch (err) {
     return { type:'error', message:'Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr') };
   }
