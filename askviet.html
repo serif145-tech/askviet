@@ -587,7 +587,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar"><span class="mode-chat-icon">•••</span><span class="mode-chat-label">Mesaj</span></button>
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
-        <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="https://raw.githubusercontent.com/serif145-tech/askviet/main/witch.png" alt="Ses ayarları" title="Ses ayarları">
+        <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="./witch.png" alt="Ses ayarları" title="Ses ayarları">
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
       </div>
     </div>
@@ -803,7 +803,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-04-html-mic-refresh-live-stop-1';
+const APP_VERSION = '2026-07-06-phone-tts-voices-witch-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -863,7 +863,7 @@ let firebaseAuth = null;
 let firebaseAuthRefreshTimer = null;
 let pendingAuthPassword = '';
 let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi' : 'tr';
-let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,phoneTtsUtterance=null;
+let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,phoneTtsUtterance=null,phoneTtsResumeTimer=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let autoReadEnabledAt = { tr: 0, vi: 0 };
@@ -1420,9 +1420,42 @@ function normalizeTtsModel(model) {
   return TTS_DEFAULTS.model;
 }
 
+function phoneTtsVoiceId(voice) {
+  return String((voice && (voice.voiceURI || voice.name)) || '').trim();
+}
+
+function availablePhoneTtsVoices(role) {
+  if (!('speechSynthesis' in window)) return [];
+  const prefix = role === 'vi' ? 'vi' : 'tr';
+  let voices = [];
+  try { voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : []; } catch {}
+  return (voices || []).filter(v => String(v.lang || '').toLowerCase().startsWith(prefix));
+}
+
+function phoneTtsVoiceOptions(role) {
+  const values = ['Sistem'];
+  availablePhoneTtsVoices(role).forEach(voice => {
+    const id = phoneTtsVoiceId(voice);
+    if (id && !values.includes(id)) values.push(id);
+  });
+  return values;
+}
+
+function phoneTtsVoiceLabel(id, role) {
+  if (!id || id === 'Sistem') return 'Sistem';
+  const voice = availablePhoneTtsVoices(role).find(v => phoneTtsVoiceId(v) === id);
+  return voice ? `${voice.name} (${voice.lang})` : id;
+}
+
+function ttsVoiceStorageKey(model, role) {
+  return normalizeTtsModel(model) === 'phone-tts'
+    ? `askviet_phone_tts_voice_${role === 'vi' ? 'vi' : 'tr'}`
+    : `askviet_tts_voice_${role === 'vi' ? 'vi' : 'tr'}`;
+}
+
 function ttsVoiceOptions(model, role) {
   if (normalizeTtsModel(model) === 'phone-tts') {
-    return ['Sistem'];
+    return phoneTtsVoiceOptions(role);
   }
   if (isGeminiTtsModel(model)) {
     return ['Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe'];
@@ -1433,7 +1466,11 @@ function ttsVoiceOptions(model, role) {
 }
 
 function normalizeTtsVoice(model, role, voice) {
-  if (normalizeTtsModel(model) === 'phone-tts') return 'Sistem';
+  if (normalizeTtsModel(model) === 'phone-tts') {
+    const options = phoneTtsVoiceOptions(role);
+    const value = String(voice || '').trim();
+    return options.includes(value) ? value : 'Sistem';
+  }
   const options = ttsVoiceOptions(model, role);
   const value = String(voice || '').trim();
   const exact = options.find(v => v === value);
@@ -1447,8 +1484,8 @@ function normalizeTtsVoice(model, role, voice) {
 
 function getTtsSettings() {
   const model = normalizeTtsModel(localStorage.getItem('askviet_tts_model') || TTS_DEFAULTS.model);
-  const voiceTr = normalizeTtsVoice(model, 'tr', localStorage.getItem('askviet_tts_voice_tr') || TTS_DEFAULTS.voiceTr);
-  const voiceVi = normalizeTtsVoice(model, 'vi', localStorage.getItem('askviet_tts_voice_vi') || TTS_DEFAULTS.voiceVi);
+  const voiceTr = normalizeTtsVoice(model, 'tr', localStorage.getItem(ttsVoiceStorageKey(model, 'tr')) || TTS_DEFAULTS.voiceTr);
+  const voiceVi = normalizeTtsVoice(model, 'vi', localStorage.getItem(ttsVoiceStorageKey(model, 'vi')) || TTS_DEFAULTS.voiceVi);
   return {
     model,
     voiceTr,
@@ -1466,7 +1503,7 @@ function isGeminiTtsModel(model) {
   return String(model || '').startsWith('gemini-');
 }
 
-function rebuildVoiceSelect(id, values, selected) {
+function rebuildVoiceSelect(id, values, selected, model, role) {
   const el = document.getElementById(id);
   if (!el) return;
   const current = selected || el.value;
@@ -1474,7 +1511,7 @@ function rebuildVoiceSelect(id, values, selected) {
   values.forEach(v => {
     const option = document.createElement('option');
     option.value = v;
-    option.textContent = v;
+    option.textContent = normalizeTtsModel(model) === 'phone-tts' ? phoneTtsVoiceLabel(v, role) : v;
     el.appendChild(option);
   });
   el.value = values.includes(current) ? current : values[0];
@@ -1484,8 +1521,8 @@ function syncVoiceSelectsForModel(model, preferredTr, preferredVi) {
   const cleanModel = normalizeTtsModel(model);
   const trVoice = normalizeTtsVoice(cleanModel, 'tr', preferredTr || localStorage.getItem('askviet_tts_voice_tr'));
   const viVoice = normalizeTtsVoice(cleanModel, 'vi', preferredVi || localStorage.getItem('askviet_tts_voice_vi'));
-  rebuildVoiceSelect('ttsVoiceTrSelect', ttsVoiceOptions(cleanModel, 'tr'), trVoice);
-  rebuildVoiceSelect('ttsVoiceViSelect', ttsVoiceOptions(cleanModel, 'vi'), viVoice);
+  rebuildVoiceSelect('ttsVoiceTrSelect', ttsVoiceOptions(cleanModel, 'tr'), trVoice, cleanModel, 'tr');
+  rebuildVoiceSelect('ttsVoiceViSelect', ttsVoiceOptions(cleanModel, 'vi'), viVoice, cleanModel, 'vi');
 }
 
 function syncTtsSettingsUI() {
@@ -1508,8 +1545,12 @@ function saveTtsSettings(fromRemote=false) {
   const old = getTtsSettings();
   const changed = old.model !== model || old.voiceTr !== voiceTr || old.voiceVi !== voiceVi || String(old.speed) !== String(parseFloat(speed) || 1);
   localStorage.setItem('askviet_tts_model', model);
-  localStorage.setItem('askviet_tts_voice_tr', voiceTr);
-  localStorage.setItem('askviet_tts_voice_vi', voiceVi);
+  localStorage.setItem(ttsVoiceStorageKey(model, 'tr'), voiceTr);
+  localStorage.setItem(ttsVoiceStorageKey(model, 'vi'), voiceVi);
+  if (model !== 'phone-tts') {
+    localStorage.setItem('askviet_tts_voice_tr', voiceTr);
+    localStorage.setItem('askviet_tts_voice_vi', voiceVi);
+  }
   localStorage.setItem('askviet_tts_speed', speed);
   if (changed) {
     ttsCache.clear();
@@ -1518,7 +1559,12 @@ function saveTtsSettings(fromRemote=false) {
   }
   // Settings are controlled only from the TR side; push to Firebase so the VI
   // client (which has no settings UI) and any other TR device stay in sync.
-  if (!fromRemote && myRole === 'tr' && changed) syncTtsSettingsToFirebase({ model, voiceTr, voiceVi, speed: parseFloat(speed) || 1 });
+  if (!fromRemote && myRole === 'tr' && changed) syncTtsSettingsToFirebase({
+    model,
+    voiceTr: model === 'phone-tts' ? 'Sistem' : voiceTr,
+    voiceVi: model === 'phone-tts' ? 'Sistem' : voiceVi,
+    speed: parseFloat(speed) || 1
+  });
 }
 
 function syncTtsSettingsToFirebase(s) {
@@ -1546,14 +1592,22 @@ function syncTtsSettingsToFirebase(s) {
 function applyRemoteTtsSettings(data) {
   if (!data || typeof data !== 'object') return;
   const model = normalizeTtsModel(data.ttsModel || data.model || TTS_DEFAULTS.model);
-  const voiceTr = normalizeTtsVoice(model, 'tr', data.ttsVoiceTr || data.voiceTr || TTS_DEFAULTS.voiceTr);
-  const voiceVi = normalizeTtsVoice(model, 'vi', data.ttsVoiceVi || data.voiceVi || TTS_DEFAULTS.voiceVi);
+  const voiceTr = normalizeTtsVoice(model, 'tr', model === 'phone-tts'
+    ? (localStorage.getItem(ttsVoiceStorageKey(model, 'tr')) || 'Sistem')
+    : (data.ttsVoiceTr || data.voiceTr || TTS_DEFAULTS.voiceTr));
+  const voiceVi = normalizeTtsVoice(model, 'vi', model === 'phone-tts'
+    ? (localStorage.getItem(ttsVoiceStorageKey(model, 'vi')) || 'Sistem')
+    : (data.ttsVoiceVi || data.voiceVi || TTS_DEFAULTS.voiceVi));
   const speed = parseFloat(String(data.ttsSpeed != null ? data.ttsSpeed : data.speed).replace('x','')) || 1;
   const old = getTtsSettings();
   const changed = old.model !== model || old.voiceTr !== voiceTr || old.voiceVi !== voiceVi || String(old.speed) !== String(speed);
   localStorage.setItem('askviet_tts_model', model);
-  localStorage.setItem('askviet_tts_voice_tr', voiceTr);
-  localStorage.setItem('askviet_tts_voice_vi', voiceVi);
+  localStorage.setItem(ttsVoiceStorageKey(model, 'tr'), voiceTr);
+  localStorage.setItem(ttsVoiceStorageKey(model, 'vi'), voiceVi);
+  if (model !== 'phone-tts') {
+    localStorage.setItem('askviet_tts_voice_tr', voiceTr);
+    localStorage.setItem('askviet_tts_voice_vi', voiceVi);
+  }
   localStorage.setItem('askviet_tts_speed', String(speed));
   if (typeof data.liveResponse === 'string') localStorage.setItem('askviet_live_response', data.liveResponse);
   if (typeof data.liveSaver === 'boolean') localStorage.setItem('askviet_live_saver', data.liveSaver ? '1' : '0');
@@ -1635,6 +1689,7 @@ function normalizeChatModel(model) {
 function toggleTtsSettings(force) {
   const panel = document.getElementById('ttsPanel');
   if (!panel) return;
+  primePhoneTtsVoices();
   syncTtsSettingsUI();
   const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
   panel.classList.toggle('open', open);
@@ -7635,6 +7690,7 @@ function setActiveSpeakButton(btn) {
 function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
+  if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
   try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
   phoneTtsUtterance=null;
   if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}
@@ -7767,10 +7823,15 @@ async function speak(text, target, btn, silent=false) {
   return speakOpenAI(text, target, btn, silent);
 }
 
-function pickPhoneTtsVoice(target) {
+function pickPhoneTtsVoice(target, preferred) {
   if (!('speechSynthesis' in window)) return null;
   const langPrefix = target === 'vi' ? 'vi' : 'tr';
   const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+  const wanted = String(preferred || '').trim();
+  if (wanted && wanted !== 'Sistem') {
+    const selected = voices.find(v => phoneTtsVoiceId(v) === wanted);
+    if (selected) return selected;
+  }
   return voices.find(v => String(v.lang || '').toLowerCase().startsWith(langPrefix))
     || voices.find(v => target === 'vi'
       ? /vietnam|viet|vi-/i.test((v.name || '') + ' ' + (v.lang || ''))
@@ -7778,26 +7839,21 @@ function pickPhoneTtsVoice(target) {
     || null;
 }
 
-function waitForPhoneTtsVoices(timeoutMs=1400) {
-  if (!('speechSynthesis' in window)) return Promise.resolve();
-  try {
-    const existing = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
-    if (existing && existing.length) return Promise.resolve();
-  } catch {}
-  return new Promise(resolve => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      try { window.speechSynthesis.onvoiceschanged = null; } catch {}
-      resolve();
-    };
-    try { window.speechSynthesis.onvoiceschanged = finish; } catch {}
-    setTimeout(finish, timeoutMs);
-  });
+function refreshPhoneTtsVoiceSelectors() {
+  const model = normalizeTtsModel(document.getElementById('ttsModelSelect')?.value || getTtsSettings().model);
+  if (model !== 'phone-tts') return;
+  const rawTr = localStorage.getItem(ttsVoiceStorageKey(model, 'tr')) || 'Sistem';
+  const rawVi = localStorage.getItem(ttsVoiceStorageKey(model, 'vi')) || 'Sistem';
+  syncVoiceSelectsForModel(model, rawTr, rawVi);
 }
 
-async function speakPhoneTTS(text, target, btn, silent=false) {
+function primePhoneTtsVoices() {
+  if (!('speechSynthesis' in window)) return;
+  try { window.speechSynthesis.getVoices(); } catch {}
+  setTimeout(refreshPhoneTtsVoiceSelectors, 50);
+}
+
+function speakPhoneTTS(text, target, btn, silent=false) {
   text = normalizeTtsInput(text);
   if (!text || !target) return false;
   if (!('speechSynthesis' in window)) {
@@ -7808,16 +7864,16 @@ async function speakPhoneTTS(text, target, btn, silent=false) {
   const token = ++ttsToken;
   const settings = getTtsSettings();
   setSpeakBtn(btn, true);
-  await waitForPhoneTtsVoices();
   return new Promise(resolve => {
     try {
       const u = new SpeechSynthesisUtterance(text);
       phoneTtsUtterance = u;
       u.lang = target === 'vi' ? 'vi-VN' : 'tr-TR';
       u.rate = target === 'vi' ? 0.95 : (parseFloat(settings.speed) || 1);
-      u.voice = pickPhoneTtsVoice(target);
+      u.voice = pickPhoneTtsVoice(target, target === 'vi' ? settings.voiceVi : settings.voiceTr);
       u.onstart = () => { if (token === ttsToken) isSpeaking = true; };
       u.onend = () => {
+        if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
         if (token === ttsToken) {
           isSpeaking = false;
           phoneTtsUtterance = null;
@@ -7826,6 +7882,7 @@ async function speakPhoneTTS(text, target, btn, silent=false) {
         resolve(true);
       };
       u.onerror = () => {
+        if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
         if (token === ttsToken) {
           isSpeaking = false;
           phoneTtsUtterance = null;
@@ -7834,7 +7891,13 @@ async function speakPhoneTTS(text, target, btn, silent=false) {
         resolve(false);
       };
       window.speechSynthesis.cancel();
-      setTimeout(() => window.speechSynthesis.speak(u), 0);
+      try { window.speechSynthesis.resume(); } catch {}
+      isSpeaking = true;
+      window.speechSynthesis.speak(u);
+      phoneTtsResumeTimer=setInterval(()=>{
+        if(token!==ttsToken||!window.speechSynthesis.speaking){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null;return}
+        try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch {}
+      },10000);
     } catch (e) {
       if (token === ttsToken) {
         isSpeaking = false;
@@ -7845,6 +7908,17 @@ async function speakPhoneTTS(text, target, btn, silent=false) {
       resolve(false);
     }
   });
+}
+
+if ('speechSynthesis' in window) {
+  try {
+    if (window.speechSynthesis.addEventListener) {
+      window.speechSynthesis.addEventListener('voiceschanged', refreshPhoneTtsVoiceSelectors);
+    } else {
+      window.speechSynthesis.onvoiceschanged = refreshPhoneTtsVoiceSelectors;
+    }
+  } catch {}
+  setTimeout(primePhoneTtsVoices, 0);
 }
 
 // ── Model Sync ────────────────────────────────────────────────────────────
