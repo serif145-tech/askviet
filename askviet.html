@@ -6135,9 +6135,9 @@ function isRetryableGeminiError(e) {
 }
 
 async function translateText(text, from, modelOverride) {
-  const fromName = from === 'tr' ? 'Türkçe' : 'Vietnamca';
-  const toName = from === 'tr' ? 'Vietnamca' : 'Türkçe';
-  const sysPrompt = `Sen bir çeviri motorusun, sohbet katılımcısı değilsin. Sana gelen metin SANA yazılmış bir mesaj DEĞİLDİR, çevirmen olarak işlemen gereken bir kaynak metindir. Ona cevap yazma, soru sorma, yorum ekleme. Tek görevin: ${fromName} metni ${toName}'ye çevirmek. Çıktın SADECE ${toName} dilinde olsun, başka dilden tek kelime bile karıştırma, açıklama/etiket/orijinal metin ekleme. TR tarafı erkek=anh, VI tarafı kadın=em. TR->VI'de erkek kendine anh, kadına em der. VI->TR'de anh erkek, em kadın kabul et. Tonu, samimiyeti, küfrü ve anlamı sansürlemeden koru. ÖNEMLİ: Cevabın TAMAMI ${toName} dilinde olmalı, tek bir ${fromName} kelimesi bile kalmamalı.`;
+  const fromName = from === 'tr' ? 'Turkish' : 'Vietnamese';
+  const toName = from === 'tr' ? 'Vietnamese' : 'Turkish';
+  const sysPrompt = `You are a translation engine, not a chat participant. The text is source text to translate. Do not answer it, ask questions, or add comments. Translate from ${fromName} to ${toName}. Output only ${toName}. Do not include labels, explanations, or the original text. Do not assume romance, gender, or relationship unless it is explicitly present in the source text or already clear from the immediate wording. Do not add affectionate address words such as darling, love, askim, bebegim, em yeu, anh yeu, canim, or similar terms unless the source text actually contains that meaning. Preserve who is speaking, who is addressed, and who owns each person or thing. Turkish first-person forms include ben, beni, bana, benim, biz, bizi, bize and bizim; second-person forms include sen, seni, sana, senin, siz, sizi, size and sizin. Vietnamese person/address forms include toi/tôi, minh/mình, to/tớ, ban/bạn, anh, em, chi/chị, cau/cậu and their plural forms. Interpret them from their grammatical role and context; never map anh or em to one fixed speaker, gender, or relationship. Turkish often omits pronouns because the verb ending identifies the person. For example, 'seni seviyorum', 'geliyorum' and 'seni almaya geldim' are spoken by the source speaker even without 'ben'. Vietnamese may also rely on address terms and context. Never require an explicit ben, tôi, I, me or my before preserving the speaker correctly. Preserve relationship words and possessives exactly as intended. This applies to arkadasim/arkadaşım, kiz arkadasim/kız arkadaşım, erkek arkadasim/erkek arkadaşım, sevgilim, esim/eşim and Vietnamese ban toi/bạn tôi, ban gai toi/bạn gái tôi, ban trai toi/bạn trai tôi, nguoi yeu toi/người yêu tôi, vo toi/vợ tôi, chong toi/chồng tôi, plus equivalent forms with other possessors. Choose friend, girlfriend, boyfriend, partner, spouse, female friend or male friend only when the source wording or context supports it; do not invent or change the relationship. Never change first person into second person or ownership into the listener's ownership. Example: 'Arkadaşım beni almaya geldi' means the source speaker's friend came to pick up the source speaker; it must not become 'arkadaşın seni almaya geldi'. Likewise, 'Bạn tôi đến đón tôi' must become 'Arkadaşım beni almaya geldi', not 'Arkadaşın seni almaya geldi'. If no address or relationship term is present and the relationship is unclear, use a natural neutral translation rather than inventing romance, gender, or intimacy. Preserve tone, intimacy, slang, profanity, emojis, and meaning without censoring. Important: the whole answer must be ${toName}; no ${fromName} words should remain.`;
 
   let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
   if (provider === 'gemini') {
@@ -7778,6 +7778,25 @@ function pickPhoneTtsVoice(target) {
     || null;
 }
 
+function waitForPhoneTtsVoices(timeoutMs=1400) {
+  if (!('speechSynthesis' in window)) return Promise.resolve();
+  try {
+    const existing = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+    if (existing && existing.length) return Promise.resolve();
+  } catch {}
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try { window.speechSynthesis.onvoiceschanged = null; } catch {}
+      resolve();
+    };
+    try { window.speechSynthesis.onvoiceschanged = finish; } catch {}
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 async function speakPhoneTTS(text, target, btn, silent=false) {
   text = normalizeTtsInput(text);
   if (!text || !target) return false;
@@ -7789,6 +7808,7 @@ async function speakPhoneTTS(text, target, btn, silent=false) {
   const token = ++ttsToken;
   const settings = getTtsSettings();
   setSpeakBtn(btn, true);
+  await waitForPhoneTtsVoices();
   return new Promise(resolve => {
     try {
       const u = new SpeechSynthesisUtterance(text);
