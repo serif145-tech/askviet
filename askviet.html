@@ -547,14 +547,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
         </optgroup>
         <optgroup label="Gemini">
-          <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
           <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
-          <option value="gemini:gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
         </optgroup>
         <optgroup label="Claude">
-          <option value="claude:claude-opus-4-8">Opus 4.8</option>
-          <option value="claude:claude-sonnet-4-6">Sonnet 4.6</option>
-          <option value="claude:claude-haiku-4-5">Haiku 4.5</option>
+          <option value="claude:claude-sonnet-5">Sonnet 5</option>
+        </optgroup>
+        <optgroup label="DeepSeek">
+          <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash</option>
+          <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro</option>
         </optgroup>
       </select>
     </div>
@@ -612,12 +612,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="openai:gpt-5.5">GPT-5.5</option>
             <option value="openai:gpt-5.4">GPT-5.4</option>
             <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
-            <option value="gemini:gemini-3.1-pro-preview">G 3.1 Pro</option>
             <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
-            <option value="gemini:gemini-3.1-flash-lite">G 3.1 Lite</option>
-            <option value="claude:claude-opus-4-8">Opus 4.8</option>
-            <option value="claude:claude-sonnet-4-6">Sonnet 4.6</option>
-            <option value="claude:claude-haiku-4-5">Haiku 4.5</option>
+            <option value="claude:claude-sonnet-5">Sonnet 5</option>
+            <option value="deepseek:deepseek-v4-flash">DeepSeek Flash</option>
+            <option value="deepseek:deepseek-v4-pro">DeepSeek V4</option>
           </select>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
@@ -628,6 +626,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <div class="tts-panel-head">Ses ayarları</div>
           <label>Ses modeli</label>
           <select id="ttsModelSelect" onchange="saveTtsSettings()">
+            <option value="phone-tts">Telefon TTS</option>
             <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
             <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
           </select>
@@ -864,7 +863,7 @@ let firebaseAuth = null;
 let firebaseAuthRefreshTimer = null;
 let pendingAuthPassword = '';
 let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi' : 'tr';
-let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null;
+let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,phoneTtsUtterance=null;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let autoReadEnabledAt = { tr: 0, vi: 0 };
@@ -1288,9 +1287,9 @@ function reconnectFirebaseStreamsAfterTokenRefresh() {
 }
 
 const TTS_DEFAULTS = {
-  model: 'gpt-4o-mini-tts',
-  voiceTr: 'nova',
-  voiceVi: 'cedar',
+  model: 'phone-tts',
+  voiceTr: 'Sistem',
+  voiceVi: 'Sistem',
   speed: '1'
 };
 const TRANSCRIBE_ENGINE_KEY = 'askviet_transcribe_engine';
@@ -1317,6 +1316,7 @@ function transcribeEngineLabel(engine=getTranscribeEngine()) {
 
 function ttsModelLabel(model) {
   const labels = {
+    'phone-tts': 'Telefon TTS',
     'gpt-4o-mini-tts': 'GPT-4o mini TTS',
     'gemini-2.5-flash-preview-tts': 'Gemini 2.5 Flash TTS'
   };
@@ -1413,12 +1413,17 @@ function extractApiKey(text, provider) {
 
 function normalizeTtsModel(model) {
   const value = String(model || '').trim();
+  const lower = value.toLowerCase();
+  if (value === 'phone-tts' || lower === 'telefon tts' || lower === 'sistem tts') return 'phone-tts';
   if (value === 'gpt-4o-tts') return 'gpt-4o-mini-tts';
   if (value === 'gpt-4o-mini-tts' || value === 'gemini-2.5-flash-preview-tts') return value;
   return TTS_DEFAULTS.model;
 }
 
 function ttsVoiceOptions(model, role) {
+  if (normalizeTtsModel(model) === 'phone-tts') {
+    return ['Sistem'];
+  }
   if (isGeminiTtsModel(model)) {
     return ['Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe'];
   }
@@ -1428,6 +1433,7 @@ function ttsVoiceOptions(model, role) {
 }
 
 function normalizeTtsVoice(model, role, voice) {
+  if (normalizeTtsModel(model) === 'phone-tts') return 'Sistem';
   const options = ttsVoiceOptions(model, role);
   const value = String(voice || '').trim();
   const exact = options.find(v => v === value);
@@ -1595,7 +1601,9 @@ function normalizeChatModel(model) {
   const oldGemini = {
     'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.5-flash',
     'gemini:gemini-2.5-flash': 'gemini:gemini-3.5-flash',
-    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.1-pro-preview'
+    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.5-flash',
+    'gemini:gemini-3.1-pro-preview': 'gemini:gemini-3.5-flash',
+    'gemini:gemini-3.1-flash-lite': 'gemini:gemini-3.5-flash'
   };
   const oldOpenAi = {
     'openai:gpt-4o': 'openai:gpt-5.5',
@@ -1605,14 +1613,23 @@ function normalizeChatModel(model) {
     'codex:gpt-5.4-mini': 'openai:gpt-5.4-mini'
   };
   const oldClaude = {
-    'claude:claude-opus-4.8': 'claude:claude-opus-4-8',
-    'claude:claude-sonnet-4.6': 'claude:claude-sonnet-4-6',
-    'claude:claude-haiku-4.5': 'claude:claude-haiku-4-5',
-    'anthropic:claude-opus-4-8': 'claude:claude-opus-4-8',
-    'anthropic:claude-sonnet-4-6': 'claude:claude-sonnet-4-6',
-    'anthropic:claude-haiku-4-5': 'claude:claude-haiku-4-5'
+    'claude:claude-opus-4.8': 'claude:claude-sonnet-5',
+    'claude:claude-opus-4-8': 'claude:claude-sonnet-5',
+    'claude:claude-sonnet-5.0': 'claude:claude-sonnet-5',
+    'anthropic:claude-sonnet-5': 'claude:claude-sonnet-5',
+    'claude:claude-sonnet-4.6': 'claude:claude-sonnet-5',
+    'claude:claude-sonnet-4-6': 'claude:claude-sonnet-5',
+    'claude:claude-haiku-4.5': 'claude:claude-sonnet-5',
+    'claude:claude-haiku-4-5': 'claude:claude-sonnet-5',
+    'anthropic:claude-opus-4-8': 'claude:claude-sonnet-5',
+    'anthropic:claude-sonnet-4-6': 'claude:claude-sonnet-5',
+    'anthropic:claude-haiku-4-5': 'claude:claude-sonnet-5'
   };
-  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || model || 'openai:gpt-5.5';
+  const oldDeepSeek = {
+    'deepseek:v4-flash': 'deepseek:deepseek-v4-flash',
+    'deepseek:v4-pro': 'deepseek:deepseek-v4-pro'
+  };
+  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || model || 'openai:gpt-5.5';
 }
 
 function toggleTtsSettings(force) {
@@ -5654,25 +5671,13 @@ function providerHasKey(provider) {
   if (provider === 'openai') return !!(apiKey || localStorage.getItem('askviet_key'));
   if (provider === 'gemini') return !!(geminiApiKey || localStorage.getItem('askviet_gemini_key'));
   if (provider === 'claude') return !!(claudeApiKey || localStorage.getItem('askviet_claude_key'));
+  if (provider === 'deepseek') return true;
   return false;
 }
 
 function translationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || 'openai:gpt-5.5');
-  let queue;
-  if (base.startsWith('claude:claude-opus')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
-  } else if (base.startsWith('claude:claude-sonnet')) {
-    queue = [base, 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
-  } else if (base.startsWith('claude:claude-haiku')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'gemini:gemini-3.1-flash-lite'];
-  } else if (isGeminiProChatModel(base)) {
-    queue = [base, 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
-  } else if (base.startsWith('gemini:')) {
-    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
-  } else {
-    queue = [base, 'claude:claude-sonnet-4-6', 'claude:claude-opus-4-8', 'openai:gpt-5.5', 'openai:gpt-5.4', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.5-flash', 'openai:gpt-5.4-mini', 'claude:claude-haiku-4-5', 'gemini:gemini-3.1-flash-lite'];
-  }
+  const queue = [base, 'deepseek:deepseek-v4-pro', 'openai:gpt-5.4', 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-5', 'deepseek:deepseek-v4-flash', 'openai:gpt-5.5', 'openai:gpt-5.4-mini'];
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
@@ -5685,12 +5690,13 @@ function fastTranslationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.5');
   const fastFallbacks = [
     base,
+    'deepseek:deepseek-v4-pro',
+    'openai:gpt-5.4',
     'gemini:gemini-3.5-flash',
-    'openai:gpt-5.4-mini',
+    'claude:claude-sonnet-5',
+    'deepseek:deepseek-v4-flash',
     'openai:gpt-5.5',
-    'claude:claude-haiku-4-5',
-    'claude:claude-sonnet-4-6',
-    'gemini:gemini-3.1-flash-lite'
+    'openai:gpt-5.4-mini'
   ];
   const currentQueue = translationModelQueue(base);
   return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
@@ -6193,6 +6199,19 @@ async function translateText(text, from, modelOverride) {
     return out;
   }
 
+  if (provider === 'deepseek') {
+    const serverModel = provider + ':' + model;
+    const data = await askVietServer('translate', {
+      text,
+      fromRole: from,
+      model: serverModel,
+      roomId: ROOM
+    });
+    const out = String(data && data.translation || '').trim();
+    if (!out) throw new Error(modelName(serverModel) + ' boÅŸ cevap dÃ¶ndÃ¼');
+    return out;
+  }
+
   if (provider !== 'openai') {
     provider = 'openai';
     model = 'gpt-5.5';
@@ -6677,7 +6696,8 @@ async function pttTranslate(text, from, transcribeNotice='') {
   const data = await askVietServer('translate', {
     text,
     fromRole: from,
-    model: baseModel
+    model: baseModel,
+    roomId: ROOM
   });
   const out = String(data.translation || '').trim();
   renderPttTurn(text, out, from, target);
@@ -7615,6 +7635,8 @@ function setActiveSpeakButton(btn) {
 function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
+  phoneTtsUtterance=null;
   if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}
   if(ttsSource){try{ttsSource.onended=null;ttsSource.stop(0)}catch{}try{ttsSource.disconnect()}catch{}ttsSource=null}
   if(ttsGain){try{ttsGain.disconnect()}catch{}ttsGain=null}
@@ -7740,7 +7762,69 @@ async function playBlob(blob,token,btn,text='',opts={}){
   }
 }
 async function speak(text, target, btn, silent=false) {
+  const settings = getTtsSettings();
+  if (settings.model === 'phone-tts') return speakPhoneTTS(text, target, btn, silent);
   return speakOpenAI(text, target, btn, silent);
+}
+
+function pickPhoneTtsVoice(target) {
+  if (!('speechSynthesis' in window)) return null;
+  const langPrefix = target === 'vi' ? 'vi' : 'tr';
+  const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+  return voices.find(v => String(v.lang || '').toLowerCase().startsWith(langPrefix))
+    || voices.find(v => target === 'vi'
+      ? /vietnam|viet|vi-/i.test((v.name || '') + ' ' + (v.lang || ''))
+      : /turk|tr-/i.test((v.name || '') + ' ' + (v.lang || '')))
+    || null;
+}
+
+async function speakPhoneTTS(text, target, btn, silent=false) {
+  text = normalizeTtsInput(text);
+  if (!text || !target) return false;
+  if (!('speechSynthesis' in window)) {
+    if (!silent) console.warn('Telefon TTS desteklenmiyor');
+    return false;
+  }
+  if (isSpeaking) { stopAudio(); return false; }
+  const token = ++ttsToken;
+  const settings = getTtsSettings();
+  setSpeakBtn(btn, true);
+  return new Promise(resolve => {
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      phoneTtsUtterance = u;
+      u.lang = target === 'vi' ? 'vi-VN' : 'tr-TR';
+      u.rate = target === 'vi' ? 0.95 : (parseFloat(settings.speed) || 1);
+      u.voice = pickPhoneTtsVoice(target);
+      u.onstart = () => { if (token === ttsToken) isSpeaking = true; };
+      u.onend = () => {
+        if (token === ttsToken) {
+          isSpeaking = false;
+          phoneTtsUtterance = null;
+          setSpeakBtn(btn, false);
+        }
+        resolve(true);
+      };
+      u.onerror = () => {
+        if (token === ttsToken) {
+          isSpeaking = false;
+          phoneTtsUtterance = null;
+          setSpeakBtn(btn, false);
+        }
+        resolve(false);
+      };
+      window.speechSynthesis.cancel();
+      setTimeout(() => window.speechSynthesis.speak(u), 0);
+    } catch (e) {
+      if (token === ttsToken) {
+        isSpeaking = false;
+        phoneTtsUtterance = null;
+        setSpeakBtn(btn, false);
+      }
+      if (!silent) console.warn('Telefon TTS hatasi', e);
+      resolve(false);
+    }
+  });
 }
 
 // ── Model Sync ────────────────────────────────────────────────────────────
@@ -7801,12 +7885,10 @@ const MODEL_NAMES = {
   'openai:gpt-5.5': 'GPT-5.5',
   'openai:gpt-5.4': 'GPT-5.4',
   'openai:gpt-5.4-mini': 'GPT-5.4 mini',
-  'gemini:gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
   'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
-  'gemini:gemini-3.1-flash-lite': 'Gemini 3.1 Lite',
-  'claude:claude-opus-4-8': 'Opus 4.8',
-  'claude:claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude:claude-haiku-4-5': 'Haiku 4.5'
+  'claude:claude-sonnet-5': 'Sonnet 5',
+  'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
+  'deepseek:deepseek-v4-pro': 'DeepSeek V4 Pro'
 };
 
 function modelName(model) {
@@ -8663,7 +8745,7 @@ async function transcribeVoiceDetailed(blob, sourceOverride) {
 }
 
 async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'];
+  const models = ['gemini-3.5-flash'];
   let lastErr = null;
   for (const model of models) {
     try {
@@ -9412,6 +9494,11 @@ function enqueuePseudoLiveTts(text, target, preparedItem=null) {
 
 function preparePseudoLiveTts(item) {
   if (!item || item.promise || item.prepared || item.failed) return;
+  const instantSettings = getTtsSettings();
+  if (instantSettings.model === 'phone-tts') {
+    item.prepared = { phone:true, key:cacheKey(item.text, item.target, instantSettings.model, 'Sistem', item.target === 'vi' ? 0.95 : instantSettings.speed) };
+    return;
+  }
   item.promise = (async () => {
     const settings = getTtsSettings();
     const voice = item.target === 'vi' ? settings.voiceVi : settings.voiceTr;
@@ -9463,7 +9550,8 @@ async function processPseudoLiveTtsQueue() {
   setRealLiveStatus('Seslendiriliyor', 'speaking');
   updateRealLiveInfo(pttTtsLabel(item.target));
   try {
-    await playBlob(prepared.blob, ++ttsToken, null, item.text, { target:item.target, cacheKey:prepared.key });
+    if (prepared.phone) await speakPhoneTTS(item.text, item.target, null, true);
+    else await playBlob(prepared.blob, ++ttsToken, null, item.text, { target:item.target, cacheKey:prepared.key });
   } catch (err) {
     appendRealLiveLog('Live ses hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
   } finally {
@@ -9523,7 +9611,7 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
   setRealLiveStatus('Çeviri hazırlanıyor', 'working');
   updateRealLiveInfo((transcribeFallbackNotice || '') + modelName(selectedModel));
   try {
-    const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel });
+    const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel, roomId: ROOM });
     if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return {type:'skip'};
     const translated=String(tr.translation || '').trim();
     if (!translated) return { type:'notice', message:'Çeviri boş döndü', state:'error' };
