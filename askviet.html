@@ -870,7 +870,7 @@ let firebaseAuth = null;
 let firebaseAuthRefreshTimer = null;
 let pendingAuthPassword = '';
 let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi' : 'tr';
-let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,pendingPhoneTts=null,phoneTtsUtterance=null,phoneTtsResumeTimer=null,phoneTtsStartTimer=null,phoneTtsEndTimer=null,phoneTtsStarting=false,phoneTtsVoicesWait=null,phoneTtsGestureAt=0,phoneTtsUnlockDone=false,phoneTtsUnlockBusy=false;
+let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,pendingPhoneTts=null,phoneTtsUtterance=null,phoneTtsResumeTimer=null,phoneTtsStartTimer=null,phoneTtsEndTimer=null,phoneTtsStarting=false,phoneTtsVoicesWait=null,phoneTtsGestureAt=0;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let autoReadEnabledAt = { tr: 0, vi: 0 };
@@ -919,7 +919,9 @@ const REMOTE_DEBUG_EVENTS = new Set([
   'message_send_keepalive_failed',
   'read_batch_error',
   'server_translation_request_failed',
-  'all_attempts_exhausted'
+  'all_attempts_exhausted',
+  'server_call_timing',
+  'phone_tts_event'
 ]);
 function debugLog(event, data) {
   try {
@@ -988,6 +990,8 @@ const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
 const STT_TIMEOUT_MS = 14000;
+const FIREBASE_TOKEN_REFRESH_TIMEOUT_MS = 8000;
+const PSEUDO_LIVE_TRANSCRIBE_BUDGET_MS = 18000;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const AUTO_REFRESH_IDLE_MS = 4 * 60 * 1000;
 let autoRefreshTimer = null;
@@ -1205,6 +1209,8 @@ async function signInFirebaseRole(role, password) {
   return session;
 }
 
+let firebaseAuthRefreshInFlight = null;
+let firebaseAuthRefreshInFlightRole = null;
 async function refreshFirebaseAuth(force=false) {
   const expectedRole = myRole || selectedLoginRole || localStorage.getItem('askviet_last_role');
   if (expectedRole && firebaseAuth && firebaseAuth.role !== expectedRole) firebaseAuth = null;
@@ -1213,27 +1219,52 @@ async function refreshFirebaseAuth(force=false) {
   if (!force && firebaseAuth.idToken && firebaseAuth.expiresAt && firebaseAuth.expiresAt - Date.now() > 5 * 60 * 1000) {
     return firebaseAuth;
   }
-  const r = await fetch(FIREBASE_REFRESH_URL + '?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: firebaseAuth.refreshToken
-    })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    clearFirebaseAuth();
-    throw new Error(data?.error?.message || r.statusText || ('HTTP ' + r.status));
+  // Aynı anda birden fazla çağrı (ör. Live'daki 2 paralel işçi) yenileme isteyebilir.
+  // Hepsi TEK network isteğini paylaşsın; ikinci/üçüncü çağrı ayrı bir fetch başlatmasın.
+  // Rol uyuşmazsa (nadir: yenileme sürerken rol değişirse) paylaşılmaz, yeni istek açılır.
+  if (firebaseAuthRefreshInFlight && firebaseAuthRefreshInFlightRole === expectedRole) return firebaseAuthRefreshInFlight;
+  const refreshToken = firebaseAuth.refreshToken;
+  firebaseAuthRefreshInFlightRole = expectedRole;
+  firebaseAuthRefreshInFlight = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FIREBASE_TOKEN_REFRESH_TIMEOUT_MS);
+    let r;
+    try {
+      r = await fetch(FIREBASE_REFRESH_URL + '?key=' + encodeURIComponent(FIREBASE_WEB_API_KEY), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: controller.signal,
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        })
+      });
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error('Firebase anahtar yenileme zaman aşımına uğradı');
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      clearFirebaseAuth();
+      throw new Error(data?.error?.message || r.statusText || ('HTTP ' + r.status));
+    }
+    const session = Object.assign({}, firebaseAuth, {
+      idToken: data.id_token,
+      refreshToken: data.refresh_token || firebaseAuth.refreshToken,
+      localId: data.user_id || firebaseAuth.localId,
+      expiresAt: Date.now() + (Number(data.expires_in || 3600) * 1000)
+    });
+    saveFirebaseAuth(session);
+    return session;
+  })();
+  try {
+    return await firebaseAuthRefreshInFlight;
+  } finally {
+    firebaseAuthRefreshInFlight = null;
+    firebaseAuthRefreshInFlightRole = null;
   }
-  const session = Object.assign({}, firebaseAuth, {
-    idToken: data.id_token,
-    refreshToken: data.refresh_token || firebaseAuth.refreshToken,
-    localId: data.user_id || firebaseAuth.localId,
-    expiresAt: Date.now() + (Number(data.expires_in || 3600) * 1000)
-  });
-  saveFirebaseAuth(session);
-  return session;
 }
 
 async function ensureFirebaseAuth(role) {
@@ -1249,6 +1280,17 @@ async function getFirebaseIdToken() {
   return session.idToken;
 }
 
+// Live/Bas-Konuş gibi zamana duyarlı akışlar başlamadan önce, ya da arka planda
+// periyodik olarak, token'ı sessizce tazele — böylece asıl istek anında
+// (transcribe vb.) neredeyse her zaman anında dönen cache yoluna düşer.
+function warmFirebaseAuthToken() {
+  try {
+    if (!firebaseAuth || !firebaseAuth.refreshToken) return;
+    refreshFirebaseAuth().catch(() => {});
+  } catch {}
+}
+setInterval(warmFirebaseAuthToken, 2 * 60 * 1000);
+
 function dbUrlWithToken(path, token, extra='') {
   return DB_URL + path + '.json?auth=' + encodeURIComponent(token) + extra;
 }
@@ -1262,8 +1304,14 @@ async function dbUrl(path, extra='') {
   return dbUrlWithToken(path, await getFirebaseIdToken(), extra);
 }
 
+function askVietServerNow() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
 async function askVietServer(action, payload={}, timeoutMs=0) {
+  const t0 = askVietServerNow();
   const token = await getFirebaseIdToken();
+  const tokenMs = Math.round(askVietServerNow() - t0);
+  const t1 = askVietServerNow();
   const controller = timeoutMs > 0 ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   let r;
@@ -1278,12 +1326,23 @@ async function askVietServer(action, payload={}, timeoutMs=0) {
       body: JSON.stringify(Object.assign({ action }, payload))
     });
   } catch (e) {
+    if (action === 'transcribe') {
+      debugLog('server_call_timing', { action, tokenMs, fetchMs: Math.round(askVietServerNow() - t1), ok:false, error: String(e && e.message || e) });
+    }
     if (e && e.name === 'AbortError') throw new Error((action === 'transcribe' ? 'Ses metne çevirme' : 'İstek') + ' zaman aşımına uğradı');
     throw e;
   } finally {
     if (timer) clearTimeout(timer);
   }
+  const fetchMs = Math.round(askVietServerNow() - t1);
   const data = await r.json().catch(() => ({}));
+  if (action === 'transcribe') {
+    debugLog('server_call_timing', {
+      action, tokenMs, fetchMs, totalMs: tokenMs + fetchMs,
+      serverMs: data && data.timings ? data.timings.serverMs : undefined,
+      openaiMs: data && data.timings ? data.timings.openaiMs : undefined
+    });
+  }
   if (!r.ok || data.ok === false) throw new Error(data.error || r.statusText || ('HTTP ' + r.status));
   return data;
 }
@@ -1345,18 +1404,7 @@ function ttsModelLabel(model) {
 function pttTtsLabel(target) {
   const s = getTtsSettings();
   const voice = target === 'vi' ? s.voiceVi : s.voiceTr;
-  if (normalizeTtsModel(s.model) === 'phone-tts') return phoneTtsDisplayVoiceName(voice, target);
   return ttsModelLabel(s.model) + ' / ' + voice;
-}
-
-function ttsSpeakingStatusText(target) {
-  const s = getTtsSettings();
-  if (normalizeTtsModel(s.model) === 'phone-tts') return pttTtsLabel(target) + ' seslendiriyor...';
-  return pttTtsLabel(target) + ' ile seslendiriliyor...';
-}
-
-function ttsPreparingStatusText(target) {
-  return pttTtsLabel(target) + ' hazırlanıyor...';
 }
 
 // ── Şifre ─────────────────────────────────────────────────────────────────
@@ -1472,13 +1520,7 @@ function phoneTtsVoiceOptions(role) {
 }
 
 function phoneTtsVoiceLabel(id, role) {
-  return phoneTtsDisplayVoiceName(id, role);
-}
-
-function phoneTtsDisplayVoiceName(id, role) {
-  const clean = String(id || '').trim();
-  if (clean && clean !== 'Sistem') return clean;
-  return 'Cihaz sesi';
+  return id || 'Sistem';
 }
 
 function ttsVoiceStorageKey(model, role) {
@@ -1575,6 +1617,7 @@ function syncTtsSettingsUI() {
 
 function saveTtsSettings(fromRemote=false) {
   const model = normalizeTtsModel(document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model);
+  if (model === 'phone-tts' && !fromRemote) unlockPhoneTtsEngineIfNeeded(model);
   const selectedTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
   const selectedVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
   const voiceTr = normalizeTtsVoice(model, 'tr', selectedTr);
@@ -1594,11 +1637,8 @@ function saveTtsSettings(fromRemote=false) {
   if (changed) {
     ttsCache.clear();
     ttsBufferCache.clear();
-    phoneTtsUnlockDone = false;
-    phoneTtsUnlockBusy = false;
     console.debug('TTS cache cleared: settings changed');
   }
-  if (!fromRemote && model === 'phone-tts') warmPhoneTtsFromGesture();
   // Settings are controlled only from the TR side; push to Firebase so the VI
   // client (which has no settings UI) and any other TR device stay in sync.
   if (!fromRemote && myRole === 'tr' && changed) syncTtsSettingsToFirebase({
@@ -1661,12 +1701,7 @@ function applyRemoteTtsSettings(data) {
   if (typeof data.pttNoiseLevel !== 'undefined') {
     localStorage.setItem('askviet_ptt_noise_level', String(Math.max(0, Math.min(2, parseInt(data.pttNoiseLevel, 10) || 0))));
   }
-  if (changed) {
-    ttsCache.clear();
-    ttsBufferCache.clear();
-    phoneTtsUnlockDone = false;
-    phoneTtsUnlockBusy = false;
-  }
+  if (changed) { ttsCache.clear(); ttsBufferCache.clear(); }
   syncTtsSettingsUI();
   if (typeof syncLiveSettingsUI === 'function') syncLiveSettingsUI();
 }
@@ -5096,10 +5131,11 @@ async function autoSpeakNowOrQueue(text, target) {
 }
 
 async function speakPttText(text, target, btn=null) {
-  if (!text || !target || !pttAutoSpeak) return false;
+  if (!text || !target) return false;
+  if (!btn && !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
-    setPttLog(ttsSpeakingStatusText(target), true, 'speaking');
+    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...', true, 'speaking');
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
@@ -6927,6 +6963,7 @@ function bindSpeakAction(btn, action) {
         autoSpeakDeferred.delete(pendingPhoneTts.id);
       }
       pendingPhoneTts = null;
+      hidePhoneTtsRetryChip();
     }
     if (btn.dataset.playing === '1' || (btn.dataset.busy === '1' && !btn.dataset.remoteAudioId)) {
       stopAudio();
@@ -7750,6 +7787,7 @@ function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
   pendingPhoneTts=null;
+  hidePhoneTtsRetryChip();
   if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
   if(phoneTtsStartTimer){clearTimeout(phoneTtsStartTimer);phoneTtsStartTimer=null}
   if(phoneTtsEndTimer){clearTimeout(phoneTtsEndTimer);phoneTtsEndTimer=null}
@@ -7774,6 +7812,7 @@ function interruptAudioForRecording() {
   autoSpeakDeferred.clear();
   pendingBlockedAudio = null;
   pendingPhoneTts = null;
+  hidePhoneTtsRetryChip();
   if (isSpeaking || phoneTtsStarting || activeSpeakBtn || ttsAbort || audioUrl || audioPlayer?.src) stopAudio();
 }
 function normalizeTtsInput(text) {
@@ -7891,26 +7930,11 @@ function pickPhoneTtsVoice(target, preferred) {
   if (!('speechSynthesis' in window)) return null;
   const langPrefix = target === 'vi' ? 'vi' : 'tr';
   const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+  const matching = voices.filter(v => String(v.lang || '').toLowerCase().startsWith(langPrefix));
   const wanted = String(preferred || '').trim();
-  const matching = voices
-    .filter(v => String(v.lang || '').toLowerCase().startsWith(langPrefix))
-    .sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
   if (wanted && wanted !== 'Sistem') {
-    const lower = wanted.toLocaleLowerCase('tr');
-    const female = lower.startsWith('kad');
-    const male = lower.startsWith('erk');
-    const n = Math.max(1, Math.min(3, parseInt(wanted.replace(/\D+/g, ''), 10) || 1));
-    const genderHints = female
-      ? ['female', 'woman', 'fem', 'kad', 'kadin', 'nữ', 'nu']
-      : ['male', 'man', 'masc', 'erk', 'nam'];
-    const gendered = (female || male)
-      ? matching.filter(v => genderHints.some(h => String((v.name || '') + ' ' + (v.voiceURI || '')).toLocaleLowerCase('tr').includes(h)))
-      : [];
-    const source = gendered.length ? gendered : matching;
-    if (source.length) {
-      const index = gendered.length ? n - 1 : ((n - 1) * 2 + (male ? 1 : 0));
-      return source[index] || source[(n - 1) % source.length] || source[0];
-    }
+    const exact = matching.find(v => v.name === wanted);
+    if (exact) return exact;
   }
   return matching[0]
     || voices.find(v => target === 'vi'
@@ -7969,48 +7993,32 @@ function primePhoneTtsVoices() {
   waitForPhoneTtsVoices(1500).then(refreshPhoneTtsVoiceSelectors).catch(()=>{});
 }
 
-function warmPhoneTtsFromGesture() {
-  if (!('speechSynthesis' in window)) return;
-  if (getTtsSettings().model !== 'phone-tts') return;
-  if (phoneTtsUnlockDone || phoneTtsUnlockBusy) return;
-  if (isSpeaking || phoneTtsStarting || phoneTtsUtterance) return;
-  const synth = window.speechSynthesis;
-  if (synth.speaking || synth.pending) return;
-  phoneTtsUnlockBusy = true;
-  let started = false;
-  let done = false;
-  const finish = ok => {
-    if (done) return;
-    done = true;
-    phoneTtsUnlockBusy = false;
-    if (ok) phoneTtsUnlockDone = true;
-  };
-  try {
-    const settings = getTtsSettings();
-    const u = new SpeechSynthesisUtterance('.');
-    u.lang = 'tr-TR';
-    u.volume = 0.01;
-    u.rate = 1;
-    const voice = pickPhoneTtsVoice('tr', settings.voiceTr);
-    if (voice) u.voice = voice;
-    u.onstart = () => {
-      started = true;
-      phoneTtsUnlockDone = true;
-    };
-    u.onend = () => finish(true);
-    u.onerror = () => finish(false);
-    synth.speak(u);
-    setTimeout(() => {
-      try { if (synth.paused) synth.resume(); } catch {}
-    }, 0);
-    setTimeout(() => finish(started), 900);
-  } catch {
-    finish(false);
+let phoneTtsRetryChipEl = null;
+let phoneTtsRetryChipTimer = null;
+function showPhoneTtsRetryChip() {
+  if (!phoneTtsRetryChipEl) {
+    phoneTtsRetryChipEl = document.createElement('button');
+    phoneTtsRetryChipEl.id = 'phoneTtsRetryChip';
+    phoneTtsRetryChipEl.textContent = '🔊 Sesi duymak için dokun';
+    phoneTtsRetryChipEl.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:99997;background:#7c3aed;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.35);white-space:nowrap;';
+    phoneTtsRetryChipEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePhoneTtsRetryChip();
+      playPendingPhoneTtsFromGesture();
+    });
+    document.body.appendChild(phoneTtsRetryChipEl);
   }
+  phoneTtsRetryChipEl.style.display = 'block';
+  if (phoneTtsRetryChipTimer) clearTimeout(phoneTtsRetryChipTimer);
+  phoneTtsRetryChipTimer = setTimeout(hidePhoneTtsRetryChip, 60000);
 }
-
+function hidePhoneTtsRetryChip() {
+  if (phoneTtsRetryChipEl) phoneTtsRetryChipEl.style.display = 'none';
+  if (phoneTtsRetryChipTimer) { clearTimeout(phoneTtsRetryChipTimer); phoneTtsRetryChipTimer = null; }
+}
 async function playPendingPhoneTtsFromGesture() {
   if (!pendingPhoneTts) return false;
+  hidePhoneTtsRetryChip();
   const item = pendingPhoneTts;
   pendingPhoneTts = null;
   if (Date.now() - Number(item.queuedAt || 0) > 60000) {
@@ -8088,6 +8096,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
             id: autoSpeakQueueId(text, target),
             queuedAt: Date.now()
           };
+          showPhoneTtsRetryChip();
         }
       }
       resolve(ok);
@@ -8110,12 +8119,14 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
         phoneTtsStarting = false;
         isSpeaking = true;
         if (phoneTtsStartTimer) { clearTimeout(phoneTtsStartTimer); phoneTtsStartTimer = null; }
+        debugLog('phone_tts_event', { phase:'started', target });
         console.debug('Telefon TTS başladı', { target, voice:voice?.name || 'Sistem' });
       };
-      u.onend = () => cleanup(true);
+      u.onend = () => { debugLog('phone_tts_event', { phase:'ended', target }); cleanup(true); };
       u.onerror = event => {
         const reason = String(event?.error || 'unknown');
         const cancelledByApp = token !== ttsToken || /cancel|interrupted/i.test(reason);
+        debugLog('phone_tts_event', { phase:'error', target, started, error: reason, cancelledByApp });
         if (!silent && !cancelledByApp) console.warn('Telefon TTS hatası', reason);
         cleanup(false, ios && !cancelledByApp && /not-allowed|notallowed|audio-busy|unknown/i.test(reason));
       };
@@ -8123,6 +8134,11 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
       if (!ios && synth.paused) {
         try { synth.resume(); } catch {}
       }
+      debugLog('phone_tts_event', {
+        phase: 'attempt', target, fromGesture, isIOS: ios, textLen: text.length,
+        voicesCount: currentPhoneTtsVoices().length, hasVoice: !!voice, voiceName: voice ? voice.name : null,
+        speaking: !!synth.speaking, pending: !!synth.pending
+      });
       synth.speak(u);
 
       phoneTtsStartTimer = setTimeout(() => {
@@ -8134,6 +8150,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
           return;
         }
         try { synth.cancel(); } catch {}
+        debugLog('phone_tts_event', { phase:'blocked_timeout', target });
         console.warn('Telefon TTS başlamadı; sonraki dokunuşta yeniden denenecek.');
         cleanup(false, ios);
       }, ios ? 2800 : 2200);
@@ -8142,6 +8159,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
       phoneTtsEndTimer = setTimeout(() => {
         if (finished || token !== ttsToken) return;
         try { synth.cancel(); } catch {}
+        debugLog('phone_tts_event', { phase:'end_timeout', target });
         if (!silent) console.warn('Telefon TTS zaman aşımı');
         cleanup(false, false);
       }, endLimit);
@@ -8157,10 +8175,24 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
         }, 10000);
       }
     } catch (e) {
+      debugLog('phone_tts_event', { phase:'exception', target, error: String(e && e.message || e) });
       if (!silent) console.warn('Telefon TTS hatası', e);
       cleanup(false, ios && opts.fromGesture !== true);
     }
   });
+}
+async function speakPhoneTTSWithMicPaused(text, target) {
+  // iOS'ta getUserMedia akışı açıkken speechSynthesis çoğu zaman hoparlöre hiç
+  // yansımıyor (WebKit'in bilinen audio-session kısıtı). Live'da mikrofon
+  // stream'ini kapatıp yeniden açmak yerine (izin/gecikme riski), konuşma
+  // süresince sadece track'i geçici olarak devre dışı bırakıyoruz.
+  const tracks = pseudoLiveStream ? pseudoLiveStream.getAudioTracks() : [];
+  tracks.forEach(t => { try { t.enabled = false; } catch {} });
+  try {
+    return await speakPhoneTTS(text, target, null, true);
+  } finally {
+    tracks.forEach(t => { try { t.enabled = true; } catch {} });
+  }
 }
 
 if ('speechSynthesis' in window) {
@@ -8928,9 +8960,24 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
+let phoneTtsEngineUnlocked = false;
+function unlockPhoneTtsEngineIfNeeded(modelOverride) {
+  if (phoneTtsEngineUnlocked) return;
+  if (!('speechSynthesis' in window)) return;
+  const model = modelOverride || getTtsSettings().model;
+  if (model !== 'phone-tts') return;
+  phoneTtsEngineUnlocked = true;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0.01;
+    u.rate = 10;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
 document.addEventListener('pointerdown',e=>{
   markChatUserActivity();
   phoneTtsGestureAt=Date.now();
+  unlockPhoneTtsEngineIfNeeded();
   try {
     const isSpeakTap=!!e.target.closest('.speakBtn');
     const hasDeferredAudio=!!pendingBlockedAudio||!!pendingPhoneTts||autoSpeakQueue.length>0;
@@ -8941,8 +8988,6 @@ document.addEventListener('pointerdown',e=>{
       if(!isSpeakTap&&pendingPhoneTts)playPendingPhoneTtsFromGesture();
       else if(!isSpeakTap&&pendingBlockedAudio)playPendingBlockedAudioFromGesture();
       else if(!isSpeakTap&&autoSpeakQueue.length)processAutoSpeakQueue();
-    } else {
-      warmPhoneTtsFromGesture();
     }
   }catch{}
   const b=e.target.closest('button');
@@ -9039,6 +9084,7 @@ async function startVoice() {
   markChatUserActivity();
   const btn = document.getElementById('micBtn');
   if(rec){stopRec();return;}
+  warmFirebaseAuthToken();
   resetMicrophoneAudioContext();
   interruptAudioForRecording();
   recChunks=[];recHadSpeech=false;recSilentSince=0;recVoiceMs=0;recConsecutiveVoiceMs=0;
@@ -9476,43 +9522,15 @@ function forceAbortRecording() {
   try {
     if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.ondataavailable = null; rec.stop(); }
   } catch {}
-  try { cleanupRecPcmCapture(); } catch {}
   try {
     if (recStream) recStream.getTracks().forEach(t => t.stop());
     if (recNode) recNode.disconnect();
   } catch {}
   recStream = null; recNode = null; rec = null; recAnalyser = null; recData = null;
-  recPcmChunks = [];
-  recButton = null;
   if (recTimer) { clearInterval(recTimer); recTimer = null; }
   const btn = document.getElementById('micBtn');
   if (btn) { btn.classList.remove('mic-recording'); btn.innerHTML = MIC_ICON; }
-  document.querySelectorAll('#pttTrBtn,#pttViBtn').forEach(b => {
-    b.classList.remove('recording');
-    if (b.dataset.defaultHtml) b.innerHTML = b.dataset.defaultHtml;
-    delete b.dataset.recRole;
-  });
   try { resetMicrophoneAudioContext(); } catch {}
-}
-
-async function warmFreshMicStream(stream) {
-  if (!stream) return;
-  const track = stream.getAudioTracks ? stream.getAudioTracks()[0] : null;
-  if (!track || track.readyState !== 'live') throw new Error('Mikrofon akışı açılamadı.');
-  const ctx = await ensureAudioCtx();
-  if (!ctx || ctx.state === 'closed') throw new Error('Ses motoru yeniden açılamadı.');
-  let source = null;
-  let analyser = null;
-  try {
-    source = ctx.createMediaStreamSource(stream);
-    analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    await sleep(320);
-  } finally {
-    try { if (source) source.disconnect(); } catch {}
-    try { if (analyser) analyser.disconnect(); } catch {}
-  }
 }
 async function revivePseudoLiveMic() {
   // Live: rebuild the whole capture pipeline with a big visual (spinning mic
@@ -9555,16 +9573,13 @@ async function manualMicRefresh() {
   micRefreshInFlight = true;
   showMicRevive('spin');
   const restartLive = !!pseudoLiveRunning;
-  const restartOldLive = !!(geminiLiveWs || geminiLiveStream || liveStarting);
   let freshStream = null;
   try {
     try { forceAbortRecording(); } catch {}
-    try { if (restartOldLive) stopGeminiLive(true, false); } catch {}
     if (restartLive) stopPseudoLive(true);
-    await sleep(220);
     try { resetMicrophoneAudioContext(); } catch {}
     primeAudioForGesture();
-    const streamPromise = requestMicrophoneStreamWithTimeout(restartLive ? 'live' : 'mic', 12000);
+    const streamPromise = requestMicrophoneStreamWithTimeout(restartLive ? 'live' : 'mic', 8000);
     unlockAudio(true).catch(()=>{});
     keepAudioAwake(90000).catch(()=>{});
     freshStream = await streamPromise;
@@ -9572,14 +9587,12 @@ async function manualMicRefresh() {
       await startPseudoLive(freshStream);
       freshStream = null;
     } else {
-      await warmFreshMicStream(freshStream);
       const ctx = await ensureAudioCtx();
       if (!ctx || ctx.state === 'closed') throw new Error('Ses motoru yeniden açılamadı.');
       const source = ctx.createMediaStreamSource(freshStream);
       try { source.disconnect(); } catch {}
       freshStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
       freshStream = null;
-      try { resetMicrophoneAudioContext(); } catch {}
     }
     showMicRevive('ok');
   } catch (e) {
@@ -9594,6 +9607,7 @@ async function manualMicRefresh() {
 }
 async function startPseudoLive(preparedStream=null) {
   stopPseudoLive(true);
+  warmFirebaseAuthToken();
   pseudoLiveRunning=true;
   pseudoLiveLastAudioAt=Date.now();
   pseudoLiveQueue=[];
@@ -9956,9 +9970,9 @@ async function processPseudoLiveTtsQueue() {
   pseudoLiveLastSpokenText = item.text;
   pseudoLiveLastSpokenAt = Date.now();
   setRealLiveStatus('Seslendiriliyor', 'speaking');
-  updateRealLiveInfo(ttsSpeakingStatusText(item.target).replace(/\.\.\.$/, ''));
+  updateRealLiveInfo(pttTtsLabel(item.target));
   try {
-    if (prepared.phone) await speakPhoneTTS(item.text, item.target, null, true);
+    if (prepared.phone) await speakPhoneTTSWithMicPaused(item.text, item.target);
     else await playBlob(prepared.blob, ++ttsToken, null, item.text, { target:item.target, cacheKey:prepared.key });
   } catch (err) {
     appendRealLiveLog('Live ses hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
@@ -9980,13 +9994,13 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
   updateRealLiveInfo(firstTranscribe);
   let data;
   try {
-    data=await askVietServer('transcribe', {
+    data=await withTimeout(askVietServer('transcribe', {
       audioBase64: payload,
       mime: blob.type || 'audio/webm',
       sourceRole: 'auto',
       live: true,
       transcribeEngine: settings.model
-    }, STT_TIMEOUT_MS);
+    }, STT_TIMEOUT_MS), PSEUDO_LIVE_TRANSCRIBE_BUDGET_MS, 'Transkript');
   } catch (err) {
     return { type:'error', message:'Transkript hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr') };
   }
@@ -10280,6 +10294,7 @@ window.addEventListener('online', () => {
 });
 window.addEventListener('offline', () => setConnected(false));
 clearUnreadCount();
+
 </script>
 <div id="micReviveOverlay" aria-hidden="true">
   <div class="mic-revive-box">
