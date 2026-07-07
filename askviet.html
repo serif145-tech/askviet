@@ -8957,11 +8957,11 @@ function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   if (!('speechSynthesis' in window)) return;
   const model = modelOverride || getTtsSettings().model;
   if (model !== 'phone-tts') return;
-  phoneTtsEngineUnlocked = true;
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
     phoneTtsUnlockProtectUntil = Date.now() + 900;
+    u.onstart = () => { phoneTtsEngineUnlocked = true; };
     window.speechSynthesis.speak(u);
   } catch {}
 }
