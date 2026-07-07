@@ -259,12 +259,21 @@ img,svg,video,canvas{max-width:100%;height:auto}
 @keyframes radialToolIn{from{opacity:0;transform:translateY(18px) scale(.35)}to{opacity:1;transform:none}}
 .msg-action-pop .speakBtn{color:#7c3aed;background:#f5f0ff}.msg-action-pop .warn{color:#d97706;background:#fff7ed}.msg-action-pop .retry{color:#ea580c;background:#fff7ed}.msg-action-pop .copy{color:#0891b2;background:#ecfeff}.msg-action-pop .allow{color:#16a34a;background:#f0fdf4}.msg-action-pop .delete{color:#e11d48;background:#fff1f2}
 
-.typing-indicator{display:flex;visibility:hidden;opacity:0;width:max-content;min-height:26px;box-sizing:border-box;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border-bottom-left-radius:4px;gap:4px;align-items:center;pointer-events:none}
+.typing-indicator{display:flex;visibility:hidden;opacity:0;width:max-content;min-height:28px;box-sizing:border-box;background:transparent;padding:4px 10px;gap:6px;align-items:center;pointer-events:none;transition:opacity .16s ease}
 .typing-indicator.show{visibility:visible;opacity:1}
-.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:typingBounce 1.2s infinite}
-.typing-dot:nth-child(2){animation-delay:.2s}
-.typing-dot:nth-child(3){animation-delay:.4s}
-@keyframes typingBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.typing-dot{display:block;width:10px;height:10px;border-radius:50%;background:var(--vi2);box-shadow:0 0 12px rgba(244,114,182,.5);animation:typingBounce 1.15s infinite ease-in-out}
+.typing-indicator.vi .typing-dot{background:var(--tr2);box-shadow:0 0 10px rgba(167,139,250,.45)}
+.typing-dot:nth-child(2){animation-delay:.14s}
+.typing-dot:nth-child(3){animation-delay:.28s}
+.typing-label{display:none}
+.typing-indicator.vi .typing-label{color:var(--tr);text-shadow:0 0 10px rgba(124,58,237,.2)}
+@keyframes typingBounce{0%,70%,100%{transform:translateY(0) scale(.78);opacity:.62}35%{transform:translateY(-6px) scale(1.08);opacity:1}}
+.typing-label .typing-char{display:inline-block;animation:typingCharDance 2.1s infinite ease-in-out}
+.typing-label .typing-char:nth-child(3n+2){animation-delay:.08s}.typing-label .typing-char:nth-child(3n){animation-delay:.16s}
+.typing-label .typing-char.dot{animation-name:typingDotTextDance;color:inherit}
+@keyframes typingTextDance{0%,100%{transform:translateY(0)}45%{transform:translateY(-1px)}}
+@keyframes typingCharDance{0%,70%,100%{transform:translateY(0);opacity:.9}35%{transform:translateY(-2px);opacity:1}}
+@keyframes typingDotTextDance{0%,65%,100%{transform:translateY(0);opacity:.58}35%{transform:translateY(-4px);opacity:1}}
 
 .reply-composer{display:none;align-items:center;gap:9px;width:100%;min-width:0;padding:8px 10px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
 .reply-composer.show{display:flex}
@@ -761,6 +770,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="typing-dot"></div>
       <div class="typing-dot"></div>
       <div class="typing-dot"></div>
+      <div class="typing-label">Yazıyor...</div>
     </div>
   </div>
   <button class="jump-bottom" id="jumpBottomBtn" onclick="scrollToBottom(true)" title="En alta in">&#8595;</button>
@@ -2222,7 +2232,7 @@ function goBack() {
   const card = document.querySelector('.setup-card');
   if (card) card.style.display = 'none';
   document.getElementById('chat').style.display = 'none';
-  document.getElementById('messages').innerHTML = '<div class="empty-state" id="emptyState"><div class="empty-emoji">💬</div><div class="empty-text" id="emptyText">Henüz mesaj yok.<br>İlk mesajı gönder!</div></div><div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+  document.getElementById('messages').innerHTML = '<div class="empty-state" id="emptyState"><div class="empty-emoji">💬</div><div class="empty-text" id="emptyText">Henüz mesaj yok.<br>İlk mesajı gönder!</div></div><div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-label">Yazıyor...</div></div>';
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────
@@ -2385,6 +2395,7 @@ function showRemoteTyping(show) {
   const scrollAnchor = followBottom ? null : captureScrollAnchor();
   if (remoteTypingHideTimer) clearTimeout(remoteTypingHideTimer);
   remoteTypingHideTimer = null;
+  renderRemoteTypingIndicator(ind);
   ind.classList.toggle('show', !!show);
   if (!show) {
     if (followBottom) scrollToBottom(true);
@@ -2398,6 +2409,33 @@ function showRemoteTyping(show) {
     document.getElementById('typingIndicator')?.classList.remove('show');
     updateJumpBottomButton();
   }, REMOTE_TYPING_TTL_MS);
+}
+
+function renderRemoteTypingIndicator(ind = document.getElementById('typingIndicator')) {
+  if (!ind) return;
+  ind.classList.toggle('vi', myRole === 'vi');
+  let label = ind.querySelector('.typing-label');
+  if (!label) {
+    label = document.createElement('div');
+    label.className = 'typing-label';
+    ind.appendChild(label);
+  }
+  renderTypingDanceText(label, myRole === 'vi' ? 'đang viết...' : 'Yazıyor...');
+}
+
+function renderTypingDanceText(label, text) {
+  if (!label) return;
+  const value = String(text || '');
+  if (label.dataset.text === value && label.children.length) return;
+  label.dataset.text = value;
+  label.textContent = '';
+  [...value].forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.className = 'typing-char' + (ch === '.' ? ' dot' : '');
+    span.textContent = ch === ' ' ? '\u00a0' : ch;
+    span.style.animationDelay = ((i % 6) * 0.035).toFixed(3) + 's';
+    label.appendChild(span);
+  });
 }
 
 async function pollMessagesSnapshot(fresh=false) {
