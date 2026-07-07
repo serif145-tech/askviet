@@ -447,6 +447,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .tts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tts-save{padding:11px 12px;border-radius:12px;border:none;background:linear-gradient(135deg,#8b5cf6,#6d5df2);color:#fff;font-weight:900;font-size:13.5px;cursor:pointer;box-shadow:0 4px 14px rgba(124,109,242,.4);transition:transform .1s ease}
 .tts-save:active{transform:scale(.97)}
+.tts-panel.vi-push-only label,
+.tts-panel.vi-push-only select,
+.tts-panel.vi-push-only .tts-grid,
+.tts-panel.vi-push-only .tts-save,
+.tts-panel.vi-push-only .list-panel-btn{display:none!important}
+.tts-panel.vi-push-only{width:min(220px,calc(100vw - 18px))}
+.tts-panel.vi-push-only #webPushPanelBtn{display:block!important;margin-top:0}
 .list-panel-btn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:#cbd5e1;font-weight:800;font-size:12.5px;cursor:pointer;transition:background .15s ease}
 .list-panel-btn:active{background:#1c1c22}
 .list-modal{position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.78);display:none;align-items:stretch;justify-content:center;padding:max(env(safe-area-inset-top),18px) 12px max(env(safe-area-inset-bottom),18px)}
@@ -803,7 +810,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-07-ios-phone-tts-fix-1';
+const APP_VERSION = '2026-07-07-tts-push-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1470,6 +1477,13 @@ function ttsVoiceOptions(model, role) {
     : ['nova','alloy','ash','ballad','coral','echo','fable','onyx','sage','shimmer'];
 }
 
+function defaultTtsVoice(model, role) {
+  const cleanModel = normalizeTtsModel(model);
+  if (cleanModel === 'phone-tts') return 'Sistem';
+  if (isGeminiTtsModel(cleanModel)) return role === 'vi' ? 'Kore' : 'Puck';
+  return role === 'vi' ? 'cedar' : 'nova';
+}
+
 function normalizeTtsVoice(model, role, voice) {
   if (normalizeTtsModel(model) === 'phone-tts') {
     const options = phoneTtsVoiceOptions(role);
@@ -1482,9 +1496,7 @@ function normalizeTtsVoice(model, role, voice) {
   if (exact) return exact;
   const sameCase = options.find(v => v.toLowerCase() === value.toLowerCase());
   if (sameCase) return sameCase;
-  return isGeminiTtsModel(model)
-    ? (role === 'vi' ? 'Kore' : 'Puck')
-    : (role === 'vi' ? TTS_DEFAULTS.voiceVi : TTS_DEFAULTS.voiceTr);
+  return defaultTtsVoice(model, role);
 }
 
 function getTtsSettings() {
@@ -7954,7 +7966,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
     if (!silent) console.warn('Telefon TTS desteklenmiyor');
     return false;
   }
-  if (isSpeaking || phoneTtsStarting) { stopAudio(); return false; }
+  if (isSpeaking || phoneTtsStarting || phoneTtsUtterance) stopAudio();
 
   const synth = window.speechSynthesis;
   const ios = isIOSPhoneTts();
@@ -7962,7 +7974,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
   const token = ++ttsToken;
   const settings = getTtsSettings();
   phoneTtsStarting = true;
-  setSpeakBtn(btn, true);
+  setActiveSpeakButton(btn);
 
   if (!currentPhoneTtsVoices().length && !fromGesture) await waitForPhoneTtsVoices(ios ? 1400 : 700);
   if (token !== ttsToken) {
@@ -7998,6 +8010,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
         isSpeaking = false;
         phoneTtsStarting = false;
         phoneTtsUtterance = null;
+        if (activeSpeakBtn === btn) activeSpeakBtn = null;
         setSpeakBtn(btn, false);
         if (deferUntilGesture && ios) {
           pendingPhoneTts = {
@@ -8044,7 +8057,7 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
 
       phoneTtsStartTimer = setTimeout(() => {
         if (finished || started || token !== ttsToken) return;
-        if (synth.speaking) {
+        if (synth.speaking || synth.pending) {
           started = true;
           phoneTtsStarting = false;
           isSpeaking = true;
@@ -8097,10 +8110,12 @@ async function speakOpenAI(text, target, btn, silent=false) {
   text = normalizeTtsInput(text);
   if (!text || !target) return false;
   if (isSpeaking) { stopAudio(); return false; }
-  const settings = getTtsSettings();
-  const voice = target === 'vi' ? settings.voiceVi : settings.voiceTr;
-  const speed = target === 'vi' ? 0.95 : settings.speed;
-  const model = settings.model;
+  const rawSettings = getTtsSettings();
+  const model = normalizeTtsModel(rawSettings.model);
+  const voiceTr = normalizeTtsVoice(model, 'tr', rawSettings.voiceTr);
+  const voiceVi = normalizeTtsVoice(model, 'vi', rawSettings.voiceVi);
+  const voice = target === 'vi' ? voiceVi : voiceTr;
+  const speed = target === 'vi' ? 0.95 : rawSettings.speed;
   const primaryKey = cacheKey(text, target, model, voice, speed);
   if (pendingBlockedAudio && pendingBlockedAudio.cacheKey === primaryKey) pendingBlockedAudio = null;
   const instructions = target === 'vi'
@@ -8115,7 +8130,7 @@ async function speakOpenAI(text, target, btn, silent=false) {
       const data = await askVietServer('speak', {
         text,
         targetRole: target,
-        settings: { model, voiceTr: settings.voiceTr, voiceVi: settings.voiceVi, speed: settings.speed }
+        settings: { model, voiceTr, voiceVi, speed: rawSettings.speed }
       });
       blob = new Blob([base64ToBytes(data.audioBase64 || '')], { type: data.mime || 'audio/mpeg' });
       ttsCache.set(primaryKey, blob);
@@ -8246,7 +8261,7 @@ function setupChatControls() {
     realLiveBtn.hidden = myRole !== 'tr';
   }
   const gearBtn = document.getElementById('ttsSettingsGearBtn');
-  if (gearBtn) gearBtn.style.display = myRole === 'tr' ? '' : 'none';
+  if (gearBtn) gearBtn.style.display = '';
   if (myRole !== 'tr') { togglePttMode(false); toggleRealLive(false); }
   applyLocaleUI();
   setSelectedModel(selectedModel, true);
@@ -8360,6 +8375,10 @@ function applyLocaleUI() {
   const viLabels = ['Mẫu giọng', 'Giọng TR', 'Giọng VI', 'Tốc độ'];
   const trLabels = ['Ses modeli', 'TR sesi', 'VI sesi', 'Hız'];
   labels.forEach((label, i) => label.textContent = (isVi ? viLabels : trLabels)[i] || label.textContent);
+  const ttsPanel = document.getElementById('ttsPanel');
+  if (ttsPanel) ttsPanel.classList.toggle('vi-push-only', isVi);
+  const ttsHead = document.querySelector('#ttsPanel .tts-panel-head');
+  if (ttsHead) ttsHead.textContent = isVi ? 'Thong bao' : 'Ses ayarlari';
   const save = document.querySelector('#ttsPanel .tts-save');
   if (save) save.textContent = isVi ? 'Lưu' : 'Kaydet';
   const listBtn = document.querySelector('#ttsPanel .list-panel-btn');
@@ -9781,16 +9800,19 @@ function preparePseudoLiveTts(item) {
     return;
   }
   item.promise = (async () => {
-    const settings = getTtsSettings();
-    const voice = item.target === 'vi' ? settings.voiceVi : settings.voiceTr;
-    const speed = item.target === 'vi' ? 0.95 : settings.speed;
-    const key = cacheKey(item.text, item.target, settings.model, voice, speed);
+    const rawSettings = getTtsSettings();
+    const model = normalizeTtsModel(rawSettings.model);
+    const voiceTr = normalizeTtsVoice(model, 'tr', rawSettings.voiceTr);
+    const voiceVi = normalizeTtsVoice(model, 'vi', rawSettings.voiceVi);
+    const voice = item.target === 'vi' ? voiceVi : voiceTr;
+    const speed = item.target === 'vi' ? 0.95 : rawSettings.speed;
+    const key = cacheKey(item.text, item.target, model, voice, speed);
     let blob = ttsCache.get(key);
     if (!blob) {
       const data = await askVietServer('speak', {
         text:item.text,
         targetRole:item.target,
-        settings:{ model:settings.model, voiceTr:settings.voiceTr, voiceVi:settings.voiceVi, speed:settings.speed }
+        settings:{ model, voiceTr, voiceVi, speed:rawSettings.speed }
       });
       blob = new Blob([base64ToBytes(data.audioBase64 || '')], { type:data.mime || 'audio/mpeg' });
       ttsCache.set(key, blob);
