@@ -8940,15 +8940,19 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
 let phoneTtsEngineUnlocked = false;
+function phoneTtsUnlockPhrase() {
+  return myRole === 'vi' ? { text: 'Rồi', lang: 'vi-VN' } : { text: 'Hazır', lang: 'tr-TR' };
+}
 function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   if (phoneTtsEngineUnlocked) return;
   if (!('speechSynthesis' in window)) return;
   const model = modelOverride || getTtsSettings().model;
   if (model !== 'phone-tts') return;
   try {
-    const u = new SpeechSynthesisUtterance('Hazır');
-    u.lang = 'tr-TR';
-    u.volume = 0.03;
+    const phrase = phoneTtsUnlockPhrase();
+    const u = new SpeechSynthesisUtterance(phrase.text);
+    u.lang = phrase.lang;
+    u.volume = 0.01;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { phoneTtsEngineUnlocked = true; };
     window.speechSynthesis.speak(u);
@@ -8966,9 +8970,10 @@ function enablePhoneTtsSoundManually(btn) {
     return;
   }
   try {
-    const u = new SpeechSynthesisUtterance('Hazır');
-    u.lang = 'tr-TR';
-    u.volume = 0.03;
+    const phrase = phoneTtsUnlockPhrase();
+    const u = new SpeechSynthesisUtterance(phrase.text);
+    u.lang = phrase.lang;
+    u.volume = 0.01;
     phoneTtsEngineUnlocked = true;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { if (btn) { const old = btn.textContent; btn.textContent = '✓ Etkinleştirildi'; setTimeout(() => btn.textContent = old, 2200); } };
