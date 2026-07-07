@@ -1617,7 +1617,6 @@ function syncTtsSettingsUI() {
 
 function saveTtsSettings(fromRemote=false) {
   const model = normalizeTtsModel(document.getElementById('ttsModelSelect')?.value || TTS_DEFAULTS.model);
-  if (model === 'phone-tts' && !fromRemote) unlockPhoneTtsEngineIfNeeded(model);
   const selectedTr = document.getElementById('ttsVoiceTrSelect')?.value || TTS_DEFAULTS.voiceTr;
   const selectedVi = document.getElementById('ttsVoiceViSelect')?.value || TTS_DEFAULTS.voiceVi;
   const voiceTr = normalizeTtsVoice(model, 'tr', selectedTr);
@@ -6963,7 +6962,6 @@ function bindSpeakAction(btn, action) {
         autoSpeakDeferred.delete(pendingPhoneTts.id);
       }
       pendingPhoneTts = null;
-      hidePhoneTtsRetryChip();
     }
     if (btn.dataset.playing === '1' || (btn.dataset.busy === '1' && !btn.dataset.remoteAudioId)) {
       stopAudio();
@@ -7787,7 +7785,6 @@ function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
   pendingPhoneTts=null;
-  hidePhoneTtsRetryChip();
   if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
   if(phoneTtsStartTimer){clearTimeout(phoneTtsStartTimer);phoneTtsStartTimer=null}
   if(phoneTtsEndTimer){clearTimeout(phoneTtsEndTimer);phoneTtsEndTimer=null}
@@ -7812,7 +7809,6 @@ function interruptAudioForRecording() {
   autoSpeakDeferred.clear();
   pendingBlockedAudio = null;
   pendingPhoneTts = null;
-  hidePhoneTtsRetryChip();
   if (isSpeaking || phoneTtsStarting || activeSpeakBtn || ttsAbort || audioUrl || audioPlayer?.src) stopAudio();
 }
 function normalizeTtsInput(text) {
@@ -7993,32 +7989,8 @@ function primePhoneTtsVoices() {
   waitForPhoneTtsVoices(1500).then(refreshPhoneTtsVoiceSelectors).catch(()=>{});
 }
 
-let phoneTtsRetryChipEl = null;
-let phoneTtsRetryChipTimer = null;
-function showPhoneTtsRetryChip() {
-  if (!phoneTtsRetryChipEl) {
-    phoneTtsRetryChipEl = document.createElement('button');
-    phoneTtsRetryChipEl.id = 'phoneTtsRetryChip';
-    phoneTtsRetryChipEl.textContent = '🔊 Sesi duymak için dokun';
-    phoneTtsRetryChipEl.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:99997;background:#7c3aed;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.35);white-space:nowrap;';
-    phoneTtsRetryChipEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hidePhoneTtsRetryChip();
-      playPendingPhoneTtsFromGesture();
-    });
-    document.body.appendChild(phoneTtsRetryChipEl);
-  }
-  phoneTtsRetryChipEl.style.display = 'block';
-  if (phoneTtsRetryChipTimer) clearTimeout(phoneTtsRetryChipTimer);
-  phoneTtsRetryChipTimer = setTimeout(hidePhoneTtsRetryChip, 60000);
-}
-function hidePhoneTtsRetryChip() {
-  if (phoneTtsRetryChipEl) phoneTtsRetryChipEl.style.display = 'none';
-  if (phoneTtsRetryChipTimer) { clearTimeout(phoneTtsRetryChipTimer); phoneTtsRetryChipTimer = null; }
-}
 async function playPendingPhoneTtsFromGesture() {
   if (!pendingPhoneTts) return false;
-  hidePhoneTtsRetryChip();
   const item = pendingPhoneTts;
   pendingPhoneTts = null;
   if (Date.now() - Number(item.queuedAt || 0) > 60000) {
@@ -8096,7 +8068,6 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
             id: autoSpeakQueueId(text, target),
             queuedAt: Date.now()
           };
-          showPhoneTtsRetryChip();
         }
       }
       resolve(ok);
@@ -8960,24 +8931,9 @@ function flashButton(btn){
   setTimeout(()=>btn.classList.remove('pressed'),180);
   setTimeout(()=>btn.classList.remove('flash'),320);
 }
-let phoneTtsEngineUnlocked = false;
-function unlockPhoneTtsEngineIfNeeded(modelOverride) {
-  if (phoneTtsEngineUnlocked) return;
-  if (!('speechSynthesis' in window)) return;
-  const model = modelOverride || getTtsSettings().model;
-  if (model !== 'phone-tts') return;
-  phoneTtsEngineUnlocked = true;
-  try {
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0.01;
-    u.rate = 10;
-    window.speechSynthesis.speak(u);
-  } catch {}
-}
 document.addEventListener('pointerdown',e=>{
   markChatUserActivity();
   phoneTtsGestureAt=Date.now();
-  unlockPhoneTtsEngineIfNeeded();
   try {
     const isSpeakTap=!!e.target.closest('.speakBtn');
     const hasDeferredAudio=!!pendingBlockedAudio||!!pendingPhoneTts||autoSpeakQueue.length>0;
@@ -10294,6 +10250,133 @@ window.addEventListener('online', () => {
 });
 window.addEventListener('offline', () => setConnected(false));
 clearUnreadCount();
+
+// ========== GEÇİCİ DEBUG PANELİ — teşhis bitince bu bloğu (buradan "GEÇİCİ DEBUG PANELİ SONU" satırına kadar) silmen yeterli, başka hiçbir yeri değiştirmiyor ==========
+(function () {
+  const MAX_LINES = 300;
+  let lines = [];
+  let panelEl, logEl, tabEl, copyBtn;
+
+  function fmtTime(d) {
+    return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  function safeStringify(data) {
+    try { return JSON.stringify(data); } catch { return String(data); }
+  }
+
+  function push(event, data) {
+    lines.push('[' + fmtTime(new Date()) + '] ' + event + ' ' + safeStringify(data));
+    if (lines.length > MAX_LINES) lines = lines.slice(lines.length - MAX_LINES);
+    render();
+    if (tabEl) tabEl.classList.add('dbg-tab-flash');
+  }
+
+  function render() {
+    if (!logEl) return;
+    logEl.textContent = lines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function buildUI() {
+    const style = document.createElement('style');
+    style.textContent = '@keyframes dbgFlash{0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 10px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}.dbg-tab-flash{animation:dbgFlash .6s ease}';
+    document.head.appendChild(style);
+
+    tabEl = document.createElement('button');
+    tabEl.textContent = '🐞';
+    tabEl.style.cssText = 'position:fixed;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:999999;width:42px;height:42px;border-radius:50%;border:none;background:#111;color:#fff;font-size:19px;box-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.88;';
+    tabEl.addEventListener('click', () => {
+      panelEl.style.display = panelEl.style.display === 'none' ? 'flex' : 'none';
+      tabEl.classList.remove('dbg-tab-flash');
+    });
+    document.body.appendChild(tabEl);
+
+    panelEl = document.createElement('div');
+    panelEl.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(58px + env(safe-area-inset-bottom));max-height:44vh;z-index:999998;background:rgba(10,10,14,.95);border:1px solid #333;border-radius:12px;display:none;flex-direction:column;overflow:hidden;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;gap:6px;padding:8px;border-bottom:1px solid #333;';
+    function mkBtn(label, fn) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'flex:1;padding:9px 6px;border-radius:8px;border:none;background:#2a2a33;color:#fff;font-size:12px;font-weight:700;font-family:inherit;';
+      b.addEventListener('click', fn);
+      return b;
+    }
+    copyBtn = mkBtn('Kopyala', async () => {
+      const text = lines.join('\n') || '(boş)';
+      let ok = false;
+      try { ok = typeof copyTextFallback === 'function' ? await copyTextFallback(text) : false; } catch {}
+      if (!ok) { try { await navigator.clipboard.writeText(text); ok = true; } catch {} }
+      const old = copyBtn.textContent;
+      copyBtn.textContent = ok ? 'Kopyalandı ✓' : 'Kopyalanamadı';
+      setTimeout(() => { copyBtn.textContent = old; }, 1300);
+    });
+    header.appendChild(copyBtn);
+    header.appendChild(mkBtn('Temizle', () => { lines = []; render(); }));
+    header.appendChild(mkBtn('Kapat', () => { panelEl.style.display = 'none'; }));
+    panelEl.appendChild(header);
+
+    const testRow = document.createElement('div');
+    testRow.style.cssText = 'display:flex;gap:6px;padding:0 8px 8px;border-bottom:1px solid #333;';
+    const rawTestBtn = mkBtn('🔊 Ham TTS Testi (TR)', () => {
+      const startedAt = Date.now();
+      push('raw_test', { phase: 'attempt' });
+      try {
+        const u = new SpeechSynthesisUtterance('Test bir iki üç');
+        u.lang = 'tr-TR';
+        u.onstart = () => push('raw_test', { phase: 'started', ms: Date.now() - startedAt });
+        u.onend = () => push('raw_test', { phase: 'ended', ms: Date.now() - startedAt });
+        u.onerror = (e) => push('raw_test', { phase: 'error', ms: Date.now() - startedAt, error: String(e && e.error || 'unknown') });
+        window.speechSynthesis.speak(u);
+        setTimeout(() => {
+          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            push('raw_test', { phase: 'no_event_after_2s', speaking: window.speechSynthesis.speaking, pending: window.speechSynthesis.pending });
+          }
+        }, 2000);
+      } catch (e) {
+        push('raw_test', { phase: 'exception', error: String(e && e.message || e) });
+      }
+    });
+    rawTestBtn.style.background = '#7c3aed';
+    testRow.appendChild(rawTestBtn);
+    panelEl.appendChild(testRow);
+
+    logEl = document.createElement('pre');
+    logEl.style.cssText = 'margin:0;padding:8px;overflow:auto;flex:1;color:#8ef58e;font-size:10.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace;';
+    logEl.textContent = '(henüz log yok — TTS dene, burada canlı görünecek)';
+    panelEl.appendChild(logEl);
+    document.body.appendChild(panelEl);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', buildUI);
+  } else {
+    buildUI();
+  }
+
+  // Mevcut debugLog() fonksiyonunu DEĞİŞTİRMEDEN, her çağrıldığında paneli de
+  // güncelleyecek şekilde sarmalıyoruz. Bu blok silinince debugLog otomatik
+  // olarak eski haline döner, başka hiçbir yeri elle düzeltmek gerekmez.
+  const origDebugLog = window.debugLog;
+  if (typeof origDebugLog === 'function') {
+    window.debugLog = function (event, data) {
+      try { push(event, data); } catch {}
+      return origDebugLog.apply(this, arguments);
+    };
+  }
+
+  // Ekranda DevTools olmasa bile yakalanamayan hatalar ve reddedilen
+  // promise'ler panelde görünsün.
+  window.addEventListener('error', e => {
+    try { push('js_error', { message: e.message, source: e.filename, line: e.lineno, col: e.colno }); } catch {}
+  });
+  window.addEventListener('unhandledrejection', e => {
+    try { push('js_unhandled_rejection', { reason: String((e.reason && e.reason.message) || e.reason) }); } catch {}
+  });
+})();
+// ========== GEÇİCİ DEBUG PANELİ SONU ==========
 
 </script>
 <div id="micReviveOverlay" aria-hidden="true">
