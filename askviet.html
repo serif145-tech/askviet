@@ -870,7 +870,7 @@ let firebaseAuth = null;
 let firebaseAuthRefreshTimer = null;
 let pendingAuthPassword = '';
 let selectedLoginRole = localStorage.getItem('askviet_last_role') === 'vi' ? 'vi' : 'tr';
-let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,pendingPhoneTts=null,phoneTtsUtterance=null,phoneTtsResumeTimer=null,phoneTtsStartTimer=null,phoneTtsEndTimer=null,phoneTtsStarting=false,phoneTtsVoicesWait=null,phoneTtsGestureAt=0;
+let isSpeaking=false,ttsToken=0,ttsAbort=null,ttsCache=new Map(),ttsBufferCache=new Map(),audioUrl=null,audioPlayer=null,unlockAudioPlayer=null,ttsSource=null,ttsGain=null,pendingBlockedAudio=null,pendingPhoneTts=null,phoneTtsUtterance=null,phoneTtsResumeTimer=null,phoneTtsStartTimer=null,phoneTtsEndTimer=null,phoneTtsStarting=false,phoneTtsVoicesWait=null,phoneTtsGestureAt=0,phoneTtsUnlockProtectUntil=0;
 let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let autoReadEnabledAt = { tr: 0, vi: 0 };
@@ -6966,7 +6966,6 @@ function bindSpeakAction(btn, action) {
         autoSpeakDeferred.delete(pendingPhoneTts.id);
       }
       pendingPhoneTts = null;
-      hidePhoneTtsRetryChip();
     }
     if (btn.dataset.playing === '1' || (btn.dataset.busy === '1' && !btn.dataset.remoteAudioId)) {
       stopAudio();
@@ -7790,11 +7789,10 @@ function stopAudio(){
   ttsToken++;
   pendingBlockedAudio=null;
   pendingPhoneTts=null;
-  hidePhoneTtsRetryChip();
   if(phoneTtsResumeTimer){clearInterval(phoneTtsResumeTimer);phoneTtsResumeTimer=null}
   if(phoneTtsStartTimer){clearTimeout(phoneTtsStartTimer);phoneTtsStartTimer=null}
   if(phoneTtsEndTimer){clearTimeout(phoneTtsEndTimer);phoneTtsEndTimer=null}
-  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
+  try { if ('speechSynthesis' in window && Date.now() > phoneTtsUnlockProtectUntil) window.speechSynthesis.cancel(); } catch {}
   phoneTtsUtterance=null;
   phoneTtsStarting=false;
   if(ttsAbort){try{ttsAbort.abort()}catch{}ttsAbort=null}
@@ -7815,7 +7813,6 @@ function interruptAudioForRecording() {
   autoSpeakDeferred.clear();
   pendingBlockedAudio = null;
   pendingPhoneTts = null;
-  hidePhoneTtsRetryChip();
   if (isSpeaking || phoneTtsStarting || activeSpeakBtn || ttsAbort || audioUrl || audioPlayer?.src) stopAudio();
 }
 function normalizeTtsInput(text) {
@@ -7996,32 +7993,8 @@ function primePhoneTtsVoices() {
   waitForPhoneTtsVoices(1500).then(refreshPhoneTtsVoiceSelectors).catch(()=>{});
 }
 
-let phoneTtsRetryChipEl = null;
-let phoneTtsRetryChipTimer = null;
-function showPhoneTtsRetryChip() {
-  if (!phoneTtsRetryChipEl) {
-    phoneTtsRetryChipEl = document.createElement('button');
-    phoneTtsRetryChipEl.id = 'phoneTtsRetryChip';
-    phoneTtsRetryChipEl.textContent = '🔊 Sesi duymak için dokun';
-    phoneTtsRetryChipEl.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:99997;background:#7c3aed;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.35);white-space:nowrap;';
-    phoneTtsRetryChipEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hidePhoneTtsRetryChip();
-      playPendingPhoneTtsFromGesture();
-    });
-    document.body.appendChild(phoneTtsRetryChipEl);
-  }
-  phoneTtsRetryChipEl.style.display = 'block';
-  if (phoneTtsRetryChipTimer) clearTimeout(phoneTtsRetryChipTimer);
-  phoneTtsRetryChipTimer = setTimeout(hidePhoneTtsRetryChip, 60000);
-}
-function hidePhoneTtsRetryChip() {
-  if (phoneTtsRetryChipEl) phoneTtsRetryChipEl.style.display = 'none';
-  if (phoneTtsRetryChipTimer) { clearTimeout(phoneTtsRetryChipTimer); phoneTtsRetryChipTimer = null; }
-}
 async function playPendingPhoneTtsFromGesture() {
   if (!pendingPhoneTts) return false;
-  hidePhoneTtsRetryChip();
   const item = pendingPhoneTts;
   pendingPhoneTts = null;
   if (Date.now() - Number(item.queuedAt || 0) > 60000) {
@@ -8099,7 +8072,6 @@ async function speakPhoneTTS(text, target, btn, silent=false, opts={}) {
             id: autoSpeakQueueId(text, target),
             queuedAt: Date.now()
           };
-          showPhoneTtsRetryChip();
         }
       }
       resolve(ok);
@@ -8973,6 +8945,7 @@ function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
+    phoneTtsUnlockProtectUntil = Date.now() + 900;
     window.speechSynthesis.speak(u);
   } catch {}
 }
