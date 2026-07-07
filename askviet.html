@@ -851,28 +851,6 @@ function playClickFeedback() {
     osc.stop(now + 0.13);
   } catch {}
 }
-function playPhoneTtsUnlockChime() {
-  try {
-    if (!clickFeedbackEnabled()) return;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!clickFeedbackCtx) clickFeedbackCtx = new Ctx();
-    if (clickFeedbackCtx.state === 'suspended') clickFeedbackCtx.resume().catch(()=>{});
-    const now = clickFeedbackCtx.currentTime;
-    const osc = clickFeedbackCtx.createOscillator();
-    const gain = clickFeedbackCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1500, now);
-    osc.frequency.exponentialRampToValueAtTime(1900, now + 0.05);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-    osc.connect(gain);
-    gain.connect(clickFeedbackCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.24);
-  } catch {}
-}
 function triggerButtonFeedback() {
   if (!clickFeedbackEnabled()) return;
   playClickFeedback();
@@ -8970,10 +8948,9 @@ function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
-    u.volume = 0.3;
+    u.volume = 0.03;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { phoneTtsEngineUnlocked = true; };
-    playPhoneTtsUnlockChime();
     window.speechSynthesis.speak(u);
   } catch {}
 }
@@ -8991,12 +8968,11 @@ function enablePhoneTtsSoundManually(btn) {
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
-    u.volume = 0.3;
+    u.volume = 0.03;
     phoneTtsEngineUnlocked = true;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { if (btn) { const old = btn.textContent; btn.textContent = '✓ Etkinleştirildi'; setTimeout(() => btn.textContent = old, 2200); } };
     u.onerror = () => { if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); } };
-    playPhoneTtsUnlockChime();
     window.speechSynthesis.speak(u);
   } catch {
     if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); }
