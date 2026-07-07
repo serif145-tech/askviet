@@ -10328,6 +10328,31 @@ clearUnreadCount();
     header.appendChild(mkBtn('Kapat', () => { panelEl.style.display = 'none'; }));
     panelEl.appendChild(header);
 
+    const testRow = document.createElement('div');
+    testRow.style.cssText = 'display:flex;gap:6px;padding:0 8px 8px;border-bottom:1px solid #333;';
+    const rawTestBtn = mkBtn('🔊 Ham TTS Testi (TR)', () => {
+      const startedAt = Date.now();
+      push('raw_test', { phase: 'attempt' });
+      try {
+        const u = new SpeechSynthesisUtterance('Test bir iki üç');
+        u.lang = 'tr-TR';
+        u.onstart = () => push('raw_test', { phase: 'started', ms: Date.now() - startedAt });
+        u.onend = () => push('raw_test', { phase: 'ended', ms: Date.now() - startedAt });
+        u.onerror = (e) => push('raw_test', { phase: 'error', ms: Date.now() - startedAt, error: String(e && e.error || 'unknown') });
+        window.speechSynthesis.speak(u);
+        setTimeout(() => {
+          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            push('raw_test', { phase: 'no_event_after_2s', speaking: window.speechSynthesis.speaking, pending: window.speechSynthesis.pending });
+          }
+        }, 2000);
+      } catch (e) {
+        push('raw_test', { phase: 'exception', error: String(e && e.message || e) });
+      }
+    });
+    rawTestBtn.style.background = '#7c3aed';
+    testRow.appendChild(rawTestBtn);
+    panelEl.appendChild(testRow);
+
     logEl = document.createElement('pre');
     logEl.style.cssText = 'margin:0;padding:8px;overflow:auto;flex:1;color:#8ef58e;font-size:10.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace;';
     logEl.textContent = '(henüz log yok — TTS dene, burada canlı görünecek)';
