@@ -447,10 +447,13 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .tts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tts-save{padding:11px 12px;border-radius:12px;border:none;background:linear-gradient(135deg,#8b5cf6,#6d5df2);color:#fff;font-weight:900;font-size:13.5px;cursor:pointer;box-shadow:0 4px 14px rgba(124,109,242,.4);transition:transform .1s ease}
 .tts-save:active{transform:scale(.97)}
+.phone-tts-enable-btn{width:100%;padding:11px 12px;border-radius:12px;border:none;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.35);transition:transform .1s ease;margin:6px 0 2px}
+.phone-tts-enable-btn:active{transform:scale(.97)}
 .tts-panel.vi-push-only label,
 .tts-panel.vi-push-only select,
 .tts-panel.vi-push-only .tts-grid,
 .tts-panel.vi-push-only .tts-save,
+.tts-panel.vi-push-only .phone-tts-enable-btn,
 .tts-panel.vi-push-only .list-panel-btn{display:none!important}
 .tts-panel.vi-push-only{width:min(220px,calc(100vw - 18px))}
 .tts-panel.vi-push-only #webPushPanelBtn{display:block!important;margin-top:0}
@@ -637,6 +640,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
             <option value="gpt-4o-mini-tts">GPT-4o mini TTS</option>
             <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
           </select>
+          <button type="button" class="phone-tts-enable-btn" id="phoneTtsEnableBtn" onclick="enablePhoneTtsSoundManually(this)">🔊 Sesi Etkinleştir (bir kere dokun)</button>
           <div class="tts-grid">
             <div>
               <label>TR sesi</label>
@@ -8950,6 +8954,28 @@ function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   } catch {}
 }
 document.addEventListener('click', () => { unlockPhoneTtsEngineIfNeeded(); }, { capture:true });
+function enablePhoneTtsSoundManually(btn) {
+  if (!('speechSynthesis' in window)) {
+    if (btn) { const old = btn.textContent; btn.textContent = '❌ Bu cihazda desteklenmiyor'; setTimeout(() => btn.textContent = old, 2200); }
+    return;
+  }
+  const model = normalizeTtsModel(document.getElementById('ttsModelSelect')?.value || getTtsSettings().model);
+  if (model !== 'phone-tts') {
+    if (btn) { const old = btn.textContent; btn.textContent = '⚠️ Önce "Telefon TTS" seç'; setTimeout(() => btn.textContent = old, 2200); }
+    return;
+  }
+  try {
+    const u = new SpeechSynthesisUtterance('Hazır');
+    u.lang = 'tr-TR';
+    phoneTtsEngineUnlocked = true;
+    phoneTtsUnlockProtectUntil = Date.now() + 900;
+    u.onstart = () => { if (btn) { const old = btn.textContent; btn.textContent = '✓ Etkinleştirildi'; setTimeout(() => btn.textContent = old, 2200); } };
+    u.onerror = () => { if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); } };
+    window.speechSynthesis.speak(u);
+  } catch {
+    if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); }
+  }
+}
 document.addEventListener('pointerdown',e=>{
   markChatUserActivity();
   phoneTtsGestureAt=Date.now();
