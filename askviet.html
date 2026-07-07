@@ -2120,6 +2120,15 @@ async function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
+  // Ses motorunun "unlock" durumu her sayfa yüklemesinde sıfırlanıyor (bu bir
+  // tarayıcı/OS kısıtı, kalıcı yapılamıyor). Otomatik seslendirmeyi de her
+  // oturumda kapalı başlatıyoruz ki kullanıcı bilerek tekrar açsın — o açma
+  // dokunuşu aynı zamanda sesi de gerçekten etkinleştirmiş olsun.
+  autoRead = false;
+  localStorage.setItem('askviet_autoread', '0');
+  autoReadStates[role] = false;
+  autoReadEnabledAt[role] = 0;
+  fbSet(AUTO_READ_PATH + '/' + role, false).catch(()=>{});
   loadPersistentQueues();
   isTyping = false;
   lastTypingSignalAt = 0;
