@@ -8567,10 +8567,12 @@ function applyAutoReadData(data, path='/') {
   } else if (path === '/tr') autoReadStates.tr = !!data;
   else if (path === '/vi') autoReadStates.vi = !!data;
   if (myRole) { const own = getAutoReadState(myRole); autoRead = own; localStorage.setItem('askviet_autoread', own ? '1' : '0'); }
+  if (myRole && getAutoReadState(myRole)) unlockPhoneTtsEngineIfNeeded();
   updateAutoReadUI();
   if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
 }
 async function toggleAutoRead() {
+  unlockPhoneTtsEngineIfNeeded();
   unlockAudio();
   const role = autoReadControlRole();
   const next = !getAutoReadState(role);
@@ -8584,6 +8586,7 @@ async function toggleAutoRead() {
   if (role === myRole && next) clearAutoSpeakQueue(false);
 }
 async function toggleOwnAutoRead() {
+  unlockPhoneTtsEngineIfNeeded();
   unlockAudio();
   if (!myRole) return;
   const next = !getAutoReadState(myRole);
