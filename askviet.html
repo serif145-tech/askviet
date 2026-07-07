@@ -851,6 +851,28 @@ function playClickFeedback() {
     osc.stop(now + 0.13);
   } catch {}
 }
+function playPhoneTtsUnlockChime() {
+  try {
+    if (!clickFeedbackEnabled()) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!clickFeedbackCtx) clickFeedbackCtx = new Ctx();
+    if (clickFeedbackCtx.state === 'suspended') clickFeedbackCtx.resume().catch(()=>{});
+    const now = clickFeedbackCtx.currentTime;
+    const osc = clickFeedbackCtx.createOscillator();
+    const gain = clickFeedbackCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1500, now);
+    osc.frequency.exponentialRampToValueAtTime(1900, now + 0.05);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    osc.connect(gain);
+    gain.connect(clickFeedbackCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  } catch {}
+}
 function triggerButtonFeedback() {
   if (!clickFeedbackEnabled()) return;
   playClickFeedback();
@@ -2120,15 +2142,6 @@ async function start(role) {
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
-  // Ses motorunun "unlock" durumu her sayfa yüklemesinde sıfırlanıyor (bu bir
-  // tarayıcı/OS kısıtı, kalıcı yapılamıyor). Otomatik seslendirmeyi de her
-  // oturumda kapalı başlatıyoruz ki kullanıcı bilerek tekrar açsın — o açma
-  // dokunuşu aynı zamanda sesi de gerçekten etkinleştirmiş olsun.
-  autoRead = false;
-  localStorage.setItem('askviet_autoread', '0');
-  autoReadStates[role] = false;
-  autoReadEnabledAt[role] = 0;
-  fbSet(AUTO_READ_PATH + '/' + role, false).catch(()=>{});
   loadPersistentQueues();
   isTyping = false;
   lastTypingSignalAt = 0;
@@ -8576,12 +8589,10 @@ function applyAutoReadData(data, path='/') {
   } else if (path === '/tr') autoReadStates.tr = !!data;
   else if (path === '/vi') autoReadStates.vi = !!data;
   if (myRole) { const own = getAutoReadState(myRole); autoRead = own; localStorage.setItem('askviet_autoread', own ? '1' : '0'); }
-  if (myRole && getAutoReadState(myRole)) unlockPhoneTtsEngineIfNeeded();
   updateAutoReadUI();
   if (!getAutoReadState(myRole)) { autoSpeakQueue = []; autoSpeakDeferred.clear(); }
 }
 async function toggleAutoRead() {
-  unlockPhoneTtsEngineIfNeeded();
   unlockAudio();
   const role = autoReadControlRole();
   const next = !getAutoReadState(role);
@@ -8595,7 +8606,6 @@ async function toggleAutoRead() {
   if (role === myRole && next) clearAutoSpeakQueue(false);
 }
 async function toggleOwnAutoRead() {
-  unlockPhoneTtsEngineIfNeeded();
   unlockAudio();
   if (!myRole) return;
   const next = !getAutoReadState(myRole);
@@ -8960,8 +8970,10 @@ function unlockPhoneTtsEngineIfNeeded(modelOverride) {
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
+    u.volume = 0.3;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { phoneTtsEngineUnlocked = true; };
+    playPhoneTtsUnlockChime();
     window.speechSynthesis.speak(u);
   } catch {}
 }
@@ -8979,10 +8991,12 @@ function enablePhoneTtsSoundManually(btn) {
   try {
     const u = new SpeechSynthesisUtterance('Hazır');
     u.lang = 'tr-TR';
+    u.volume = 0.3;
     phoneTtsEngineUnlocked = true;
     phoneTtsUnlockProtectUntil = Date.now() + 900;
     u.onstart = () => { if (btn) { const old = btn.textContent; btn.textContent = '✓ Etkinleştirildi'; setTimeout(() => btn.textContent = old, 2200); } };
     u.onerror = () => { if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); } };
+    playPhoneTtsUnlockChime();
     window.speechSynthesis.speak(u);
   } catch {
     if (btn) { const old = btn.textContent; btn.textContent = '❌ Olmadı, tekrar dene'; setTimeout(() => btn.textContent = old, 2200); }
