@@ -823,7 +823,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-07-tts-push-fix-1';
+const APP_VERSION = '2026-07-09-live-html-echo-route-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -888,6 +888,8 @@ let autoRead=localStorage.getItem('askviet_autoread')==='1';
 let autoReadStates = { tr: null, vi: null };
 let autoReadEnabledAt = { tr: 0, vi: 0 };
 let theirRole = null;
+let pttTranslationContext = [];
+let pseudoLiveTranslationContext = [];
 let apiKey = '';
 let geminiApiKey = '';
 let claudeApiKey = '';
@@ -6391,7 +6393,7 @@ async function translateText(text, from, modelOverride) {
       roomId: ROOM
     });
     const out = String(data && data.translation || '').trim();
-    if (!out) throw new Error(modelName(serverModel) + ' boÅŸ cevap dÃ¶ndÃ¼');
+    if (!out) throw new Error(modelName(serverModel) + ' boş cevap döndü');
     return out;
   }
 
@@ -6859,6 +6861,37 @@ function setPttLog(text, beforeLastTurn=false, state='') {
   el.querySelectorAll('.ptt-status').forEach(node => node.remove());
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
+function usesDeepSeekContext(modelSpec) {
+  const model = normalizeChatModel(modelSpec || selectedModel || '').toLowerCase();
+  return model === 'deepseek:deepseek-v4-pro' || model === 'deepseek:deepseek-v4-flash';
+}
+function trimVoiceContextText(value) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  return clean.length > 240 ? clean.slice(0, 240) : clean;
+}
+function buildVoiceContextPayload(modelSpec, history) {
+  if (!usesDeepSeekContext(modelSpec)) return null;
+  return (Array.isArray(history) ? history : [])
+    .slice(-5)
+    .map(item => ({
+      role: item && item.role === 'vi' ? 'vi' : 'tr',
+      text: trimVoiceContextText(item && item.text),
+      translation: trimVoiceContextText(item && item.translation)
+    }))
+    .filter(item => item.text);
+}
+function rememberVoiceContext(history, role, text, translation) {
+  if (!Array.isArray(history)) return;
+  const cleanText = trimVoiceContextText(text);
+  const cleanTranslation = trimVoiceContextText(translation);
+  if (!cleanText || !cleanTranslation) return;
+  history.push({ role: role === 'vi' ? 'vi' : 'tr', text: cleanText, translation: cleanTranslation });
+  while (history.length > 5) history.shift();
+}
+function voiceContextRequestFields(modelSpec, history, source) {
+  const context = buildVoiceContextPayload(modelSpec, history);
+  return context ? { contextSource: source, context } : {};
+}
 function appendPttLog(text) {
   const el = document.getElementById('pttLog');
   const ready = uiText('Hazır.', 'Sẵn sàng.');
@@ -6880,9 +6913,11 @@ async function pttTranslate(text, from, transcribeNotice='') {
     text,
     fromRole: from,
     model: baseModel,
-    roomId: ROOM
+    roomId: ROOM,
+    ...voiceContextRequestFields(baseModel, pttTranslationContext, 'ptt')
   });
   const out = String(data.translation || '').trim();
+  rememberVoiceContext(pttTranslationContext, from, text, out);
   renderPttTurn(text, out, from, target);
   const usedModel = modelName(data.model || data.usedModel || baseModel);
   setPttLog((transcribeNotice || '') + usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'), true, pttAutoSpeak ? 'working' : 'idle');
@@ -8202,13 +8237,7 @@ async function speakPhoneTTSWithMicPaused(text, target) {
   // yansımıyor (WebKit'in bilinen audio-session kısıtı). Live'da mikrofon
   // stream'ini kapatıp yeniden açmak yerine (izin/gecikme riski), konuşma
   // süresince sadece track'i geçici olarak devre dışı bırakıyoruz.
-  const tracks = pseudoLiveStream ? pseudoLiveStream.getAudioTracks() : [];
-  tracks.forEach(t => { try { t.enabled = false; } catch {} });
-  try {
-    return await speakPhoneTTS(text, target, null, true);
-  } finally {
-    tracks.forEach(t => { try { t.enabled = true; } catch {} });
-  }
+  return await speakPhoneTTS(text, target, null, true);
 }
 
 if ('speechSynthesis' in window) {
@@ -9656,6 +9685,7 @@ async function startPseudoLive(preparedStream=null) {
   pseudoLiveRunning=true;
   pseudoLiveLastAudioAt=Date.now();
   pseudoLiveQueue=[];
+  pseudoLiveTranslationContext=[];
   pseudoLiveProcessing=false;
   pseudoLiveActiveWorkers=0;
   pseudoLiveDispatchSeq=0;
@@ -9694,6 +9724,7 @@ async function startGeminiLive() {
 function stopPseudoLive(silent=false) {
   pseudoLiveSessionId++;
   pseudoLiveRunning=false;
+  pseudoLiveTranslationContext=[];
   stopAudio();
   try { if (pseudoLiveProcessor) pseudoLiveProcessor.disconnect(); } catch {}
   try { if (pseudoLiveAnalyser) pseudoLiveAnalyser.disconnect(); } catch {}
@@ -10078,7 +10109,13 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
   setRealLiveStatus('Çeviri hazırlanıyor', 'working');
   updateRealLiveInfo((transcribeFallbackNotice || '') + modelName(selectedModel));
   try {
-    const tr=await askVietServer('translate', { text: srcText, fromRole: from, model: selectedModel, roomId: ROOM });
+    const tr=await askVietServer('translate', {
+      text: srcText,
+      fromRole: from,
+      model: selectedModel,
+      roomId: ROOM,
+      ...voiceContextRequestFields(selectedModel, pseudoLiveTranslationContext, 'live')
+    });
     if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return {type:'skip'};
     const translated=String(tr.translation || '').trim();
     if (!translated) return { type:'notice', message:'Çeviri boş döndü', state:'error' };
@@ -10111,6 +10148,7 @@ function commitPseudoLiveResult(result) {
     return;
   }
   if (result.type !== 'turn') return;
+  rememberVoiceContext(pseudoLiveTranslationContext, result.from, result.srcText, result.translated);
   if (result.response !== 'AUDIO') {
     appendPseudoLiveTurn(result.srcText, result.translated, result.from, result.target, result.translationModel, result.transcribeModel);
   }
