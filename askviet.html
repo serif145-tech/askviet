@@ -10196,7 +10196,41 @@ function isBadLiveTranscript(text) {
   // legitimately contains the word "altyazı"). Only an empty result is rejected.
   const clean=String(text || '').trim();
   if (!clean) return true;
-  return false;
+  return looksLikeTranscribeInstructionLeak(clean);
+}
+
+function normalizeInstructionLeakText(text) {
+  return String(text || '')
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\p{L}\s]/gu,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function looksLikeTranscribeInstructionLeak(text) {
+  const clean=normalizeInstructionLeakText(text);
+  if (!clean) return false;
+  if (['turkce','turk dili','vietnamca','tieng viet','tieng tho nhi ky','turkish','vietnamese'].includes(clean)) return true;
+  const hasLanguage=/\b(turkce|turkish|vietnamca|vietnamese|tieng viet|tieng tho nhi ky)\b/.test(clean);
+  const hasInstruction=/\b(olmali|olabilir|yalnizca|sadece|disinda|diger|soyleme|duydugun|ceviri yapma|cevap verme|bos cevap|belirsiz|altyazi|tesekkur|video|uydurma|return empty|clear speech|do not translate|do not answer|transcribe|translate|only)\b/.test(clean)
+    || clean.includes('aynen yaz')
+    || clean.includes('khong dich')
+    || clean.includes('khong tra loi')
+    || clean.includes('chep lai')
+    || clean.includes('phu de')
+    || clean.includes('cam on')
+    || clean.includes('khong ro')
+    || clean.includes('tra ve rong');
+  if (hasLanguage && hasInstruction) return true;
+  let hits=0;
+  if (hasLanguage) hits++;
+  if (clean.startsWith('bu ses') || clean.startsWith('am thanh nay') || clean.startsWith('day la am thanh') || clean.startsWith('this audio') || clean.startsWith('the audio')) hits++;
+  if (clean.includes('ceviri yapma') || clean.includes('cevap verme') || clean.includes('do not translate') || clean.includes('do not answer') || clean.includes('khong dich') || clean.includes('khong tra loi')) hits++;
+  if (clean.includes('duydugun') || clean.includes('aynen yaz') || clean.includes('chep lai') || clean.includes('transcribe')) hits++;
+  if (clean.includes('bos cevap') || clean.includes('belirsiz') || clean.includes('return empty') || clean.includes('clear speech') || clean.includes('khong ro') || clean.includes('tra ve rong')) hits++;
+  return hits >= 2;
 }
 
 function normalizeLiveCompareText(text) {
