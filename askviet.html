@@ -835,15 +835,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="sticker-panel" id="stickerPanel">
     <div class="sticker-panel-head">
       <div class="sticker-tabs">
-        <button type="button" class="sticker-tab active" data-tab="recent" onclick="setStickerTab('recent')">Son</button>
-        <button type="button" class="sticker-tab" data-tab="fav" onclick="setStickerTab('fav')">Favori</button>
-        <button type="button" class="sticker-tab" data-tab="all" onclick="setStickerTab('all')">Tümü</button>
+        <button type="button" class="sticker-tab active" data-tab="recent" data-tr="Son" data-vi="Gần đây" onclick="setStickerTab('recent')">Son</button>
+        <button type="button" class="sticker-tab" data-tab="fav" data-tr="Favori" data-vi="Yêu thích" onclick="setStickerTab('fav')">Favori</button>
+        <button type="button" class="sticker-tab" data-tab="all" data-tr="Tümü" data-vi="Tất cả" onclick="setStickerTab('all')">Tümü</button>
       </div>
     </div>
     <div class="sticker-tools">
-      <button type="button" class="sticker-add-btn" onclick="openStickerImport()">+ Ekle</button>
-      <button type="button" class="sticker-add-btn" onclick="openStickerFolderImport()">Klasör</button>
-      <button type="button" class="sticker-add-btn" onclick="openStickerFolderImport()">Yenile</button>
+      <button type="button" class="sticker-add-btn" data-tr="+ Ekle" data-vi="+ Thêm" onclick="openStickerImport()">+ Ekle</button>
+      <button type="button" class="sticker-add-btn" data-tr="Klasör" data-vi="Thư mục" onclick="openStickerFolderImport()">Klasör</button>
+      <button type="button" class="sticker-add-btn" data-tr="Yenile" data-vi="Làm mới" onclick="openStickerFolderImport()">Yenile</button>
       <button type="button" class="sticker-add-btn" id="stickerSelectBtn" onclick="toggleStickerSelectMode()">Seç</button>
       <button type="button" class="sticker-add-btn warn" id="stickerDeleteBtn" onclick="deleteSelectedStickers()" style="display:none">Sil</button>
     </div>
@@ -3686,6 +3686,7 @@ function setMessageContent(el, msg) {
     img.onload = () => wrap.classList.add('loaded');
     img.onerror = () => wrap.classList.add('error');
     img.src = mediaUrl;
+    bindStickerArchivePress(wrap, msg, mediaUrl);
     wrap.append(fallback, img);
     originalContent.appendChild(wrap);
   } else if (msg.type === 'image' && mediaUrl) {
@@ -5471,12 +5472,19 @@ function toggleStickerPanel(force) {
     const stickers = loadStickers();
     window.currentStickerTab = stickers.some(s => Number(s.lastUsed || 0) > 0) ? 'recent'
       : (stickers.some(s => !!s.favorite) ? 'fav' : 'all');
+    updateStickerPanelLanguage();
     renderStickerPanel();
   }
   return open;
 }
+function updateStickerPanelLanguage() {
+  document.querySelectorAll('#stickerPanel [data-tr][data-vi]').forEach(el => {
+    el.textContent = uiText(el.dataset.tr || '', el.dataset.vi || el.dataset.tr || '');
+  });
+}
 function setStickerTab(tab) {
   window.currentStickerTab = tab || 'all';
+  updateStickerPanelLanguage();
   document.querySelectorAll('.sticker-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === window.currentStickerTab));
   renderStickerPanel();
 }
@@ -5529,6 +5537,7 @@ async function importStickerFile(file) {
 function renderStickerPanel() {
   const grid = document.getElementById('stickerGrid');
   if (!grid) return;
+  updateStickerPanelLanguage();
   const tab = window.currentStickerTab || 'recent';
   document.querySelectorAll('.sticker-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
   updateStickerSelectionButtons();
@@ -5608,6 +5617,59 @@ function deleteSelectedStickers() {
   updateStickerSelectionButtons();
   renderStickerPanel();
   showMediaStatus(uiText('Sticker silindi.', 'Đã xóa sticker.'), 1000);
+}
+function stickerAlreadySaved(url) {
+  if (!url) return false;
+  return loadStickers().some(s => s && s.url === url);
+}
+async function addStickerMessageToLibrary(msg, url) {
+  if (!url) return;
+  if (stickerAlreadySaved(url)) {
+    showMediaStatus(uiText('Sticker zaten arşivde.', 'Sticker đã có trong bộ sưu tập.'), 1200);
+    return;
+  }
+  if (!(await askConfirm('addSticker'))) return;
+  const list = loadStickers();
+  list.unshift({
+    id: 'st_msg_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+    name: (msg && msg.text && !isStickerType(msg.type)) ? msg.text : 'Sticker',
+    url,
+    mime: (msg && msg.mime) || (String(url).toLowerCase().includes('.gif') ? 'image/gif' : 'image/webp'),
+    sourceKey: 'message|' + String(url).slice(0, 140),
+    favorite: false,
+    lastUsed: 0
+  });
+  saveStickers(list);
+  showMediaStatus(uiText('Sticker arşive eklendi.', 'Đã thêm sticker vào bộ sưu tập.'), 1200);
+}
+function bindStickerArchivePress(el, msg, url) {
+  if (!el || !url) return;
+  let holdTimer = null;
+  let longPressed = false;
+  const clear = () => {
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = null;
+  };
+  el.addEventListener('pointerdown', e => {
+    longPressed = false;
+    clear();
+    holdTimer = setTimeout(() => {
+      longPressed = true;
+      addStickerMessageToLibrary(msg, url);
+    }, 620);
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => el.addEventListener(ev, clear));
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    clear();
+    addStickerMessageToLibrary(msg, url);
+  });
+  el.addEventListener('click', e => {
+    if (longPressed) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
 }
 function toggleStickerFavorite(id) {
   const list = loadStickers();
@@ -8752,6 +8814,10 @@ function askConfirm(kind) {
     delete: {
       title: isVi ? 'Xóa tin nhắn?' : 'Mesaj silinecek',
       text: isVi ? 'Tin nhắn silinecek. Bạn chắc chứ?' : 'Bu mesaj silinecek. Emin misin?'
+    },
+    addSticker: {
+      title: isVi ? 'Thêm sticker?' : 'Sticker arşive eklensin mi?',
+      text: isVi ? 'Sticker này sẽ được lưu vào bộ sưu tập của bạn.' : 'Bu sticker kendi sticker arşivine eklenecek.'
     },
     blockLive: {
       title: 'Kara listeye eklensin mi?',
