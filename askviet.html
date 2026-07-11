@@ -107,7 +107,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 
 .messages{width:100%;min-width:0;flex:1;overflow-x:hidden;overflow-y:auto;padding:14px 10px;-webkit-overflow-scrolling:touch;background:#f0ece8;overscroll-behavior:contain;overflow-anchor:none}
 .load-older-btn{display:block;margin:2px auto 12px;padding:7px 12px;border:1px solid #d8c8f5;border-radius:999px;background:#fff;color:#6d28d9;font-size:12px;font-weight:800;box-shadow:0 2px 8px #00000014}
-#chat.mode-panel-open .jump-bottom{display:none!important}
+#chat.mode-panel-open .jump-bottom,#chat.sticker-open .jump-bottom{display:none!important}
 .jump-bottom{position:absolute;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translate(-50%,18px) scale(.92);z-index:70;min-width:46px;height:46px;padding:0 14px;border-radius:999px;border:1px solid #60a5fa;background:#2563eb;color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 8px 24px rgba(37,99,235,.45);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease,background .16s ease}
 .jump-bottom.show{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
 .jump-bottom.has-new{background:#16a34a;border-color:#4ade80;font-size:13px;box-shadow:0 8px 24px rgba(22,163,74,.45)}
@@ -192,23 +192,34 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg-translation.language-collapsed,.msg-original.language-collapsed{display:none!important}
 .msg.mine .msg-translation{border-bottom-right-radius:9px}
 .msg.theirs .msg-translation{border-bottom-left-radius:9px}
-.sticker-panel{position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:120;display:none;max-height:min(380px,56vh);border:1px solid rgba(167,139,250,.28);border-radius:24px;background:linear-gradient(180deg,rgba(24,22,36,.96),rgba(14,12,24,.98));box-shadow:0 18px 50px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(18px);overflow:hidden}
+.sticker-panel{position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:120;display:none;max-height:min(430px,62vh);border:1px solid rgba(168,85,247,.55);border-radius:18px;background:radial-gradient(circle at 20% 0%,rgba(124,58,237,.22),transparent 34%),linear-gradient(180deg,rgba(18,18,30,.98),rgba(10,10,18,.99));box-shadow:0 18px 50px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.04) inset;backdrop-filter:blur(18px);overflow:hidden}
 .sticker-panel.open{display:flex;flex-direction:column}
-.sticker-panel-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sticker-panel-head{display:flex;align-items:center;gap:8px;padding:10px 12px 7px}
 .sticker-tabs{display:flex;gap:6px;flex:1;min-width:0}
-.sticker-tab{min-height:30px;padding:0 10px;border-radius:999px;border:1px solid rgba(167,139,250,.24);background:rgba(255,255,255,.05);color:#c4b5fd;font-size:11px;font-weight:900}
+.sticker-tab{min-height:31px;padding:0 12px;border-radius:999px;border:1px solid rgba(167,139,250,.18);background:rgba(255,255,255,.035);color:#d8ccff;font-size:11px;font-weight:900}
 .sticker-tab.active{background:linear-gradient(180deg,#7c3aed,#6d28d9);color:#fff;border-color:#a78bfa;box-shadow:0 0 14px rgba(124,58,237,.35)}
-.sticker-tools{display:flex;gap:6px;align-items:center;padding:8px 12px 0;flex-wrap:wrap}
-.sticker-add-btn{min-height:31px;padding:0 11px;border-radius:999px;border:1px solid rgba(34,197,94,.45);background:rgba(22,163,74,.20);color:#bbf7d0;font-size:12px;font-weight:950}
+.sticker-menu-wrap{position:relative;flex:0 0 auto}
+.sticker-menu-btn{width:34px;height:34px;border-radius:11px;border:1px solid rgba(167,139,250,.54);background:rgba(88,28,135,.22);color:#fff;font-size:20px;font-weight:950;display:flex;align-items:center;justify-content:center}
+.sticker-tools{position:absolute;right:0;top:40px;display:none;min-width:164px;z-index:4;padding:8px;border-radius:16px;border:1px solid rgba(167,139,250,.45);background:rgba(15,15,27,.98);box-shadow:0 16px 34px rgba(0,0,0,.42);flex-direction:column;gap:5px}
+.sticker-tools.open{display:flex}
+.sticker-add-btn{min-height:34px;padding:0 12px;border-radius:11px;border:0;background:transparent;color:#f3e8ff;font-size:12px;font-weight:850;text-align:left;display:flex;align-items:center}
+.sticker-add-btn:hover,.sticker-add-btn:active{background:rgba(124,58,237,.22)}
 .sticker-add-btn.warn{border-color:rgba(244,63,94,.5);background:rgba(244,63,94,.18);color:#fecdd3}
 .sticker-add-btn.selecting{border-color:#a78bfa;background:rgba(124,58,237,.34);color:#fff}
-.sticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:9px;padding:12px;overflow-y:auto;min-height:120px}
-.sticker-item{position:relative;height:66px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;padding:5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);transition:transform .12s ease,background .12s ease}
+.sticker-search{margin:0 12px 8px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.065);color:#fff;font-size:13px;font-weight:750;padding:0 13px;outline:none}
+.sticker-search::placeholder{color:#8f8aa0}
+.sticker-emoji-row{display:flex;gap:7px;padding:0 12px 8px;overflow-x:auto}
+.sticker-emoji-chip{min-width:34px;height:34px;border-radius:13px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.075);display:flex;align-items:center;justify-content:center;font-size:18px}
+.sticker-emoji-chip.active{background:#7c3aed;border-color:#a78bfa;box-shadow:0 0 14px rgba(124,58,237,.36)}
+.sticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:10px;padding:0 12px 12px;overflow-y:auto;min-height:160px}
+.sticker-item{position:relative;height:72px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.075);display:flex;align-items:center;justify-content:center;padding:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);transition:transform .12s ease,background .12s ease,border-color .12s ease}
 .sticker-item:active{transform:scale(.92);background:rgba(124,58,237,.18)}
-.sticker-item.selected{border-color:#22c55e;background:rgba(34,197,94,.18);box-shadow:0 0 0 2px rgba(34,197,94,.22),inset 0 1px 0 rgba(255,255,255,.08)}
+.sticker-item.selected{border-color:#a78bfa;background:rgba(124,58,237,.20);box-shadow:0 0 0 2px rgba(124,58,237,.32),inset 0 1px 0 rgba(255,255,255,.08)}
 .sticker-item.selected::after{content:'✓';position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#22c55e;color:#fff;font-size:13px;font-weight:950;box-shadow:0 4px 12px rgba(34,197,94,.35)}
 .sticker-item img{max-width:100%;max-height:100%;object-fit:contain}
-.sticker-empty{padding:22px 14px;text-align:center;color:#a3a3b5;font-size:13px;font-weight:750}
+.sticker-empty{grid-column:1/-1;padding:28px 14px;text-align:center;color:#a3a3b5;font-size:13px;font-weight:750}
+.sticker-empty-icon{width:74px;height:74px;margin:0 auto 11px;border-radius:24px;display:flex;align-items:center;justify-content:center;background:rgba(124,58,237,.13);color:#c4b5fd;font-size:36px}
+.sticker-bottom-add{align-self:center;margin:-2px 0 10px;min-height:36px;padding:0 24px;border-radius:14px;border:1px solid rgba(167,139,250,.65);background:linear-gradient(180deg,#7c3aed,#6d28d9);color:#fff;font-size:13px;font-weight:950;box-shadow:0 10px 24px rgba(124,58,237,.28)}
 .attach-wrap{display:none!important}
 .attach-menu{position:absolute;left:0;bottom:54px;display:none;gap:8px;padding:8px;border-radius:24px;background:rgba(255,255,255,.96);border:1px solid #e9d5ff;box-shadow:0 12px 34px rgba(76,29,149,.18);backdrop-filter:blur(14px);z-index:130}
 .attach-menu.open{display:flex}
@@ -835,19 +846,25 @@ img,svg,video,canvas{max-width:100%;height:auto}
   <div class="sticker-panel" id="stickerPanel">
     <div class="sticker-panel-head">
       <div class="sticker-tabs">
-        <button type="button" class="sticker-tab active" data-tab="recent" data-tr="Son" data-vi="Gần đây" onclick="setStickerTab('recent')">Son</button>
-        <button type="button" class="sticker-tab" data-tab="fav" data-tr="Favori" data-vi="Yêu thích" onclick="setStickerTab('fav')">Favori</button>
-        <button type="button" class="sticker-tab" data-tab="all" data-tr="Tümü" data-vi="Tất cả" onclick="setStickerTab('all')">Tümü</button>
+        <button type="button" class="sticker-tab active" data-tab="recent" data-tr="◷ Son" data-vi="◷ Gần đây" onclick="setStickerTab('recent')">◷ Son</button>
+        <button type="button" class="sticker-tab" data-tab="fav" data-tr="☆ Favoriler" data-vi="☆ Yêu thích" onclick="setStickerTab('fav')">☆ Favoriler</button>
+        <button type="button" class="sticker-tab" data-tab="all" data-tr="▣ Paketler" data-vi="▣ Gói" onclick="setStickerTab('all')">▣ Paketler</button>
+      </div>
+      <div class="sticker-menu-wrap">
+        <button type="button" class="sticker-menu-btn" onclick="toggleStickerMenu(event)" aria-label="Sticker menü">⋮</button>
+        <div class="sticker-tools" id="stickerTools">
+          <button type="button" class="sticker-add-btn" data-tr="+ Sticker Ekle" data-vi="+ Thêm sticker" onclick="openStickerImport()">+ Sticker Ekle</button>
+          <button type="button" class="sticker-add-btn" data-tr="▣ Paket İçe Aktar" data-vi="▣ Nhập gói" onclick="openStickerFolderImport()">▣ Paket İçe Aktar</button>
+          <button type="button" class="sticker-add-btn" data-tr="↻ Yenile" data-vi="↻ Làm mới" onclick="openStickerFolderImport()">↻ Yenile</button>
+          <button type="button" class="sticker-add-btn" id="stickerSelectBtn" onclick="toggleStickerSelectMode()">Seç</button>
+          <button type="button" class="sticker-add-btn warn" id="stickerDeleteBtn" onclick="deleteSelectedStickers()" style="display:none">Sil</button>
+        </div>
       </div>
     </div>
-    <div class="sticker-tools">
-      <button type="button" class="sticker-add-btn" data-tr="+ Ekle" data-vi="+ Thêm" onclick="openStickerImport()">+ Ekle</button>
-      <button type="button" class="sticker-add-btn" data-tr="Klasör" data-vi="Thư mục" onclick="openStickerFolderImport()">Klasör</button>
-      <button type="button" class="sticker-add-btn" data-tr="Yenile" data-vi="Làm mới" onclick="openStickerFolderImport()">Yenile</button>
-      <button type="button" class="sticker-add-btn" id="stickerSelectBtn" onclick="toggleStickerSelectMode()">Seç</button>
-      <button type="button" class="sticker-add-btn warn" id="stickerDeleteBtn" onclick="deleteSelectedStickers()" style="display:none">Sil</button>
-    </div>
+    <input class="sticker-search" id="stickerSearchInput" data-tr="Sticker ara..." data-vi="Tìm sticker..." placeholder="Sticker ara..." oninput="setStickerSearch(this.value)">
+    <div class="sticker-emoji-row" id="stickerEmojiRow"></div>
     <div class="sticker-grid" id="stickerGrid"></div>
+    <button type="button" class="sticker-bottom-add" data-tr="+ Sticker Ekle" data-vi="+ Thêm sticker" onclick="openStickerImport()">+ Sticker Ekle</button>
   </div>
 </div>
 
@@ -3678,7 +3695,7 @@ function setMessageContent(el, msg) {
     wrap.className = 'msg-sticker-wrap';
     const fallback = document.createElement('div');
     fallback.className = 'msg-sticker-fallback';
-    fallback.textContent = '✦';
+    fallback.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z"/><path d="M14 3v4a2 2 0 0 0 2 2h3"/><path d="M8 13h.01M12 13h.01M16 13h.01"/></svg>';
     const img = document.createElement('img');
     img.className = 'msg-sticker-img';
     img.draggable = false;
@@ -5315,6 +5332,10 @@ function updateJumpBottomButton() {
   const m = document.getElementById('messages');
   const btn = document.getElementById('jumpBottomBtn');
   if (!m || !btn) return;
+  if (document.getElementById('stickerPanel')?.classList.contains('open')) {
+    btn.classList.remove('show');
+    return;
+  }
   const away = !isAtChatBottom();
   if (!away) unseenIncomingCount = 0;
   btn.classList.toggle('has-new', unseenIncomingCount > 0);
@@ -5326,6 +5347,7 @@ function updateJumpBottomButton() {
 }
 
 function noteIncomingWhileAway(msg) {
+  if (document.getElementById('stickerPanel')?.classList.contains('open')) return;
   if (!msg || msg.role === myRole || shouldFollowChatBottom()) return;
   unseenIncomingCount = Math.min(99, unseenIncomingCount + 1);
   updateJumpBottomButton();
@@ -5453,6 +5475,9 @@ function saveStickers(list) {
 window.currentStickerTab = window.currentStickerTab || 'recent';
 window.stickerSelectMode = false;
 window.selectedStickerIds = window.selectedStickerIds || new Set();
+window.stickerSearchText = window.stickerSearchText || '';
+window.stickerEmojiFilter = window.stickerEmojiFilter || '';
+const STICKER_EMOJI_FILTERS = ['', '🙂', '😆', '😍', '🤣', '😎', '❤️', '😭', '😈'];
 function toggleAttachMenu(force) {
   const menu = document.getElementById('attachMenu');
   if (!menu) return false;
@@ -5466,7 +5491,9 @@ function toggleStickerPanel(force) {
   if (!panel) return false;
   const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
   panel.classList.toggle('open', open);
+  document.getElementById('chat')?.classList.toggle('sticker-open', open);
   document.getElementById('stickerBtn')?.classList.toggle('on', open);
+  document.getElementById('stickerTools')?.classList.remove('open');
   if (open) {
     toggleAttachMenu(false);
     const stickers = loadStickers();
@@ -5479,19 +5506,53 @@ function toggleStickerPanel(force) {
 }
 function updateStickerPanelLanguage() {
   document.querySelectorAll('#stickerPanel [data-tr][data-vi]').forEach(el => {
-    el.textContent = uiText(el.dataset.tr || '', el.dataset.vi || el.dataset.tr || '');
+    const value = uiText(el.dataset.tr || '', el.dataset.vi || el.dataset.tr || '');
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = value;
+    else el.textContent = value;
+  });
+}
+function toggleStickerMenu(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  document.getElementById('stickerTools')?.classList.toggle('open');
+}
+function setStickerSearch(value) {
+  window.stickerSearchText = (value || '').trim().toLowerCase();
+  renderStickerPanel();
+}
+function setStickerEmojiFilter(value) {
+  window.stickerEmojiFilter = value || '';
+  renderStickerEmojiFilters();
+  renderStickerPanel();
+}
+function renderStickerEmojiFilters() {
+  const row = document.getElementById('stickerEmojiRow');
+  if (!row) return;
+  row.textContent = '';
+  STICKER_EMOJI_FILTERS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sticker-emoji-chip' + ((window.stickerEmojiFilter || '') === emoji ? ' active' : '');
+    btn.textContent = emoji || '☺';
+    btn.onclick = () => setStickerEmojiFilter(emoji);
+    row.appendChild(btn);
   });
 }
 function setStickerTab(tab) {
   window.currentStickerTab = tab || 'all';
+  document.getElementById('stickerTools')?.classList.remove('open');
   updateStickerPanelLanguage();
   document.querySelectorAll('.sticker-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === window.currentStickerTab));
   renderStickerPanel();
 }
 function openStickerImport() {
+  document.getElementById('stickerTools')?.classList.remove('open');
   document.getElementById('stickerInput')?.click();
 }
 function openStickerFolderImport() {
+  document.getElementById('stickerTools')?.classList.remove('open');
   const input = document.getElementById('stickerFolderInput') || document.getElementById('stickerInput');
   input?.click();
 }
@@ -5538,19 +5599,32 @@ function renderStickerPanel() {
   const grid = document.getElementById('stickerGrid');
   if (!grid) return;
   updateStickerPanelLanguage();
+  renderStickerEmojiFilters();
   const tab = window.currentStickerTab || 'recent';
   document.querySelectorAll('.sticker-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
   updateStickerSelectionButtons();
   let list = loadStickers();
   if (tab === 'recent') list = list.filter(s => Number(s.lastUsed || 0) > 0).sort((a,b) => Number(b.lastUsed || 0) - Number(a.lastUsed || 0));
   if (tab === 'fav') list = list.filter(s => !!s.favorite);
+  const query = (window.stickerSearchText || '').trim().toLowerCase();
+  const emoji = window.stickerEmojiFilter || '';
+  if (query) list = list.filter(s => String(s.name || '').toLowerCase().includes(query));
+  if (emoji) list = list.filter(s => String(s.name || '').includes(emoji));
   grid.textContent = '';
   if (!list.length) {
     const empty = document.createElement('div');
     empty.className = 'sticker-empty';
-    empty.textContent = tab === 'all'
-      ? uiText('Henüz sticker yok. Ekle veya Klasör ile içe aktar.', 'Chưa có sticker. Bấm Thêm hoặc Thư mục để nhập.')
+    const icon = document.createElement('div');
+    icon.className = 'sticker-empty-icon';
+    icon.textContent = '🫶';
+    const title = document.createElement('div');
+    title.textContent = tab === 'all'
+      ? uiText('Henüz sticker eklemedin.', 'Bạn chưa thêm sticker.')
       : uiText('Bu bölüm boş.', 'Mục này đang trống.');
+    const sub = document.createElement('div');
+    sub.style.cssText = 'margin-top:6px;color:#8f8aa0;font-size:12px;font-weight:750';
+    sub.textContent = uiText('Hemen kendi stickerlarını ekleyebilirsin.', 'Bạn có thể thêm sticker ngay.');
+    empty.append(icon, title, sub);
     grid.appendChild(empty);
     return;
   }
