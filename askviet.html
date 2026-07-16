@@ -348,6 +348,10 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .model-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .model-badge.active{border-color:var(--tr);color:var(--tr2)}
 .chat-model-select{max-width:92px;padding:5px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;outline:none}
+.chat-model-picker{position:relative;width:92px;height:30px;flex:0 0 92px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);overflow:hidden}
+.chat-model-picker-display{position:absolute;inset:0;padding:0 18px 0 8px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;pointer-events:none}
+.chat-model-picker::after{content:'⌄';position:absolute;right:6px;top:50%;transform:translateY(-56%);font-size:12px;color:var(--muted);pointer-events:none}
+.chat-model-picker .chat-model-select{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;padding:0;opacity:0;cursor:pointer}
 .status-pill{font-size:11px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap;cursor:pointer;font-weight:800}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .status-pill.mode-toggle{min-width:78px;border-color:#7c3aed;background:rgba(18,13,28,.64);color:#eadcff;box-shadow:inset 0 0 0 1px rgba(167,139,250,.14),0 4px 14px rgba(0,0,0,.18)}
@@ -470,12 +474,16 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .live-listen.recording{background:#dc2626!important;border-color:#ef4444!important;color:#fff!important;box-shadow:0 4px 14px rgba(220,38,38,.25);animation:pulse 1.2s infinite}
 .live-mini{min-height:40px;min-width:44px;padding:0 10px;border:1px solid rgba(168,85,247,.55);border-radius:10px;background:rgba(124,58,237,.12);color:#f3e8ff;font-weight:900;font-size:18px;box-shadow:0 0 12px rgba(124,58,237,.16)}
 .empty{color:#707070;text-align:center;padding:36px 18px;line-height:1.45;font-size:16px;font-weight:500}
-.ptt-turn{padding:11px 0 14px;border-bottom:1px solid #171717}
-.ptt-src{color:#f2f2f2;font-size:15px;font-weight:750;line-height:1.4;white-space:pre-wrap}
-.ptt-dst{color:#c084fc;font-size:23px;font-weight:900;line-height:1.42;white-space:pre-wrap;margin-top:7px}
+.ptt-turn{margin:7px 0;padding:12px 14px 10px;border:1px solid #302b3e;border-radius:20px;background:rgba(15,15,23,.97);box-shadow:0 5px 18px rgba(0,0,0,.22);overflow:hidden}
+.ptt-lang-head{display:flex;align-items:center;gap:7px;min-height:28px;color:#aeaec0;font-size:11px;font-weight:900}
+.ptt-lang-head.target{color:#c484fc;margin-top:1px}
+.ptt-lang-flag{width:28px;min-width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:18px}
+.ptt-divider{height:1px;background:#2b2b37;margin:2px 0 10px}
+.ptt-src{color:#eeeef3;font-size:16px;font-weight:750;line-height:1.4;white-space:pre-wrap;padding:6px 0 11px}
+.ptt-dst{color:#c484fc;font-size:18px;font-weight:900;line-height:1.42;white-space:pre-wrap;padding:6px 0 8px;margin:0}
 .ptt-status{color:#9ca3af;font-size:15px;font-weight:650;line-height:1.45;white-space:pre-wrap;padding:4px 2px}
-.turn-tools{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
-.tool-btn{min-height:40px;border:1px solid rgba(139,92,246,.38);border-radius:13px;background:linear-gradient(180deg,#1c1c26,#141419);color:#fff;font-weight:900;font-size:13px;letter-spacing:.15px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .1s ease,box-shadow .15s ease,border-color .15s ease;cursor:pointer}
+.turn-tools{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap}
+.tool-btn{min-height:36px;border:1px solid rgba(139,92,246,.38);border-radius:12px;background:linear-gradient(180deg,#1c1c26,#141419);color:#fff;font-weight:900;font-size:12px;letter-spacing:0;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .1s ease,box-shadow .15s ease,border-color .15s ease;cursor:pointer}
 .tool-btn:active{transform:scale(.94);border-color:#a78bfa;box-shadow:0 0 14px rgba(139,92,246,.5)}
 .tool-btn.primary,.tool-btn.retry{background:rgba(249,115,22,.14);border-color:#fb923c;color:#fdba74}
 .tool-btn.warn{background:rgba(124,58,237,.15);border-color:#a78bfa;color:#c4b5fd}
@@ -486,6 +494,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .tool-btn.danger{background:rgba(220,38,38,.16);border-color:#ef4444;color:#fca5a5}
 .tool-btn.confirm{background:#16a34a!important;border-color:#22c55e!important}
 .status-pill.live-on{border-color:#a78bfa;color:#fff}
+.live-queue-row{display:flex;align-items:center;min-height:31px;padding:4px 14px 7px;border-bottom:1px solid #171717;background:#09090c;color:#f8fafc;font-size:13px;font-weight:900}
+.live-queue-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width: 520px){
   .flag-actions,.ptt-actions{grid-template-columns:1fr}.roundflag{min-height:76px}
   .ptt-panel .flag-actions{grid-template-columns:1fr 1fr;gap:12px;padding-left:12px;padding-right:12px}
@@ -545,6 +555,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
   .control-row{gap:6px}
   .left-controls,.right-controls{gap:5px}
   .chat-model-select{max-width:86px}
+  .chat-model-picker{width:86px;flex-basis:86px}
   .status-pill{padding:5px 7px;font-size:11px}
   .notify-toggle{padding:5px 7px}
   .status-pill.mode-toggle{min-width:58px}
@@ -607,19 +618,28 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="setup-label">Model</div>
       <select class="model-select" id="modelSelect">
         <optgroup label="OpenAI Resmi">
-          <option value="openai:gpt-5.5">GPT-5.5</option>
-          <option value="openai:gpt-5.4">GPT-5.4</option>
-          <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
-        </optgroup>
-        <optgroup label="Gemini">
-          <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
+          <option value="openai:gpt-5.6-sol">GPT-5.6 Sol</option>
+          <option value="openai:gpt-5.6-terra">GPT-5.6 Terra</option>
+          <option value="openai:gpt-5.6-luna">GPT-5.6 Luna</option>
         </optgroup>
         <optgroup label="Claude">
           <option value="claude:claude-sonnet-5">Sonnet 5</option>
         </optgroup>
+        <optgroup label="Gemini">
+          <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
+        </optgroup>
         <optgroup label="DeepSeek">
-          <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash</option>
           <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro</option>
+          <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash</option>
+        </optgroup>
+        <optgroup label="OpenRouter">
+          <option value="openrouter:moonshotai/kimi-k3">Kimi K3</option>
+          <option value="openrouter:x-ai/grok-4.5">Grok 4.5</option>
+        </optgroup>
+        <optgroup label="Qwen Resmi">
+          <option value="qwen:qwen3.7-max">Qwen 3.7 Max</option>
+          <option value="qwen:qwen3.7-plus">Qwen 3.7 Plus</option>
+          <option value="qwen:qwen-mt-plus">Qwen MT Plus</option>
         </optgroup>
       </select>
     </div>
@@ -673,15 +693,23 @@ img,svg,video,canvas{max-width:100%;height:auto}
         </div>
         <div class="right-controls">
           <div class="conn-dot off" id="connDot"></div>
-          <select class="chat-model-select" id="chatModelSelect" title="Model seçimi">
-            <option value="openai:gpt-5.5">GPT-5.5</option>
-            <option value="openai:gpt-5.4">GPT-5.4</option>
-            <option value="openai:gpt-5.4-mini">GPT-5.4 mini</option>
-            <option value="gemini:gemini-3.5-flash">G 3.5 Flash</option>
-            <option value="claude:claude-sonnet-5">Sonnet 5</option>
-            <option value="deepseek:deepseek-v4-flash">DeepSeek Flash</option>
-            <option value="deepseek:deepseek-v4-pro">DeepSeek V4</option>
-          </select>
+          <div class="chat-model-picker" id="chatModelPicker" title="Model seçimi">
+            <span class="chat-model-picker-display" id="chatModelPickerDisplay">GPT-5.6 Sol</span>
+            <select class="chat-model-select" id="chatModelSelect" title="Model seçimi" aria-label="Model seçimi">
+              <option value="openai:gpt-5.6-sol">GPT-5.6 Sol  🔴🔴</option>
+              <option value="openai:gpt-5.6-terra">GPT-5.6 Terra  🔴</option>
+              <option value="openai:gpt-5.6-luna">GPT-5.6 Luna  🟡</option>
+              <option value="claude:claude-sonnet-5">Sonnet 5  🔴</option>
+              <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash  🔴</option>
+              <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro  🟢</option>
+              <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash  🟢</option>
+              <option value="openrouter:moonshotai/kimi-k3">Kimi K3  🟡</option>
+              <option value="openrouter:x-ai/grok-4.5">Grok 4.5  🟡</option>
+              <option value="qwen:qwen3.7-max">Qwen 3.7 Max  🟡</option>
+              <option value="qwen:qwen3.7-plus">Qwen 3.7 Plus  🟡</option>
+              <option value="qwen:qwen-mt-plus">Qwen MT Plus  🟡</option>
+            </select>
+          </div>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
           <div class="mic-refresh-slot"><button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button></div>
@@ -785,6 +813,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <span class="live-state-dot live-beacon" id="liveBeacon" data-state="idle"></span>
       <button class="live-mini" onclick="toggleLiveSettings()" title="Live ayarları">&#9881;</button>
     </div>
+    <div class="live-queue-row"><span class="live-queue-text" id="realLiveQueueText">Sırada / Đang chờ: 0</span></div>
     <div class="live-status" id="realLiveStatus"><span class="live-state-big" id="liveStateBig" data-state="idle"></span><span id="realLiveStatusText">Dinliyorum</span></div>
     <div class="live-settings" id="liveSettingsPanel">
       <label>Cevap tipi</label>
@@ -898,7 +927,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-09-live-html-echo-route-fix-1';
+const APP_VERSION = '2026-07-17-complete-ui-media-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -971,7 +1000,7 @@ let claudeApiKey = '';
 let liveRecognizer = null;
 let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr', liveOutputMuteUntil = 0;
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
-let selectedModel = 'openai:gpt-5.5';
+let selectedModel = 'openai:gpt-5.6-sol';
 let typingTimer = null;
 let remoteTypingHideTimer = null;
 let lastTypingSignalAt = 0;
@@ -1835,11 +1864,14 @@ function normalizeChatModel(model) {
     'gemini:gemini-3.1-flash-lite': 'gemini:gemini-3.5-flash'
   };
   const oldOpenAi = {
-    'openai:gpt-4o': 'openai:gpt-5.5',
-    'openai:gpt-4o-mini': 'openai:gpt-5.4-mini',
-    'codex:gpt-5.5': 'openai:gpt-5.5',
-    'codex:gpt-5.4': 'openai:gpt-5.4',
-    'codex:gpt-5.4-mini': 'openai:gpt-5.4-mini'
+    'openai:gpt-4o': 'openai:gpt-5.6-sol',
+    'openai:gpt-5.5': 'openai:gpt-5.6-sol',
+    'openai:gpt-4o-mini': 'openai:gpt-5.6-sol',
+    'codex:gpt-5.5': 'openai:gpt-5.6-sol',
+    'openai:gpt-5.4': 'openai:gpt-5.6-sol',
+    'openai:gpt-5.4-mini': 'openai:gpt-5.6-sol',
+    'codex:gpt-5.4': 'openai:gpt-5.6-sol',
+    'codex:gpt-5.4-mini': 'openai:gpt-5.6-sol'
   };
   const oldClaude = {
     'claude:claude-opus-4.8': 'claude:claude-sonnet-5',
@@ -1858,7 +1890,7 @@ function normalizeChatModel(model) {
     'deepseek:v4-flash': 'deepseek:deepseek-v4-flash',
     'deepseek:v4-pro': 'deepseek:deepseek-v4-pro'
   };
-  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || model || 'openai:gpt-5.5';
+  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || model || 'openai:gpt-5.6-sol';
 }
 
 function toggleTtsSettings(force) {
@@ -2202,7 +2234,7 @@ async function start(role) {
     document.getElementById('pwscreen').style.display = 'flex';
     return;
   }
-  selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.5');
+  selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.6-sol');
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
@@ -4428,7 +4460,7 @@ async function retryMessageTranslation(key, btn) {
     btn.textContent = '...';
   }
   try {
-    const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
+    const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
     debugLog('manual_retry_button_clicked', { key, model: manualModel });
     const exists = await ensureOutgoingMessageExistsForTranslation(key);
     if (!exists) {
@@ -5275,11 +5307,11 @@ async function speakPttText(text, target, btn=null) {
   if (!btn && !pttAutoSpeak) return false;
   pttAudioActive = true;
   try {
-    setPttLog(pttTtsLabel(target) + ' ile seslendiriliyor...', true, 'speaking');
+    setPttLog(roleText(target, pttTtsLabel(target) + ' seslendiriyor...', pttTtsLabel(target) + ' đang phát âm...'), true, 'speaking');
     return await speak(text, target, btn, true);
   } finally {
     pttAudioActive = false;
-    setPttLog('Hazır', false, 'idle');
+    setPttLog(roleText(target, 'Hazır', 'Sẵn sàng'), false, 'idle');
   }
 }
 
@@ -5899,7 +5931,7 @@ function queueOutgoingMessage(msg) {
   if (!canQueueOutgoingMessage()) return null;
   markChatUserActivity();
   const key = createMessageKey();
-  const messageModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
+  const messageModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
   const item = {
     key,
     msg: Object.assign({}, msg, { translationModel: messageModel }),
@@ -6236,7 +6268,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
   translationRunTokens.set(key, runId);
   const stillCurrent = () => translationRunTokens.get(key) === runId;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
-  const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.5');
+  const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.6-sol');
   const modelsToTry = translationModelQueue(baseModel);
   const startedAt = Date.now();
   debugLog('start', { key, fromRole, runId, queue: modelsToTry, force: !!options.force, userTriggered: !!options.userTriggered });
@@ -6290,31 +6322,32 @@ function providerHasKey(provider) {
   if (provider === 'gemini') return !!(geminiApiKey || localStorage.getItem('askviet_gemini_key'));
   if (provider === 'claude') return !!(claudeApiKey || localStorage.getItem('askviet_claude_key'));
   if (provider === 'deepseek') return true;
+  if (provider === 'openrouter' || provider === 'qwen') return true;
   return false;
 }
 
 function translationModelQueue(baseModel) {
-  const base = normalizeChatModel(baseModel || 'openai:gpt-5.5');
-  const queue = [base, 'deepseek:deepseek-v4-pro', 'openai:gpt-5.4', 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-5', 'deepseek:deepseek-v4-flash', 'openai:gpt-5.5', 'openai:gpt-5.4-mini'];
+  const base = normalizeChatModel(baseModel || 'openai:gpt-5.6-sol');
+  const queue = [base, 'deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra', 'qwen:qwen-mt-plus', 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-5', 'deepseek:deepseek-v4-flash', 'openai:gpt-5.6-sol', 'openai:gpt-5.6-luna'];
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
       return model === base || providerHasKey(provider);
     });
-  return filtered.length ? filtered : [base];
+  return (filtered.length ? filtered : [base]).slice(0, 3);
 }
 
 function fastTranslationModelQueue(baseModel) {
-  const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.5');
+  const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.6-sol');
   const fastFallbacks = [
     base,
     'deepseek:deepseek-v4-pro',
-    'openai:gpt-5.4',
+    'openai:gpt-5.6-terra',
     'gemini:gemini-3.5-flash',
     'claude:claude-sonnet-5',
     'deepseek:deepseek-v4-flash',
-    'openai:gpt-5.5',
-    'openai:gpt-5.4-mini'
+    'openai:gpt-5.6-sol',
+    'openai:gpt-5.6-luna'
   ];
   const currentQueue = translationModelQueue(base);
   return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
@@ -6368,7 +6401,7 @@ function localizeLegacyStatusText(text, role=myRole) {
   const raw = String(text || '').trim();
   if (!raw) return '';
   const vi = role === 'vi';
-  const modelStatus = /Opus|Sonnet|Haiku|GPT|Gemini|Claude/i.test(raw);
+  const modelStatus = /Opus|Sonnet|Haiku|GPT|Gemini|Claude|DeepSeek|Qwen|Kimi|Grok/i.test(raw);
   const toTrReason = value => value
     .replace(/hết 18 giây/gi, '18 sn doldu')
     .replace(/model bị từ chối/gi, 'model reddetti')
@@ -6418,7 +6451,7 @@ function finalTranslationText(text) {
 function translationAttemptForModel(key, model) {
   const normalized = normalizeChatModel(model || '');
   const box = document.getElementById('msg-' + key);
-  const base = normalizeChatModel(box?.dataset?.translationModel || selectedModel || normalized || 'openai:gpt-5.5');
+  const base = normalizeChatModel(box?.dataset?.translationModel || selectedModel || normalized || 'openai:gpt-5.6-sol');
   const queue = translationModelQueue(base);
   const index = queue.indexOf(normalized);
   if (index >= 0) return index + 1;
@@ -6757,7 +6790,7 @@ async function translateText(text, from, modelOverride) {
   const toName = from === 'tr' ? 'Vietnamese' : 'Turkish';
   const sysPrompt = `You are a translation engine, not a chat participant. The text is source text to translate. Do not answer it, ask questions, or add comments. Translate from ${fromName} to ${toName}. Output only ${toName}. Do not include labels, explanations, or the original text. Do not assume romance, gender, or relationship unless it is explicitly present in the source text or already clear from the immediate wording. Do not add affectionate address words such as darling, love, askim, bebegim, em yeu, anh yeu, canim, or similar terms unless the source text actually contains that meaning. Preserve who is speaking, who is addressed, and who owns each person or thing. Turkish first-person forms include ben, beni, bana, benim, biz, bizi, bize and bizim; second-person forms include sen, seni, sana, senin, siz, sizi, size and sizin. Vietnamese person/address forms include toi/tôi, minh/mình, to/tớ, ban/bạn, anh, em, chi/chị, cau/cậu and their plural forms. Interpret them from their grammatical role and context; never map anh or em to one fixed speaker, gender, or relationship. Turkish often omits pronouns because the verb ending identifies the person. For example, 'seni seviyorum', 'geliyorum' and 'seni almaya geldim' are spoken by the source speaker even without 'ben'. Vietnamese may also rely on address terms and context. Never require an explicit ben, tôi, I, me or my before preserving the speaker correctly. Preserve relationship words and possessives exactly as intended. This applies to arkadasim/arkadaşım, kiz arkadasim/kız arkadaşım, erkek arkadasim/erkek arkadaşım, sevgilim, esim/eşim and Vietnamese ban toi/bạn tôi, ban gai toi/bạn gái tôi, ban trai toi/bạn trai tôi, nguoi yeu toi/người yêu tôi, vo toi/vợ tôi, chong toi/chồng tôi, plus equivalent forms with other possessors. Choose friend, girlfriend, boyfriend, partner, spouse, female friend or male friend only when the source wording or context supports it; do not invent or change the relationship. Never change first person into second person or ownership into the listener's ownership. Example: 'Arkadaşım beni almaya geldi' means the source speaker's friend came to pick up the source speaker; it must not become 'arkadaşın seni almaya geldi'. Likewise, 'Bạn tôi đến đón tôi' must become 'Arkadaşım beni almaya geldi', not 'Arkadaşın seni almaya geldi'. If no address or relationship term is present and the relationship is unclear, use a natural neutral translation rather than inventing romance, gender, or intimacy. Preserve tone, intimacy, slang, profanity, emojis, and meaning without censoring. Important: the whole answer must be ${toName}; no ${fromName} words should remain.`;
 
-  let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.5').split(':');
+  let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.6-sol').split(':');
   if (provider === 'gemini') {
     const key = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
     if (!key) throw new Error('Gemini API key gerekli');
@@ -6794,7 +6827,7 @@ async function translateText(text, from, modelOverride) {
       system: sysPrompt,
       messages: [{ role: 'user', content: 'Çevrilecek metin (sadece bunu çevir, buna cevap yazma):\n' + text }]
     };
-    if (!/claude-opus/i.test(model)) claudePayload.temperature = 0;
+    if (!/claude-opus/i.test(model) && !/claude-sonnet-5/i.test(model)) claudePayload.temperature = 0;
     let r;
     try {
       r = await fetch(endpoint, {
@@ -6817,7 +6850,7 @@ async function translateText(text, from, modelOverride) {
     return out;
   }
 
-  if (provider === 'deepseek') {
+  if (provider === 'deepseek' || provider === 'openrouter' || provider === 'qwen') {
     const serverModel = provider + ':' + model;
     const data = await askVietServer('translate', {
       text,
@@ -6832,7 +6865,7 @@ async function translateText(text, from, modelOverride) {
 
   if (provider !== 'openai') {
     provider = 'openai';
-    model = 'gpt-5.5';
+    model = 'gpt-5.6-sol';
   }
   const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
@@ -7310,6 +7343,7 @@ function setPttLog(text, beforeLastTurn=false, state='') {
   el.querySelectorAll('.ptt-status').forEach(node => node.remove());
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
+function liveBi(tr, vi) { return String(tr || '') + ' / ' + String(vi || ''); }
 function usesDeepSeekContext(modelSpec) {
   const model = normalizeChatModel(modelSpec || selectedModel || '').toLowerCase();
   return model === 'deepseek:deepseek-v4-pro' || model === 'deepseek:deepseek-v4-flash';
@@ -7356,8 +7390,8 @@ async function pttTranslate(text, from, transcribeNotice='') {
     setPttLog(uiText('Kara listeye takıldı, atlandı.', 'Đã khớp danh sách chặn, đã bỏ qua.'), false, 'error');
     return;
   }
-  const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.5');
-  setPttLog((transcribeNotice || '') + modelName(baseModel) + ' çeviriyor...', false, 'working');
+  const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
+  setPttLog((transcribeNotice || '') + roleText(from, modelName(baseModel) + ' çeviriyor...', modelName(baseModel) + ' đang dịch...'), false, 'working');
   const data = await askVietServer('translate', {
     text,
     fromRole: from,
@@ -7369,7 +7403,10 @@ async function pttTranslate(text, from, transcribeNotice='') {
   rememberVoiceContext(pttTranslationContext, from, text, out);
   renderPttTurn(text, out, from, target);
   const usedModel = modelName(data.model || data.usedModel || baseModel);
-  setPttLog((transcribeNotice || '') + usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'), true, pttAutoSpeak ? 'working' : 'idle');
+  setPttLog((transcribeNotice || '') + roleText(from,
+    usedModel + ' çeviri tamamlandı. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' hazırlanıyor...' : 'Ses kapalı.'),
+    usedModel + ' đã dịch xong. ' + (pttAutoSpeak ? pttTtsLabel(target) + ' đang chuẩn bị...' : 'Âm thanh đang tắt.')
+  ), true, pttAutoSpeak ? 'working' : 'idle');
   if (out) speakPttText(out, target);
 }
 
@@ -7380,12 +7417,20 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   log.querySelectorAll('.ptt-status').forEach(node => node.remove());
   const turn = document.createElement('div');
   turn.className = 'ptt-turn';
+  const sourceHead = document.createElement('div');
+  sourceHead.className = 'ptt-lang-head';
+  sourceHead.innerHTML = '<span class="ptt-lang-flag">' + (sourceRole === 'vi' ? '🇻🇳' : '🇹🇷') + '</span><span>' + (sourceRole === 'vi' ? 'Vietnamca' : 'Türkçe') + '</span>';
   const src = document.createElement('div');
   src.className = 'ptt-src';
-  src.textContent = (sourceRole === 'vi' ? '🇻🇳 ' : '🇹🇷 ') + sourceText;
+  src.textContent = sourceText;
+  const divider = document.createElement('div');
+  divider.className = 'ptt-divider';
+  const targetHead = document.createElement('div');
+  targetHead.className = 'ptt-lang-head target';
+  targetHead.innerHTML = '<span class="ptt-lang-flag">' + (targetRole === 'vi' ? '🇻🇳' : '🇹🇷') + '</span><span>' + (targetRole === 'vi' ? 'Vietnamca' : 'Türkçe') + '</span>';
   const dst = document.createElement('div');
   dst.className = 'ptt-dst';
-  dst.textContent = (targetRole === 'vi' ? '🇻🇳 ' : '🇹🇷 ') + translatedText;
+  dst.textContent = translatedText;
   const tools = document.createElement('div');
   tools.className = 'turn-tools';
 
@@ -7426,7 +7471,7 @@ function renderPttTurn(sourceText, translatedText, sourceRole, targetRole) {
   del.classList.add('delete');
 
   tools.append(retry, mis, copy, speakBtn, block, del);
-  turn.append(src, dst, tools);
+  turn.append(sourceHead, src, divider, targetHead, dst, tools);
   log.appendChild(turn);
   log.scrollTop = log.scrollHeight;
 }
@@ -7716,7 +7761,7 @@ async function startPttVoice(from) {
   if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
   btn.dataset.recRole = from;
   btn.classList.add('recording');
-  const listenText = (from === 'tr' ? '🇹🇷' : '🇻🇳') + ': Dinliyorum...';
+  const listenText = (from === 'tr' ? '🇹🇷: Dinliyorum...' : '🇻🇳: Đang nghe...');
   setPttLog(listenText, false, 'idle');
   try {
     await tryRequestWakeLock();
@@ -7747,13 +7792,13 @@ async function startPttVoice(from) {
       rec=null;
       try {
         const blob=makePseudoLiveWav(pcmChunks,pcmRate);
-        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || blob.size < 1200 || pcmChunks.length===0){ noteNoSpeechStop(); setPttLog('Ses algılanmadı. Tekrar dene.', false, 'idle'); return; }
+        if(!recHadSpeech || recVoiceMs < MIC_MIN_VOICE_MS || blob.size < 1200 || pcmChunks.length===0){ noteNoSpeechStop(); setPttLog(roleText(from, 'Ses algılanmadı. Tekrar dene.', 'Không nghe thấy giọng nói. Hãy thử lại.'), false, 'idle'); return; }
         resetNoSpeechStops();
         const firstTranscribe=primaryTranscribeLabel(getTranscribeEngine());
-        setPttLog(firstTranscribe + ' ile ses yazıya çevriliyor...', false, 'working');
+        setPttLog(roleText(from, firstTranscribe + ' ile ses yazıya çevriliyor...', firstTranscribe + ' đang chuyển giọng nói thành chữ...'), false, 'working');
         const transcribed = await transcribeVoiceDetailed(blob, from);
         const text=transcribed.text;
-        if(!text){ setPttLog('Ses metne çevrilemedi.', false, 'error'); return; }
+        if(!text){ setPttLog(roleText(from, 'Ses metne çevrilemedi.', 'Không thể chuyển giọng nói thành chữ.'), false, 'error'); return; }
         const actualTranscribe=actualTranscribeLabel(transcribed.model || firstTranscribe);
         const transcribeNotice=actualTranscribe && actualTranscribe !== firstTranscribe
           ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanıldı. '
@@ -8757,9 +8802,14 @@ function openAiSpeechRequest({model,input,voice,instructions,speed,signal,key}) 
 }
 
 const MODEL_NAMES = {
-  'openai:gpt-5.5': 'GPT-5.5',
-  'openai:gpt-5.4': 'GPT-5.4',
-  'openai:gpt-5.4-mini': 'GPT-5.4 mini',
+  'openai:gpt-5.6-sol': 'GPT-5.6 Sol',
+  'openai:gpt-5.6-terra': 'GPT-5.6 Terra',
+  'openai:gpt-5.6-luna': 'GPT-5.6 Luna',
+  'openrouter:moonshotai/kimi-k3': 'Kimi K3',
+  'openrouter:x-ai/grok-4.5': 'Grok 4.5',
+  'qwen:qwen3.7-max': 'Qwen 3.7 Max',
+  'qwen:qwen3.7-plus': 'Qwen 3.7 Plus',
+  'qwen:qwen-mt-plus': 'Qwen MT Plus',
   'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
   'claude:claude-sonnet-5': 'Sonnet 5',
   'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
@@ -8768,6 +8818,11 @@ const MODEL_NAMES = {
 
 function modelName(model) {
   return MODEL_NAMES[model] || (model || '').split(':')[1] || '-';
+}
+
+function syncChatModelPickerDisplay() {
+  const display = document.getElementById('chatModelPickerDisplay');
+  if (display) display.textContent = modelName(selectedModel);
 }
 
 function parseRemoteModelConfig(data) {
@@ -8802,6 +8857,7 @@ function setSelectedModel(model, fromRemote=false) {
   const chatSelect = document.getElementById('chatModelSelect');
   if (setupSelect && setupSelect.value !== model) setupSelect.value = model;
   if (chatSelect && chatSelect.value !== model) chatSelect.value = model;
+  syncChatModelPickerDisplay();
   const myBadge = document.getElementById('myModelBadge');
   const theirBadge = document.getElementById('theirModelBadge');
   if (myBadge) myBadge.textContent = modelName(model);
@@ -8814,6 +8870,7 @@ function setSelectedModel(model, fromRemote=false) {
 
 function setupChatControls() {
   const chatSelect = document.getElementById('chatModelSelect');
+  const chatPicker = document.getElementById('chatModelPicker');
   const autoBtn = document.getElementById('autoReadStatus');
   const ownBtn = document.getElementById('ownAutoReadStatus');
   const leftControls = document.querySelector('.left-controls');
@@ -8824,10 +8881,12 @@ function setupChatControls() {
   const modelRow = document.querySelector('.model-row');
   if (chatSelect) {
     chatSelect.value = selectedModel;
-    chatSelect.style.display = myRole === 'tr' ? '' : 'none';
+    chatSelect.style.display = '';
     chatSelect.disabled = myRole !== 'tr';
     chatSelect.onchange = () => setSelectedModel(chatSelect.value);
   }
+  if (chatPicker) chatPicker.style.display = myRole === 'tr' ? '' : 'none';
+  syncChatModelPickerDisplay();
   if (autoBtn && leftControls && rightControls) {
     if (myRole === 'vi') rightControls.insertBefore(autoBtn, notifyBtn || null);
     else leftControls.appendChild(autoBtn);
@@ -8937,6 +8996,8 @@ function applyLocaleUI() {
   const isVi = viMode();
   const chatSelect = document.getElementById('chatModelSelect');
   if (chatSelect) chatSelect.title = isVi ? 'Chọn model' : 'Model seçimi';
+  const chatPicker = document.getElementById('chatModelPicker');
+  if (chatPicker) chatPicker.title = isVi ? 'Chọn model' : 'Model seçimi';
   const ct = document.getElementById('chatTitle');
   if (ct) ct.textContent = isVi ? '🇻🇳 → 🇹🇷' : '🇹🇷 → 🇻🇳';
   const pttBtn = document.getElementById('pttModeBtn');
@@ -9020,7 +9081,7 @@ function updateNotifySoundUI() {
 }
 function syncMyModel(model) {
   if (myRole !== 'tr') return;
-  const normalized = normalizeChatModel(model || selectedModel || 'openai:gpt-5.5');
+  const normalized = normalizeChatModel(model || selectedModel || 'openai:gpt-5.6-sol');
   fbSet(MODEL_PATH, {
     model: normalized,
     updatedAt: { '.sv':'timestamp' },
@@ -9042,7 +9103,7 @@ function applyRemoteModelConfig(data) {
 async function reconcileModelConfig() {
   try {
     const remote = parseRemoteModelConfig(await fbGet(MODEL_PATH, true));
-    const local = normalizeChatModel(selectedModel || localStorage.getItem('askviet_model') || 'openai:gpt-5.5');
+    const local = normalizeChatModel(selectedModel || localStorage.getItem('askviet_model') || 'openai:gpt-5.6-sol');
     const localTs = localModelUpdatedAt();
     if (myRole === 'tr') {
       if (remote.model && (!localTs || (remote.ts && remote.ts >= localTs))) {
@@ -9762,11 +9823,12 @@ let pseudoLiveLastText='';
 let pseudoLiveLastTarget='vi';
 let pseudoLiveLastSpokenText='';
 let pseudoLiveLastSpokenAt=0;
+let pseudoLiveLastSpokenDoneAt=0;
 const PSEUDO_LIVE_MAX_SEGMENT_MS=45000;
-const PSEUDO_LIVE_QUEUE_MAX=10;
-const PSEUDO_LIVE_QUEUE_MAX_AGE_MS=60000;
+const PSEUDO_LIVE_QUEUE_MAX=16;
+const PSEUDO_LIVE_QUEUE_MAX_AGE_MS=10*60*1000;
 const PSEUDO_LIVE_MAX_WORKERS=2;
-const PSEUDO_LIVE_TTS_MAX=10;
+const PSEUDO_LIVE_TTS_MAX=16;
 
 function getLiveNoiseLevel() {
   const explicit = localStorage.getItem('askviet_live_noise_level');
@@ -9866,7 +9928,7 @@ function toggleRealLive(force) {
     syncLiveSettingsUI();
     if (panel) { panel.hidden=false; panel.style.display=''; }
     setPanelOpen('realLivePanel', 'realLiveBtn', true);
-    setRealLiveStatus('Hazır', 'idle');
+    setRealLiveStatus(liveBi('Hazır', 'Sẵn sàng'), 'idle');
   } else {
     stopPseudoLive(true);
     setPanelOpen('realLivePanel', 'realLiveBtn', false);
@@ -9892,7 +9954,7 @@ async function toggleGeminiLiveMain() {
   try {
     primeAudioForGesture();
     updateLiveMainButton(true);
-    setRealLiveStatus('Mikrofon hazırlanıyor...', 'loading');
+    setRealLiveStatus(liveBi('Mikrofon hazırlanıyor...', 'Đang chuẩn bị micro...'), 'loading');
     const streamPromise = requestMicrophoneStreamWithTimeout('live', 8000);
     unlockAudio(true).catch(()=>{});
     keepAudioAwake(90000).catch(()=>{});
@@ -9928,26 +9990,42 @@ function updateLiveMainButton(on=false) {
   btn.classList.toggle('recording', !!on);
 }
 
-let realLiveMainStatus = 'Hazır';
+let realLiveMainStatus = 'Hazır / Sẵn sàng';
 let realLiveStatusDetail = '';
 function realLiveQueueInfo() {
-  const count = (Array.isArray(pseudoLiveTtsQueue) ? pseudoLiveTtsQueue.length : 0) + (pseudoLiveTtsPlaying ? 1 : 0);
-  return count > 0 ? ('Sırada ' + count + ' cümle var') : '';
+  let count = Math.max(0, pseudoLiveActiveWorkers || 0);
+  count += Array.isArray(pseudoLiveQueue) ? pseudoLiveQueue.length : 0;
+  count += pseudoLiveCompletedResults instanceof Map ? pseudoLiveCompletedResults.size : 0;
+  count += Array.isArray(pseudoLiveTtsQueue) ? pseudoLiveTtsQueue.length : 0;
+  return 'Sırada / Đang chờ: ' + count;
 }
 
 function updateRealLiveInfo(detail='') {
   if (typeof detail === 'string' && detail.trim()) realLiveStatusDetail = detail.trim();
   const info=document.getElementById('liveInfoText');
-  if (!info) return;
   const queue=realLiveQueueInfo();
+  const queueEl=document.getElementById('realLiveQueueText');
+  if (queueEl) queueEl.textContent=queue;
+  if (!info) return;
   const parts=[];
   if (realLiveMainStatus) parts.push(realLiveMainStatus);
   if (realLiveStatusDetail) parts.push(realLiveStatusDetail);
-  if (queue) parts.push(queue);
   info.textContent = parts.join('  •  ') || 'Hazır';
 }
 
 function setRealLiveStatus(text, state='') {
+  const busy = !!(
+    pseudoLiveActiveWorkers > 0 ||
+    (Array.isArray(pseudoLiveQueue) && pseudoLiveQueue.length) ||
+    (pseudoLiveCompletedResults instanceof Map && pseudoLiveCompletedResults.size) ||
+    (Array.isArray(pseudoLiveTtsQueue) && pseudoLiveTtsQueue.length) ||
+    pseudoLiveTtsPlaying
+  );
+  if (state === 'idle' && busy) {
+    updateRealLiveInfo();
+    return;
+  }
+  if (state === 'idle') realLiveStatusDetail = '';
   realLiveMainStatus = text || '';
   const textEl2=document.getElementById('realLiveStatusText');
   if (textEl2) textEl2.textContent = text || '';
@@ -9957,10 +10035,6 @@ function setRealLiveStatus(text, state='') {
   }
   updateRealLiveInfo();
   if (state) {
-    // Persist-until-done: while a segment is being processed (transcribe ->
-    // translate -> TTS playback), 'idle' must not repaint the light; the color
-    // stays until the operation truly finishes (processing flag drops).
-    if (state === 'idle' && typeof pseudoLiveProcessing !== 'undefined' && pseudoLiveProcessing) return;
     const dot=document.getElementById('liveStateDot');
     if (dot) dot.dataset.state = state;
     const big=document.getElementById('liveStateBig');
@@ -10146,6 +10220,7 @@ async function startPseudoLive(preparedStream=null) {
   pseudoLiveCompletedResults=new Map();
   pseudoLiveTtsQueue=[];
   pseudoLiveTtsPlaying=false;
+  pseudoLiveLastSpokenDoneAt=0;
   pseudoLiveStream=preparedStream || await requestMicrophoneStreamWithTimeout('live', 8000);
   pseudoLiveCtx=await ensureAudioCtx();
   pseudoLiveSampleRate=pseudoLiveCtx.sampleRate || 48000;
@@ -10167,7 +10242,7 @@ async function startPseudoLive(preparedStream=null) {
   pseudoLiveProcessor.onaudioprocess=tickPseudoLive;
   updateLiveMainButton(true);
   document.getElementById('realLiveBtn')?.classList.add('live-on');
-  setRealLiveStatus('Dinliyorum', 'idle');
+  setRealLiveStatus(liveBi('Dinliyorum...', 'Đang nghe...'), 'idle');
 }
 
 async function startGeminiLive() {
@@ -10191,6 +10266,7 @@ function stopPseudoLive(silent=false) {
   pseudoLiveCurrentVoiceRunMs=0; pseudoLiveLongestVoiceRunMs=0; pseudoLiveStrongVoiceMs=0; pseudoLivePeakLevel=0; pseudoLiveSpeechAccepted=false;
   pseudoLiveTtsQueue=[];
   pseudoLiveTtsPlaying=false;
+  pseudoLiveLastSpokenDoneAt=0;
   pseudoLiveQueue=[];
   pseudoLiveProcessing=false;
   pseudoLiveActiveWorkers=0;
@@ -10202,7 +10278,7 @@ function stopPseudoLive(silent=false) {
   updateLiveMainButton(false);
   document.getElementById('realLiveBtn')?.classList.remove('live-on');
   releaseWakeLock();
-  if (!silent) setRealLiveStatus('Live durdu', 'idle');
+  if (!silent) setRealLiveStatus(liveBi('Live durdu', 'Live đã dừng'), 'idle');
 }
 
 function tickPseudoLive(event) {
@@ -10220,9 +10296,9 @@ function tickPseudoLive(event) {
   const level=livePcmSignalLevel(pcm);
   const noiseLevel=Math.max(0,Math.min(2,settings.noiseLevel || 0));
   const noiseProfiles=[
-    { threshold:3300, minVoice:320, strong:110, longRun:480 },
-    { threshold:5000, minVoice:340, strong:170, longRun:650 },
-    { threshold:7500, minVoice:360, strong:260, longRun:850 }
+    { threshold:1600, minVoice:320, strong:110, longRun:480 },
+    { threshold:3200, minVoice:340, strong:170, longRun:650 },
+    { threshold:5000, minVoice:360, strong:260, longRun:850 }
   ];
   const noiseProfile=noiseProfiles[noiseLevel] || noiseProfiles[0];
   const peakThreshold=noiseProfile.threshold / 32768;
@@ -10258,7 +10334,7 @@ function tickPseudoLive(event) {
     pseudoLiveSilenceStartedAt=0;
     if (pseudoLiveCountdownValue) {
       pseudoLiveCountdownValue=0;
-      if (!pseudoLiveProcessing) setRealLiveStatus('Ses alınıyor', 'idle');
+      if (!pseudoLiveProcessing) setRealLiveStatus(liveBi('Ses alınıyor', 'Đang nhận giọng nói'), 'idle');
     }
   } else {
     if (pseudoLiveSegmentActive) {
@@ -10268,7 +10344,7 @@ function tickPseudoLive(event) {
       const countdown=Math.max(1, Math.ceil((silenceLimit - pseudoLiveSilentMs) / 1000));
       if (!pseudoLiveProcessing && countdown !== pseudoLiveCountdownValue) {
         pseudoLiveCountdownValue=countdown;
-        setRealLiveStatus('Çeviriye geçiliyor: ' + countdown, 'idle');
+        setRealLiveStatus(liveBi('Çeviriye geçiliyor: ' + countdown, 'Chuyển sang dịch: ' + countdown), 'idle');
       }
     }
   }
@@ -10382,11 +10458,12 @@ function finishPseudoLiveSegment() {
     if (blob.size >= 1200) {
       while (pseudoLiveQueue.length >= PSEUDO_LIVE_QUEUE_MAX) pseudoLiveQueue.shift();
       pseudoLiveQueue.push({blob,ts:Date.now()});
+      updateRealLiveInfo(realLiveStatusDetail);
       processPseudoLiveQueue();
       return;
     }
   }
-  if (pseudoLiveRunning && !pseudoLiveProcessing) setRealLiveStatus('Dinliyorum', 'idle');
+  if (pseudoLiveRunning && !pseudoLiveProcessing) setRealLiveStatus(liveBi('Dinliyorum...', 'Đang nghe...'), 'idle');
 }
 
 function processPseudoLiveQueue() {
@@ -10398,6 +10475,7 @@ function processPseudoLiveQueue() {
     const session=pseudoLiveSessionId;
     pseudoLiveActiveWorkers++;
     pseudoLiveProcessing=true;
+    updateRealLiveInfo(realLiveStatusDetail);
     buildPseudoLiveResult(item.blob, session).then(result => {
       if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return;
       pseudoLiveCompletedResults.set(seq, result || {type:'skip'});
@@ -10413,13 +10491,15 @@ function processPseudoLiveQueue() {
       if (session !== pseudoLiveSessionId) return;
       pseudoLiveActiveWorkers=Math.max(0,pseudoLiveActiveWorkers-1);
       pseudoLiveProcessing=pseudoLiveActiveWorkers>0;
+      updateRealLiveInfo(realLiveStatusDetail);
       processPseudoLiveQueue();
       if (!pseudoLiveProcessing && !pseudoLiveQueue.length && pseudoLiveRunning && !pseudoLiveTtsPlaying) {
-        setRealLiveStatus('Dinliyorum', 'idle');
+        setRealLiveStatus(liveBi('Dinliyorum...', 'Đang nghe...'), 'idle');
       }
     });
   }
   pseudoLiveProcessing=pseudoLiveActiveWorkers>0;
+  updateRealLiveInfo(realLiveStatusDetail);
 }
 
 function createPseudoLiveTtsItem(text, target) {
@@ -10498,7 +10578,7 @@ async function processPseudoLiveTtsQueue() {
   pseudoLiveTtsPlaying = true;
   pseudoLiveLastSpokenText = item.text;
   pseudoLiveLastSpokenAt = Date.now();
-  setRealLiveStatus('Seslendiriliyor', 'speaking');
+  setRealLiveStatus(liveBi('Seslendiriliyor', 'Đang phát âm thanh'), 'speaking');
   updateRealLiveInfo(pttTtsLabel(item.target));
   try {
     if (prepared.phone) await speakPhoneTTSWithMicPaused(item.text, item.target);
@@ -10506,10 +10586,11 @@ async function processPseudoLiveTtsQueue() {
   } catch (err) {
     appendRealLiveLog('Live ses hatası: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
   } finally {
+    pseudoLiveLastSpokenDoneAt = Date.now();
     pseudoLiveTtsPlaying = false;
     if (pseudoLiveRunning) {
       if (pseudoLiveTtsQueue.length) processPseudoLiveTtsQueue();
-      else if (!pseudoLiveProcessing) setRealLiveStatus('Dinliyorum', 'idle');
+      else if (!pseudoLiveProcessing) setRealLiveStatus(liveBi('Dinliyorum...', 'Đang nghe...'), 'idle');
       else updateRealLiveInfo(realLiveStatusDetail);
     }
   }
@@ -10519,7 +10600,7 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
   const settings=getLiveSettings();
   const payload=await liveFileToBase64(blob);
   const firstTranscribe=primaryTranscribeLabel(settings.model);
-  setRealLiveStatus('Ses metne çevriliyor', 'working');
+  setRealLiveStatus(liveBi('Ses metne çevriliyor', 'Đang chuyển giọng nói thành chữ'), 'working');
   updateRealLiveInfo(firstTranscribe);
   let data;
   try {
@@ -10538,28 +10619,28 @@ async function buildPseudoLiveResult(blob, session=pseudoLiveSessionId) {
     ? firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' ile metne çevrildi. '
     : '';
   if (actualTranscribe && actualTranscribe !== firstTranscribe) {
-    setRealLiveStatus('Ses metne çevriliyor', 'working');
+    setRealLiveStatus(liveBi('Ses metne çevriliyor', 'Đang chuyển giọng nói thành chữ'), 'working');
     updateRealLiveInfo(firstTranscribe + ' başarısız oldu, ' + actualTranscribe + ' kullanılıyor');
   }
   const srcText=String(data.text || '').trim();
   if (!pseudoLiveRunning || session !== pseudoLiveSessionId) return {type:'skip'};
   if (!srcText) {
-    return { type:'notice', message:'Ses algılanmadı', state:'idle' };
+    return { type:'notice', message:liveBi('Ses algılanmadı', 'Không nghe thấy giọng nói'), state:'idle' };
   }
   if (isBadLiveTranscript(srcText)) {
-    return { type:'notice', message:'Şüpheli transkript yok sayıldı', state:'idle' };
+    return { type:'notice', message:liveBi('Şüpheli transkript yok sayıldı', 'Đã bỏ qua bản ghi đáng ngờ'), state:'idle' };
   }
   if (isLikelyPseudoLiveEcho(srcText)) {
-    return { type:'notice', message:'Kendi sesimi duydum, dinlemeye devam ediyorum', state:'idle' };
+    return { type:'notice', message:liveBi('Kendi sesimi duydum, dinlemeye devam ediyorum', 'Đã nghe lại âm thanh phát, tiếp tục lắng nghe'), state:'idle' };
   }
   const guessed=guessLiveSourceRole(srcText);
   const from=guessed || 'tr';
-  if (!guessed) setRealLiveStatus('Dil net değildi, Türkçe varsayıldı', 'working');
+  if (!guessed) setRealLiveStatus(liveBi('Dil net değildi, Türkçe varsayıldı', 'Ngôn ngữ chưa rõ, tạm chọn tiếng Thổ Nhĩ Kỳ'), 'working');
   const target=from === 'tr' ? 'vi' : 'tr';
   if (isExactBlocked(srcText)) {
     return { type:'notice', message:'Kara listeye takıldı, atlandı.', state:'error' };
   }
-  setRealLiveStatus('Çeviri hazırlanıyor', 'working');
+  setRealLiveStatus(liveBi('Çeviri hazırlanıyor', 'Đang chuẩn bị bản dịch'), 'working');
   updateRealLiveInfo((transcribeFallbackNotice || '') + modelName(selectedModel));
   try {
     const tr=await askVietServer('translate', {
@@ -10615,7 +10696,12 @@ function flushPseudoLiveCompletedResults() {
     const result=pseudoLiveCompletedResults.get(pseudoLiveNextCommitSeq);
     pseudoLiveCompletedResults.delete(pseudoLiveNextCommitSeq);
     pseudoLiveNextCommitSeq++;
-    commitPseudoLiveResult(result);
+    try {
+      commitPseudoLiveResult(result);
+    } catch (err) {
+      appendRealLiveLog('Live sonuç hatası / Lỗi kết quả Live: ' + normalizeApiError(err && err.message ? err.message : String(err), 'tr'), 'status');
+    }
+    updateRealLiveInfo(realLiveStatusDetail);
   }
 }
 
@@ -10691,17 +10777,30 @@ function normalizeLiveCompareText(text) {
 }
 
 function isLikelyPseudoLiveEcho(text) {
-  if (!pseudoLiveLastSpokenText || Date.now()-pseudoLiveLastSpokenAt>30000) return false;
+  if (!pseudoLiveLastSpokenText) return false;
+  const now=Date.now();
+  const sinceDone=pseudoLiveLastSpokenDoneAt ? now-pseudoLiveLastSpokenDoneAt : Number.MAX_SAFE_INTEGER;
+  const inEchoWindow=pseudoLiveTtsPlaying || sinceDone<=6000 || now-pseudoLiveLastSpokenAt<=30000;
+  if (!inEchoWindow) return false;
   const a=normalizeLiveCompareText(text),b=normalizeLiveCompareText(pseudoLiveLastSpokenText);
-  if (a.length<6 || b.length<6) return false;
-  if (a.includes(b) || b.includes(a)) return true;
+  if (!a || !b) return false;
+  if (a===b) return true;
+  const fold=value=>String(value||'').toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9çğıöşü]/g,'');
+  const shortA=fold(text), shortB=fold(pseudoLiveLastSpokenText);
+  const shortMax=Math.max(shortA.length,shortB.length);
+  if ((pseudoLiveTtsPlaying || sinceDone<=6000) && shortMax>=2 && shortMax<=8 && shortA===shortB) return true;
+  if (a.length<8 || b.length<8) return false;
+  const shorter=Math.min(a.length,b.length), longer=Math.max(a.length,b.length);
+  const lengthRatio=longer ? shorter/longer : 0;
+  if ((a.includes(b) || b.includes(a)) && shorter>=24 && lengthRatio>=.78) return true;
+  if (lengthRatio<.72) return false;
   const as=new Set(a.split(' ').filter(word=>word.length>1));
   const bs=new Set(b.split(' ').filter(word=>word.length>1));
   if (!as.size || !bs.size) return false;
   let hit=0;
   as.forEach(word=>{if(bs.has(word))hit++;});
   const min=Math.min(as.size,bs.size);
-  return hit>=Math.max(2,Math.ceil(min*.65));
+  return hit>=Math.max(2,Math.ceil(min*.72));
 }
 
 function guessLiveSourceRole(text) {
