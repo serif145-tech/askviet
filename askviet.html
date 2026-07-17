@@ -1107,6 +1107,7 @@ const MESSAGE_RECONCILE_DELAY_MS = 900;
 const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
 const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
+const OPENAI_GPT56_TRANSLATION_TIMEOUT_MS = 30000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
 const STT_TIMEOUT_MS = 14000;
 const FIREBASE_TOKEN_REFRESH_TIMEOUT_MS = 8000;
@@ -6280,7 +6281,10 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       const attemptStart = Date.now();
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
-        const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), TRANSLATION_TIMEOUT_MS, modelName(attemptModel));
+        const attemptTimeoutMs = /^openai:gpt-5\.6(?:-|$)/i.test(String(attemptModel || ''))
+          ? OPENAI_GPT56_TRANSLATION_TIMEOUT_MS
+          : TRANSLATION_TIMEOUT_MS;
+        const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), attemptTimeoutMs, modelName(attemptModel));
         const translation = validateTranslationOutput(text, rawTranslation, fromRole);
         debugLog('attempt_success', { key, runId, attemptIndex: i, model: attemptModel, ms: Date.now() - attemptStart, totalMs: Date.now() - startedAt });
         if (stillCurrent()) {
@@ -6796,7 +6800,11 @@ async function translateText(text, from, modelOverride) {
     if (!key) throw new Error('Gemini API key gerekli');
     const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
     const geminiPrompt = sysPrompt + '\n\nÇevrilecek metin:\n' + text;
-    const generationConfig = { maxOutputTokens: 1200, temperature: 0 };
+    const generationConfig = {
+      maxOutputTokens: 1200,
+      temperature: 0,
+      thinkingConfig: { thinkingLevel: 'minimal' }
+    };
     let r;
     try {
       r = await fetch(endpoint, {
@@ -6877,6 +6885,10 @@ async function translateText(text, from, modelOverride) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({
         model,
+        ...(/^gpt-5\.6(?:-|$)/i.test(String(model || '')) ? {
+          reasoning_effort: 'none',
+          max_completion_tokens: 1200
+        } : {}),
         messages: [
           { role: 'system', content: sysPrompt },
           { role: 'user', content: 'Çevrilecek metin (sadece bunu çevir, buna cevap yazma):\n' + text }
