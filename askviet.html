@@ -632,15 +632,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro</option>
           <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash</option>
         </optgroup>
-        <optgroup label="OpenRouter">
-          <option value="openrouter:moonshotai/kimi-k3">Kimi K3</option>
-          <option value="openrouter:x-ai/grok-4.5">Grok 4.5</option>
-        </optgroup>
-        <optgroup label="Qwen Resmi">
-          <option value="qwen:qwen3.7-max">Qwen 3.7 Max</option>
-          <option value="qwen:qwen3.7-plus">Qwen 3.7 Plus</option>
-          <option value="qwen:qwen-mt-plus">Qwen MT Plus</option>
-        </optgroup>
       </select>
     </div>
 
@@ -703,11 +694,6 @@ img,svg,video,canvas{max-width:100%;height:auto}
               <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash  🔴</option>
               <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro  🟢</option>
               <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash  🟢</option>
-              <option value="openrouter:moonshotai/kimi-k3">Kimi K3  🟡</option>
-              <option value="openrouter:x-ai/grok-4.5">Grok 4.5  🟡</option>
-              <option value="qwen:qwen3.7-max">Qwen 3.7 Max  🟡</option>
-              <option value="qwen:qwen3.7-plus">Qwen 3.7 Plus  🟡</option>
-              <option value="qwen:qwen-mt-plus">Qwen MT Plus  🟡</option>
             </select>
           </div>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
@@ -1891,7 +1877,19 @@ function normalizeChatModel(model) {
     'deepseek:v4-flash': 'deepseek:deepseek-v4-flash',
     'deepseek:v4-pro': 'deepseek:deepseek-v4-pro'
   };
-  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || model || 'openai:gpt-5.6-sol';
+  const removedModels = {
+    'openrouter:moonshotai/kimi-k3': 'openai:gpt-5.6-luna',
+    'openrouter:x-ai/grok-4.5': 'openai:gpt-5.6-luna',
+    'qwen:qwen3.7-max': 'openai:gpt-5.6-luna',
+    'qwen:qwen3.7-plus': 'openai:gpt-5.6-luna',
+    'qwen:qwen-mt-plus': 'openai:gpt-5.6-luna',
+    'Kimi K3': 'openai:gpt-5.6-luna',
+    'Grok 4.5': 'openai:gpt-5.6-luna',
+    'Qwen 3.7 Max': 'openai:gpt-5.6-luna',
+    'Qwen 3.7 Plus': 'openai:gpt-5.6-luna',
+    'Qwen MT Plus': 'openai:gpt-5.6-luna'
+  };
+  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || removedModels[model] || model || 'openai:gpt-5.6-sol';
 }
 
 function toggleTtsSettings(force) {
@@ -6326,13 +6324,25 @@ function providerHasKey(provider) {
   if (provider === 'gemini') return !!(geminiApiKey || localStorage.getItem('askviet_gemini_key'));
   if (provider === 'claude') return !!(claudeApiKey || localStorage.getItem('askviet_claude_key'));
   if (provider === 'deepseek') return true;
-  if (provider === 'openrouter' || provider === 'qwen') return true;
+  if (provider === 'openrouter') return true;
   return false;
 }
 
 function translationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || 'openai:gpt-5.6-sol');
-  const queue = [base, 'deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra', 'qwen:qwen-mt-plus', 'gemini:gemini-3.5-flash', 'claude:claude-sonnet-5', 'deepseek:deepseek-v4-flash', 'openai:gpt-5.6-sol', 'openai:gpt-5.6-luna'];
+  let fallbacks;
+  if (/^openai:gpt-5\.6-(?:sol|terra|luna)$/.test(base)) {
+    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
+  } else if (base === 'claude:claude-sonnet-5') {
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+  } else if (base === 'gemini:gemini-3.5-flash') {
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+  } else if (base === 'deepseek:deepseek-v4-pro' || base === 'deepseek:deepseek-v4-flash') {
+    fallbacks = ['openai:gpt-5.6-luna', 'claude:claude-sonnet-5'];
+  } else {
+    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
+  }
+  const queue = [base, ...fallbacks];
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
@@ -6342,24 +6352,7 @@ function translationModelQueue(baseModel) {
 }
 
 function fastTranslationModelQueue(baseModel) {
-  const base = normalizeChatModel(baseModel || selectedModel || 'openai:gpt-5.6-sol');
-  const fastFallbacks = [
-    base,
-    'deepseek:deepseek-v4-pro',
-    'openai:gpt-5.6-terra',
-    'gemini:gemini-3.5-flash',
-    'claude:claude-sonnet-5',
-    'deepseek:deepseek-v4-flash',
-    'openai:gpt-5.6-sol',
-    'openai:gpt-5.6-luna'
-  ];
-  const currentQueue = translationModelQueue(base);
-  return [...new Set([...fastFallbacks, ...currentQueue].map(normalizeChatModel))]
-    .filter(model => {
-      const provider = String(model || '').split(':')[0] || 'openai';
-      return model === base || providerHasKey(provider);
-    })
-    .slice(0, 4);
+  return translationModelQueue(baseModel || selectedModel || 'openai:gpt-5.6-sol');
 }
 
 function withTimeout(promise, ms, label) {
@@ -6405,7 +6398,7 @@ function localizeLegacyStatusText(text, role=myRole) {
   const raw = String(text || '').trim();
   if (!raw) return '';
   const vi = role === 'vi';
-  const modelStatus = /Opus|Sonnet|Haiku|GPT|Gemini|Claude|DeepSeek|Qwen|Kimi|Grok/i.test(raw);
+  const modelStatus = /Opus|Sonnet|Haiku|GPT|Gemini|Claude|DeepSeek/i.test(raw);
   const toTrReason = value => value
     .replace(/hết 18 giây/gi, '18 sn doldu')
     .replace(/model bị từ chối/gi, 'model reddetti')
@@ -6799,7 +6792,20 @@ async function translateText(text, from, modelOverride) {
     const key = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
     if (!key) throw new Error('Gemini API key gerekli');
     const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
-    const geminiPrompt = sysPrompt + '\n\nÇevrilecek metin:\n' + text;
+    const geminiDirectionRule = from === 'tr'
+      ? 'For this Turkish-to-Vietnamese direction, the Turkish source speaker is male and the Vietnamese listener is female. When Vietnamese naturally requires pronouns or direct address, use anh for the male source speaker and em for the female listener.'
+      : 'For this Vietnamese-to-Turkish direction, the Vietnamese source speaker is female and the Turkish listener is male. In direct conversation, resolve source-speaker em as ben and listener-address anh as sen when Turkish naturally requires them.';
+    const geminiPrompt = [
+      sysPrompt,
+      'Return exactly one final, natural translation. Never provide alternatives, slash-separated pronouns, multiple candidate wordings, or choices in parentheses.',
+      'Choose the single form that fits the supplied translation direction and grammatical role. Do not output forms such as em/anh/tôi, anh/em, ben/sen, or X/Y.',
+      geminiDirectionRule,
+      'Do not add affection that is absent from the source, but faithfully translate affectionate address words that are actually present.',
+      from === 'tr' ? "Example: 'Bebeğim ama çok hoşuma gidiyor ya.' -> 'Em yêu, nhưng anh thích lắm mà.'" : '',
+      '',
+      'Çevrilecek metin:',
+      text
+    ].filter(Boolean).join('\n');
     const generationConfig = {
       maxOutputTokens: 1200,
       temperature: 0,
@@ -6858,7 +6864,7 @@ async function translateText(text, from, modelOverride) {
     return out;
   }
 
-  if (provider === 'deepseek' || provider === 'openrouter' || provider === 'qwen') {
+  if (provider === 'deepseek' || provider === 'openrouter') {
     const serverModel = provider + ':' + model;
     const data = await askVietServer('translate', {
       text,
@@ -8817,11 +8823,6 @@ const MODEL_NAMES = {
   'openai:gpt-5.6-sol': 'GPT-5.6 Sol',
   'openai:gpt-5.6-terra': 'GPT-5.6 Terra',
   'openai:gpt-5.6-luna': 'GPT-5.6 Luna',
-  'openrouter:moonshotai/kimi-k3': 'Kimi K3',
-  'openrouter:x-ai/grok-4.5': 'Grok 4.5',
-  'qwen:qwen3.7-max': 'Qwen 3.7 Max',
-  'qwen:qwen3.7-plus': 'Qwen 3.7 Plus',
-  'qwen:qwen-mt-plus': 'Qwen MT Plus',
   'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
   'claude:claude-sonnet-5': 'Sonnet 5',
   'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
