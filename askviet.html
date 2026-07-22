@@ -626,7 +626,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="claude:claude-sonnet-5">Sonnet 5</option>
         </optgroup>
         <optgroup label="Gemini">
-          <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash</option>
+          <option value="gemini:gemini-3.6-flash">Gemini 3.6 Flash</option>
+          <option value="gemini:gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
         </optgroup>
         <optgroup label="DeepSeek">
           <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro</option>
@@ -691,7 +692,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
               <option value="openai:gpt-5.6-terra">GPT-5.6 Terra  🔴</option>
               <option value="openai:gpt-5.6-luna">GPT-5.6 Luna  🟡</option>
               <option value="claude:claude-sonnet-5">Sonnet 5  🔴</option>
-              <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash  🔴</option>
+              <option value="gemini:gemini-3.6-flash">Gemini 3.6 Flash  🟡</option>
+              <option value="gemini:gemini-3.5-flash-lite">Gemini 3.5 Flash Lite  🟢</option>
               <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro  🟢</option>
               <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash  🟢</option>
             </select>
@@ -1844,11 +1846,12 @@ function listenTtsSettings() {
 function normalizeChatModel(model) {
   if (model && typeof model === 'object') model = model.model || model.value || model.name || '';
   const oldGemini = {
-    'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.5-flash',
-    'gemini:gemini-2.5-flash': 'gemini:gemini-3.5-flash',
-    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.5-flash',
-    'gemini:gemini-3.1-pro-preview': 'gemini:gemini-3.5-flash',
-    'gemini:gemini-3.1-flash-lite': 'gemini:gemini-3.5-flash'
+    'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.6-flash',
+    'gemini:gemini-2.5-flash': 'gemini:gemini-3.6-flash',
+    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.6-flash',
+    'gemini:gemini-3.1-pro-preview': 'gemini:gemini-3.6-flash',
+    'gemini:gemini-3.1-flash-lite': 'gemini:gemini-3.5-flash-lite',
+    'gemini:gemini-3.5-flash': 'gemini:gemini-3.6-flash'
   };
   const oldOpenAi = {
     'openai:gpt-4o': 'openai:gpt-5.6-sol',
@@ -6297,9 +6300,9 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
         const retry = !isFatalTranslationError(e) && i < modelsToTry.length - 1;
         debugLog('attempt_failed', { key, runId, attemptIndex: i, model: attemptModel, ms: Date.now() - attemptStart, errRaw: String(e && e.message || e).slice(0, 200), willRetry: retry });
         if (retry) {
-          const waitMs = 700 + (i * 600);
+          const waitMs = isRequestTimeoutError(e) ? 0 : 700 + (i * 600);
           await setTranslationStatus(key, retryText(targetRole, attemptModel, modelsToTry[i + 1], msg));
-          await sleep(waitMs);
+          if (waitMs) await sleep(waitMs);
           continue;
         }
         debugLog('all_attempts_exhausted', { key, runId, totalMs: Date.now() - startedAt });
@@ -6335,7 +6338,7 @@ function translationModelQueue(baseModel) {
     fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
   } else if (base === 'claude:claude-sonnet-5') {
     fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
-  } else if (base === 'gemini:gemini-3.5-flash') {
+  } else if (/^gemini:gemini-(?:3\.6-flash|3\.5-flash-lite)$/.test(base)) {
     fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
   } else if (base === 'deepseek:deepseek-v4-pro' || base === 'deepseek:deepseek-v4-flash') {
     fallbacks = ['openai:gpt-5.6-luna', 'claude:claude-sonnet-5'];
@@ -6375,7 +6378,7 @@ function parseTranslationStatus(text) {
   catch { return null; }
 }
 
-function retryStatusText(role, failedModel='gemini:gemini-3.5-flash', nextModel='', reason='') {
+function retryStatusText(role, failedModel='gemini:gemini-3.6-flash', nextModel='', reason='') {
   const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
   const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
   const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
@@ -6571,6 +6574,11 @@ function tryingText(model='') {
 function isFatalTranslationError(e) {
   const s = String((e && e.message) || e || '').toLowerCase();
   return /api[\s_-]?key|x-api-key|invalid.*key|authentication|unauthorized|permission|denied|401|403/.test(s);
+}
+
+function isRequestTimeoutError(e) {
+  const s = String((e && e.message) || e || '').toLowerCase();
+  return /timeout|timed out|abort|zaman asimi/.test(s);
 }
 
 function isPendingTranslationText(text) {
@@ -6769,7 +6777,7 @@ function shortRetryReason(msg, role) {
   return '';
 }
 
-function retryText(role, failedModel='gemini:gemini-3.5-flash', nextModel='', reason='') {
+function retryText(role, failedModel='gemini:gemini-3.6-flash', nextModel='', reason='') {
   return encodeTranslationStatus({ kind: 'retry', failedModel, nextModel, reason: String(reason || '').slice(0, 180) });
 }
 
@@ -8823,7 +8831,8 @@ const MODEL_NAMES = {
   'openai:gpt-5.6-sol': 'GPT-5.6 Sol',
   'openai:gpt-5.6-terra': 'GPT-5.6 Terra',
   'openai:gpt-5.6-luna': 'GPT-5.6 Luna',
-  'gemini:gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini:gemini-3.6-flash': 'Gemini 3.6 Flash',
+  'gemini:gemini-3.5-flash-lite': 'Gemini 3.5 Flash Lite',
   'claude:claude-sonnet-5': 'Sonnet 5',
   'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
   'deepseek:deepseek-v4-pro': 'DeepSeek V4 Pro'
@@ -9764,7 +9773,7 @@ async function transcribeVoiceDetailed(blob, sourceOverride) {
 }
 
 async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
-  const models = ['gemini-3.5-flash'];
+  const models = ['gemini-3.6-flash', 'gemini-3.5-flash-lite'];
   let lastErr = null;
   for (const model of models) {
     try {
