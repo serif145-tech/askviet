@@ -915,7 +915,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-17-complete-ui-media-fix-1';
+const APP_VERSION = '2026-07-27-stt-auth-model-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1097,9 +1097,9 @@ const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
 const OPENAI_GPT56_TRANSLATION_TIMEOUT_MS = 30000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
-const STT_TIMEOUT_MS = 14000;
+const STT_TIMEOUT_MS = 28000;
 const FIREBASE_TOKEN_REFRESH_TIMEOUT_MS = 8000;
-const PSEUDO_LIVE_TRANSCRIBE_BUDGET_MS = 18000;
+const PSEUDO_LIVE_TRANSCRIBE_BUDGET_MS = 30000;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const AUTO_REFRESH_IDLE_MS = 4 * 60 * 1000;
 let autoRefreshTimer = null;
@@ -1319,6 +1319,8 @@ async function signInFirebaseRole(role, password) {
 
 let firebaseAuthRefreshInFlight = null;
 let firebaseAuthRefreshInFlightRole = null;
+let firebaseAuthRefreshFailures = 0;
+let firebaseAuthRefreshRetryAt = 0;
 async function refreshFirebaseAuth(force=false) {
   const expectedRole = myRole || selectedLoginRole || localStorage.getItem('askviet_last_role');
   if (expectedRole && firebaseAuth && firebaseAuth.role !== expectedRole) firebaseAuth = null;
@@ -1326,6 +1328,10 @@ async function refreshFirebaseAuth(force=false) {
   if (!firebaseAuth || !firebaseAuth.refreshToken) throw new Error('Firebase girişi yok');
   if (!force && firebaseAuth.idToken && firebaseAuth.expiresAt && firebaseAuth.expiresAt - Date.now() > 5 * 60 * 1000) {
     return firebaseAuth;
+  }
+  if (Date.now() < firebaseAuthRefreshRetryAt) {
+    if (firebaseAuth.idToken && firebaseAuth.expiresAt - Date.now() > 15000) return firebaseAuth;
+    throw new Error('Firebase anahtar yenileme geçici olarak beklemede');
   }
   // Aynı anda birden fazla çağrı (ör. Live'daki 2 paralel işçi) yenileme isteyebilir.
   // Hepsi TEK network isteğini paylaşsın; ikinci/üçüncü çağrı ayrı bir fetch başlatmasın.
@@ -1355,8 +1361,9 @@ async function refreshFirebaseAuth(force=false) {
     }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      clearFirebaseAuth();
-      throw new Error(data?.error?.message || r.statusText || ('HTTP ' + r.status));
+      const error = new Error(data?.error?.message || r.statusText || ('HTTP ' + r.status));
+      error.status = r.status;
+      throw error;
     }
     const session = Object.assign({}, firebaseAuth, {
       idToken: data.id_token,
@@ -1368,7 +1375,20 @@ async function refreshFirebaseAuth(force=false) {
     return session;
   })();
   try {
-    return await firebaseAuthRefreshInFlight;
+    const session = await firebaseAuthRefreshInFlight;
+    firebaseAuthRefreshFailures = 0;
+    firebaseAuthRefreshRetryAt = 0;
+    return session;
+  } catch (error) {
+    const message = String(error && error.message || '').toUpperCase();
+    if (message.includes('INVALID_REFRESH_TOKEN') || message.includes('USER_DISABLED')) {
+      clearFirebaseAuth();
+      throw error;
+    }
+    firebaseAuthRefreshFailures = Math.min(5, firebaseAuthRefreshFailures + 1);
+    firebaseAuthRefreshRetryAt = Date.now() + Math.min(30000, 2000 * (2 ** (firebaseAuthRefreshFailures - 1)));
+    if (firebaseAuth && firebaseAuth.idToken && firebaseAuth.expiresAt - Date.now() > 15000) return firebaseAuth;
+    throw error;
   } finally {
     firebaseAuthRefreshInFlight = null;
     firebaseAuthRefreshInFlightRole = null;
@@ -6333,19 +6353,7 @@ function providerHasKey(provider) {
 
 function translationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || 'openai:gpt-5.6-sol');
-  let fallbacks;
-  if (/^openai:gpt-5\.6-(?:sol|terra|luna)$/.test(base)) {
-    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
-  } else if (base === 'claude:claude-sonnet-5') {
-    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
-  } else if (/^gemini:gemini-(?:3\.6-flash|3\.5-flash-lite)$/.test(base)) {
-    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
-  } else if (base === 'deepseek:deepseek-v4-pro' || base === 'deepseek:deepseek-v4-flash') {
-    fallbacks = ['openai:gpt-5.6-luna', 'claude:claude-sonnet-5'];
-  } else {
-    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
-  }
-  const queue = [base, ...fallbacks];
+  const queue = [base, 'deepseek:deepseek-v4-pro', 'deepseek:deepseek-v4-flash'];
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
