@@ -86,6 +86,19 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .transient-notice{position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),12px) + 68px);transform:translate(-50%,-12px);z-index:10000;width:max-content;max-width:min(88vw,430px);padding:11px 14px;border-radius:8px;background:#18181b;color:#fff;border:1px solid #3f3f46;box-shadow:0 10px 28px #0007;font-size:13px;font-weight:800;line-height:1.35;text-align:center;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
 .transient-notice.show{opacity:1;transform:translate(-50%,0)}
 .header-tools{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex:0 0 auto}
+.message-search-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text);display:grid;place-items:center;cursor:pointer;flex:0 0 auto}
+.message-search-btn:active{transform:scale(.94)}
+.message-search-overlay{position:fixed;inset:0;z-index:5000;background:#08050dcc;display:flex;align-items:flex-start;justify-content:center;padding:max(12px,env(safe-area-inset-top)) 10px 12px}
+.message-search-panel{width:min(620px,100%);max-height:min(760px,calc(100dvh - 24px));background:#181421;border:1px solid #6945a0;border-radius:14px;box-shadow:0 18px 60px #0009;display:flex;flex-direction:column;overflow:hidden}
+.message-search-bar{display:flex;align-items:center;gap:7px;padding:10px;border-bottom:1px solid #3c304d}
+.message-search-input{min-width:0;flex:1;height:42px;border-radius:10px;border:1px solid #4c4060;background:#241f30;color:#fff;padding:0 12px;font-size:15px;outline:none}
+.message-search-input:focus{border-color:#8b5cf6}
+.message-search-close{width:40px;height:40px;border:0;border-radius:50%;background:#2d253b;color:#fff;font-size:22px;cursor:pointer}
+.message-search-status{padding:7px 12px;color:#aaa1b8;font-size:12px}
+.message-search-results{overflow:auto;padding:0 10px 10px;display:flex;flex-direction:column;gap:6px}
+.message-search-result{border:1px solid #4a3d5e;border-radius:9px;background:#251f32;color:#fff;padding:9px 11px;text-align:left;cursor:pointer}
+.message-search-result strong,.message-search-result span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.message-search-result span{margin-top:3px;color:#b9b0c7;font-size:12px}
 .witch-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--tr);box-shadow:0 0 12px #7c3aed88;cursor:pointer;transition:transform .1s ease,box-shadow .15s ease}
 .witch-avatar:active{transform:scale(.94);box-shadow:0 0 18px #a78bfa}
 .model-row{display:flex;gap:5px;align-items:center;min-width:0;line-height:1}
@@ -664,6 +677,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="status-pill mode-toggle chat-mode on" id="chatModeBtn" onclick="switchToChatMode()" title="Mesajlar"><span class="mode-chat-icon">•••</span><span class="mode-chat-label">Mesaj</span></button>
         <button class="status-pill mode-toggle" id="pttModeBtn" onclick="togglePttMode()" title="Bas-konuş modu"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Bas-Konuş</button>
         <button class="status-pill mode-toggle" id="realLiveBtn" onclick="toggleRealLive()" title="Live" style="display:none" hidden><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>Live</button>
+        <button class="message-search-btn" id="messageSearchBtn" onclick="openMessageSearch()" title="Mesaj ara" aria-label="Mesaj ara"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
         <img class="witch-avatar" id="ttsSettingsGearBtn" onclick="toggleTtsSettings()" src="./witch.png" alt="Ses ayarları" title="Ses ayarları">
         <button class="back-btn" onclick="goBack()" title="API ve taraf seçimine dön" aria-label="Geri dön"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
       </div>
@@ -915,7 +929,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-07-27-stt-auth-model-fix-1';
+const APP_VERSION = '2026-08-31-message-search-sound-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1007,6 +1021,10 @@ let autoReadPollTimer = null;
 let presencePollTimer = null;
 let unsubAudio = null;
 let renderedKeys = new Set();
+let messageSearchCache = new Map();
+let messageSearchGeneration = 0;
+let messageSearchFullyLoaded = false;
+let messageSearchOldestTs = Infinity;
 let visibleMessageKeys = new Set();
 let deletedMessageKeys = new Set();
 let deletedMessageSnapshots = new Map();
@@ -2718,6 +2736,119 @@ async function loadOlderMessages() {
       btn.textContent = oldText || (viMode() ? 'Tải tin nhắn cũ hơn' : 'Daha eski mesajları göster');
     }
   }
+}
+
+function normalizeMessageSearch(value='') {
+  return String(value || '').toLocaleLowerCase('tr-TR')
+    .replaceAll('\u0131','i').replaceAll('\u0111','d')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ').trim();
+}
+
+function openMessageSearch() {
+  closeMessageSearch();
+  const overlay = document.createElement('div');
+  overlay.id = 'messageSearchOverlay';
+  overlay.className = 'message-search-overlay';
+  overlay.innerHTML = `<div class="message-search-panel" role="dialog" aria-modal="true">
+    <div class="message-search-bar">
+      <input class="message-search-input" id="messageSearchInput" autocomplete="off" placeholder="${viMode() ? 'T\u00ecm trong tin nh\u1eafn...' : 'Mesajlarda ara...'}">
+      <button class="message-search-close" onclick="closeMessageSearch()" aria-label="${viMode() ? '\u0110\u00f3ng' : 'Kapat'}">&times;</button>
+    </div>
+    <div class="message-search-status" id="messageSearchStatus">${viMode() ? 'Nh\u1eadp t\u1eeb c\u1ea7n t\u00ecm' : 'Aranacak kelimeyi yaz'}</div>
+    <div class="message-search-results" id="messageSearchResults"></div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeMessageSearch(); });
+  document.body.appendChild(overlay);
+  const input = document.getElementById('messageSearchInput');
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const generation = ++messageSearchGeneration;
+    timer = setTimeout(() => runMessageSearch(input.value, generation), 300);
+  });
+  input.focus();
+}
+
+function closeMessageSearch() {
+  messageSearchGeneration++;
+  document.getElementById('messageSearchOverlay')?.remove();
+}
+
+async function runMessageSearch(query, generation) {
+  const needle = normalizeMessageSearch(query);
+  const status = document.getElementById('messageSearchStatus');
+  const results = document.getElementById('messageSearchResults');
+  if (!status || !results) return;
+  results.innerHTML = '';
+  if (needle.length < 2) {
+    status.textContent = viMode() ? 'Nh\u1eadp \u00edt nh\u1ea5t 2 k\u00fd t\u1ef1' : 'En az 2 karakter yaz';
+    return;
+  }
+  status.textContent = viMode() ? '\u0110ang t\u00ecm...' : 'Aran\u0131yor...';
+  renderMessageSearchResults(needle);
+  let found = document.querySelectorAll('.message-search-result').length;
+  if (messageSearchFullyLoaded || found >= 100) {
+    status.textContent = `${viMode() ? 'K\u1ebft qu\u1ea3' : 'Sonu\u00e7'}: ${found}`;
+    return;
+  }
+  let endAt = messageSearchCache.size ? messageSearchOldestTs - 1 : null;
+  let scanned = messageSearchCache.size;
+  while (generation === messageSearchGeneration && scanned < 10000) {
+    const page = await fbGetQuery(MSGS_PATH, Object.assign({orderBy:'ts',limitToLast:250}, endAt == null ? {} : {endAt}), true).catch(() => null);
+    if (!page || typeof page !== 'object') break;
+    const entries = Object.entries(page).filter(([,v]) => v && typeof v === 'object');
+    if (!entries.length) break;
+    let oldest = Infinity;
+    for (const [key,msg] of entries) {
+      messageSearchCache.set(key,msg);
+      oldest = Math.min(oldest, messageTime(key,msg) || Infinity);
+      messageSearchOldestTs = Math.min(messageSearchOldestTs, messageTime(key,msg) || Infinity);
+    }
+    scanned += entries.length;
+    renderMessageSearchResults(needle);
+    found = document.querySelectorAll('.message-search-result').length;
+    status.textContent = `${viMode() ? 'K\u1ebft qu\u1ea3' : 'Sonu\u00e7'}: ${found}${entries.length >= 250 ? (viMode() ? ' \u00b7 \u0111ang qu\u00e9t c\u0169 h\u01a1n...' : ' \u00b7 eski mesajlar taran\u0131yor...') : ''}`;
+    if (entries.length < 250) messageSearchFullyLoaded = true;
+    if (entries.length < 250 || !Number.isFinite(oldest) || found >= 100) break;
+    endAt = oldest - 1;
+  }
+}
+
+function renderMessageSearchResults(needle) {
+  const container = document.getElementById('messageSearchResults');
+  if (!container) return;
+  const matches = Array.from(messageSearchCache.entries()).filter(([,msg]) => {
+    if (!msg || msg.deleted || isMediaMessage(msg)) return false;
+    return normalizeMessageSearch(`${msg.text || ''} ${msg.translation || ''}`).includes(needle);
+  }).sort((a,b) => messageTime(b[0],b[1]) - messageTime(a[0],a[1])).slice(0,100);
+  container.innerHTML = '';
+  for (const [key,msg] of matches) {
+    const mine = msg.role === myRole;
+    const primary = mine ? (msg.text || '') : (finalTranslationText(msg.translation || '') || msg.text || '');
+    const secondary = mine ? finalTranslationText(msg.translation || '') : (msg.text || '');
+    const button = document.createElement('button');
+    button.className = 'message-search-result';
+    const strong = document.createElement('strong'); strong.textContent = primary;
+    const small = document.createElement('span'); small.textContent = secondary;
+    button.append(strong); if (secondary) button.append(small);
+    button.onclick = () => selectMessageSearchResult(key,msg);
+    container.append(button);
+  }
+}
+
+function selectMessageSearchResult(key,msg) {
+  currentMessageLimit = Math.max(currentMessageLimit, renderedKeys.size + 1);
+  updateOrRender(key,msg);
+  reorderRenderedMessages();
+  refreshVisibleMessageWindow();
+  closeMessageSearch();
+  setTimeout(() => {
+    const target = document.getElementById('msg-' + key);
+    if (!target) return;
+    target.scrollIntoView({behavior:'smooth',block:'center'});
+    target.animate([{filter:'brightness(1)'},{filter:'brightness(1.8)'},{filter:'brightness(1)'}],{duration:900});
+  },100);
 }
 
 function updateLoadOlderButton(show=true) {

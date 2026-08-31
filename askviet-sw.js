@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-06-24-push-badge-count-1';
+const ASKVIET_SW_VERSION = '2026-08-31-message-search-sound-1';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';
