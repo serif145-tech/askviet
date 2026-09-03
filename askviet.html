@@ -929,7 +929,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-08-31-search-gemini37-fix-2';
+const APP_VERSION = '2026-09-03-message-delivery-fix-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -4715,10 +4715,6 @@ function scheduleReadReceiptFlush(delay=0) {
 async function flushPendingReadReceipts() {
   if (!canWriteReadReceipt()) return;
   if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
-  if (outgoingInFlight.size) {
-    scheduleReadReceiptFlush(1500);
-    return;
-  }
   readReceiptFlushRunning = true;
   try {
     const keys = [];
@@ -6317,9 +6313,11 @@ async function sendQueuedItem(item) {
       }, timeoutMs);
       return;
     }
+    const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
+    if (!remote || typeof remote !== 'object') throw new Error('Firebase mesaj doğrulaması başarısız');
     messageWriteBlocked = false;
     setConnected(true, true);
-    confirmOutgoingMessage(item.key);
+    confirmOutgoingMessage(item.key, remote);
     scheduleMessageSnapshotReconcile('outgoing-sent');
   } catch (e) {
     messageWriteBlocked = true;
@@ -11063,6 +11061,7 @@ window.addEventListener('pagehide', () => {
 
 function resumeChatTransport() {
   if (!myRole) return;
+  recoverInterruptedOutgoingMessages();
   try { saveChatScrollState(); } catch {}
   settleChatVisualViewport();
   if (resumeSyncTimer) clearTimeout(resumeSyncTimer);
@@ -11091,6 +11090,19 @@ function resumeChatTransport() {
     });
     scheduleReadReceiptFlush(0);
   }, 180);
+}
+
+function recoverInterruptedOutgoingMessages() {
+  if (!outgoingInFlight.size) return;
+  for (const key of Array.from(outgoingInFlight)) {
+    const item = pendingMessageQueue.get(key);
+    if (!item) continue;
+    item.state = 'unknown';
+    item.nextRetryAt = 0;
+  }
+  outgoingInFlight.clear();
+  persistPendingMessages();
+  if (hasUnknownOutgoingMessages()) scheduleUnknownOutgoingVerification(300);
 }
 
 document.addEventListener('visibilitychange', () => {
