@@ -631,6 +631,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="setup-label">Model</div>
       <select class="model-select" id="modelSelect">
         <optgroup label="OpenAI Resmi">
+          <option value="openai:gpt-6-astra">GPT-6.0 Astra</option>
           <option value="openai:gpt-5.6-sol">GPT-5.6 Sol</option>
           <option value="openai:gpt-5.6-terra">GPT-5.6 Terra</option>
           <option value="openai:gpt-5.6-luna">GPT-5.6 Luna</option>
@@ -639,7 +640,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <option value="claude:claude-sonnet-5">Sonnet 5</option>
         </optgroup>
         <optgroup label="Gemini">
-          <option value="gemini:gemini-3.7-flash">Gemini 3.7 Flash</option>
+          <option value="gemini:gemini-3.8-flash">Gemini 3.8 Flash</option>
           <option value="gemini:gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
         </optgroup>
         <optgroup label="DeepSeek">
@@ -702,11 +703,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
           <div class="chat-model-picker" id="chatModelPicker" title="Model seçimi">
             <span class="chat-model-picker-display" id="chatModelPickerDisplay">GPT-5.6 Sol</span>
             <select class="chat-model-select" id="chatModelSelect" title="Model seçimi" aria-label="Model seçimi">
+              <option value="openai:gpt-6-astra">GPT-6.0 Astra  🔴🔴🔴</option>
               <option value="openai:gpt-5.6-sol">GPT-5.6 Sol  🔴🔴</option>
               <option value="openai:gpt-5.6-terra">GPT-5.6 Terra  🔴</option>
               <option value="openai:gpt-5.6-luna">GPT-5.6 Luna  🟡</option>
               <option value="claude:claude-sonnet-5">Sonnet 5  🔴</option>
-              <option value="gemini:gemini-3.7-flash">Gemini 3.7 Flash  🟡</option>
+              <option value="gemini:gemini-3.8-flash">Gemini 3.8 Flash  🟡</option>
               <option value="gemini:gemini-3.5-flash-lite">Gemini 3.5 Flash Lite  🟢</option>
               <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro  🟢</option>
               <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash  🟢</option>
@@ -929,7 +931,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-03-message-delivery-fix-1';
+const APP_VERSION = '2026-09-15-astra-38-durable-send-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -1113,7 +1115,7 @@ const MESSAGE_RECONCILE_DELAY_MS = 900;
 const MESSAGE_RECONCILE_MIN_GAP_MS = 2500;
 const MAX_PERSISTED_DELETED_MESSAGES = 120;
 const TRANSLATION_TIMEOUT_MS = 18000;
-const OPENAI_GPT56_TRANSLATION_TIMEOUT_MS = 30000;
+const OPENAI_PREMIUM_TRANSLATION_TIMEOUT_MS = 30000;
 const PTT_TRANSLATION_TIMEOUT_MS = TRANSLATION_TIMEOUT_MS;
 const STT_TIMEOUT_MS = 28000;
 const FIREBASE_TOKEN_REFRESH_TIMEOUT_MS = 8000;
@@ -1140,6 +1142,7 @@ let activeReply = null;
 let outgoingInFlight = new Set();
 let outgoingRetryTimer = null;
 let outgoingUnknownTimer = null;
+let outgoingWatchdogTimer = null;
 let outgoingUnknownVerifying = false;
 let modelPollTimer = null;
 let lastPageHiddenAt = 0;
@@ -1173,7 +1176,9 @@ const OUTGOING_RETRY_DELAY_MS = 1200;
 const OUTGOING_AUTO_RETRY_MAX_AGE_MS = 2 * 60 * 1000;
 const OUTGOING_UNKNOWN_VERIFY_DELAY_MS = 15000;
 const OUTGOING_UNKNOWN_RESEND_GAP_MS = 15000;
-const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 10 * 60 * 1000;
+const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const OUTGOING_STUCK_IN_FLIGHT_MS = 12000;
+const OUTGOING_WATCHDOG_INTERVAL_MS = 4000;
 const READ_RECEIPT_RETRY_DELAY_MS = 12000;
 const CHAT_STREAM_STALE_MS = 50000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
@@ -1884,13 +1889,14 @@ function listenTtsSettings() {
 function normalizeChatModel(model) {
   if (model && typeof model === 'object') model = model.model || model.value || model.name || '';
   const oldGemini = {
-    'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.7-flash',
-    'gemini:gemini-2.5-flash': 'gemini:gemini-3.7-flash',
-    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.7-flash',
-    'gemini:gemini-3.1-pro-preview': 'gemini:gemini-3.7-flash',
+    'gemini:gemini-2.5-flash-preview-05-20': 'gemini:gemini-3.8-flash',
+    'gemini:gemini-2.5-flash': 'gemini:gemini-3.8-flash',
+    'gemini:gemini-3-pro-preview': 'gemini:gemini-3.8-flash',
+    'gemini:gemini-3.1-pro-preview': 'gemini:gemini-3.8-flash',
     'gemini:gemini-3.1-flash-lite': 'gemini:gemini-3.5-flash-lite',
-    'gemini:gemini-3.5-flash': 'gemini:gemini-3.7-flash',
-    'gemini:gemini-3.6-flash': 'gemini:gemini-3.7-flash'
+    'gemini:gemini-3.5-flash': 'gemini:gemini-3.8-flash',
+    'gemini:gemini-3.6-flash': 'gemini:gemini-3.8-flash',
+    'gemini:gemini-3.7-flash': 'gemini:gemini-3.8-flash'
   };
   const oldOpenAi = {
     'openai:gpt-4o': 'openai:gpt-5.6-sol',
@@ -2087,21 +2093,50 @@ async function fbSet(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
   return r.ok;
 }
 function fbPatchKeepalive(path, data) {
-  if (!firebaseAuth?.idToken) return false;
+  const request = startFbPatchKeepalive(path, data);
+  if (!request) return false;
+  request.catch(() => {});
+  return true;
+}
+function startFbPatchKeepalive(path, data) {
+  if (!firebaseAuth?.idToken) return null;
   try {
-    fetch(dbUrlSync(path, '&print=silent'), {
+    return fetch(dbUrlSync(path, '&print=silent'), {
       method: 'PATCH',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(data),
       keepalive: true
-    }).catch(() => {});
-    return true;
+    }).then(response => {
+      if (response.ok) return true;
+      const error = new Error('Firebase kalıcı yazma hatası: ' + response.status);
+      error.status = response.status;
+      throw error;
+    });
   } catch {
-    return false;
+    return null;
   }
 }
-async function fbPatch(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
-  const r = await firebaseFetch(path, { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }, '&print=silent', timeoutMs);
+async function awaitKeepalivePatch(request, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      request,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Firebase kalıcı yazma zaman aşımına uğradı')), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+async function fbPatch(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS, requestOptions={}) {
+  const options = {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  };
+  if (requestOptions.keepalive) options.keepalive = true;
+  const r = await firebaseFetch(path, options, '&print=silent', timeoutMs);
   if (!r.ok) console.warn('Firebase toplu kaydetme hatasi:', r.status, path);
   return r.ok;
 }
@@ -2208,9 +2243,11 @@ function loadPersistentQueues() {
       if (!item || !item.key || !item.msg || item.msg.role !== myRole) continue;
       if (Date.now() - Number(item.createdAt || item.msg.ts || 0) > PENDING_ITEM_MAX_AGE_MS) continue;
       const restored = Object.assign({ attempts:0, state:'pending', nextRetryAt:0 }, item);
-      if (Date.now() - Number(restored.createdAt || restored.msg.ts || 0) > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
+      if (restored.state === 'sending' || Number(restored.sendStartedAt || 0) > 0
+          || Date.now() - Number(restored.createdAt || restored.msg.ts || 0) > OUTGOING_AUTO_RETRY_MAX_AGE_MS) {
         restored.state = 'unknown';
         restored.nextRetryAt = 0;
+        restored.sendStartedAt = 0;
       }
       pendingMessageQueue.set(item.key, restored);
     }
@@ -2329,6 +2366,7 @@ async function start(role) {
   restorePendingMessages();
   flushOutgoingQueue(true);
   if (hasUnknownOutgoingMessages()) scheduleUnknownOutgoingVerification(500);
+  scheduleOutgoingWatchdog();
   scheduleReadReceiptFlush(0);
   persistSessionState();
   startAutoRefreshTimer();
@@ -2352,6 +2390,7 @@ function goBack() {
   firebaseTransportRecovering = false;
   if (outgoingRetryTimer) { clearTimeout(outgoingRetryTimer); outgoingRetryTimer = null; }
   if (outgoingUnknownTimer) { clearTimeout(outgoingUnknownTimer); outgoingUnknownTimer = null; }
+  if (outgoingWatchdogTimer) { clearTimeout(outgoingWatchdogTimer); outgoingWatchdogTimer = null; }
   outgoingUnknownVerifying = false;
   if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
   if (readReceiptRetryTimer) { clearTimeout(readReceiptRetryTimer); readReceiptRetryTimer = null; }
@@ -6147,6 +6186,26 @@ function scheduleUnknownOutgoingVerification(delay=OUTGOING_UNKNOWN_VERIFY_DELAY
   }, Math.max(300, Number(delay) || OUTGOING_UNKNOWN_VERIFY_DELAY_MS));
 }
 
+function hasSendingOutgoingMessages() {
+  for (const item of pendingMessageQueue.values()) {
+    if (item?.state === 'sending' || outgoingInFlight.has(item?.key)) return true;
+  }
+  return false;
+}
+
+function scheduleOutgoingWatchdog(delay=OUTGOING_WATCHDOG_INTERVAL_MS) {
+  if (outgoingWatchdogTimer) clearTimeout(outgoingWatchdogTimer);
+  if (!hasSendingOutgoingMessages()) {
+    outgoingWatchdogTimer = null;
+    return;
+  }
+  outgoingWatchdogTimer = setTimeout(() => {
+    outgoingWatchdogTimer = null;
+    recoverInterruptedOutgoingMessages();
+    if (hasSendingOutgoingMessages()) scheduleOutgoingWatchdog();
+  }, Math.max(500, Number(delay) || OUTGOING_WATCHDOG_INTERVAL_MS));
+}
+
 function hasUnknownOutgoingMessages() {
   for (const item of pendingMessageQueue.values()) {
     if (item?.state === 'unknown') return true;
@@ -6208,7 +6267,12 @@ async function ensureOutgoingMessageExistsForTranslation(key) {
   }
   try {
     item.lastManualResendAt = Date.now();
-    const ok = await fbSet(MSGS_PATH + '/' + key, messagePayloadForServer(item.msg), OUTGOING_RETRY_TIMEOUT_MS);
+    const ok = await fbPatch(
+      MSGS_PATH + '/' + key,
+      messagePayloadForKeepalive(item.msg),
+      OUTGOING_RETRY_TIMEOUT_MS,
+      { keepalive:true }
+    );
     if (!ok) return false;
     confirmOutgoingMessage(key);
     scheduleMessageSnapshotReconcile('manual-retry-resend-message');
@@ -6233,6 +6297,13 @@ async function verifyUnknownOutgoingMessages() {
       if (!pendingMessageQueue.has(item.key) || outgoingInFlight.has(item.key)) continue;
       const age = Date.now() - Number(item.createdAt || item.msg?.ts || Date.now());
       try {
+        const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
+        setConnected(true);
+        if (remote && typeof remote === 'object') {
+          confirmOutgoingMessage(item.key, remote);
+          scheduleMessageSnapshotReconcile('outgoing-unknown-confirmed');
+          continue;
+        }
         if (age > OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS) {
           item.state = 'unknown_paused';
           item.nextRetryAt = 0;
@@ -6241,15 +6312,8 @@ async function verifyUnknownOutgoingMessages() {
           changed = true;
           continue;
         }
-        const remote = await fbGet(MSGS_PATH + '/' + item.key, true);
-        setConnected(true);
-        if (remote && typeof remote === 'object') {
-          confirmOutgoingMessage(item.key, remote);
-          scheduleMessageSnapshotReconcile('outgoing-unknown-confirmed');
-          continue;
-        }
         const lastResendAt = Number(item.lastUnknownResendAt || 0);
-        if (age <= OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS && Date.now() - lastResendAt > OUTGOING_UNKNOWN_RESEND_GAP_MS) {
+        if (Date.now() - lastResendAt > OUTGOING_UNKNOWN_RESEND_GAP_MS) {
           item.state = 'unknown';
           item.nextRetryAt = 0;
           item.lastUnknownResendAt = Date.now();
@@ -6294,12 +6358,20 @@ async function verifyUnknownOutgoingMessages() {
 
 async function sendQueuedItem(item) {
   if (!item || !pendingMessageQueue.has(item.key) || outgoingInFlight.has(item.key)) return;
+  const sendStartedAt = Date.now();
   outgoingInFlight.add(item.key);
-  item.state = 'pending';
+  item.state = 'sending';
+  item.sendStartedAt = sendStartedAt;
+  persistPendingMessages();
+  scheduleOutgoingWatchdog();
   updateDeliveryStatus(item.key, 'pending');
   const timeoutMs = item.attempts > 0 ? OUTGOING_RETRY_TIMEOUT_MS : FIREBASE_REQUEST_TIMEOUT_MS;
   try {
-    const ok = await fbSet(MSGS_PATH + '/' + item.key, messagePayloadForServer(item.msg), timeoutMs);
+    const messagePath = MSGS_PATH + '/' + item.key;
+    const keepaliveRequest = startFbPatchKeepalive(messagePath, messagePayloadForKeepalive(item.msg));
+    const ok = keepaliveRequest
+      ? await awaitKeepalivePatch(keepaliveRequest, timeoutMs)
+      : await fbPatch(messagePath, messagePayloadForKeepalive(item.msg), timeoutMs, { keepalive:true });
     if (!ok) throw new Error('Firebase mesajı kaydetmedi');
     if (deletedMessageKeys.has(String(item.key))) {
       const deleted = deletedMessageSnapshots.get(String(item.key));
@@ -6328,7 +6400,7 @@ async function sendQueuedItem(item) {
     if (remote && typeof remote === 'object') {
       confirmOutgoingMessage(item.key, remote);
       scheduleMessageSnapshotReconcile('outgoing-confirmed-remote');
-    } else if (pendingMessageQueue.has(item.key)) {
+    } else if (pendingMessageQueue.has(item.key) && Number(item.sendStartedAt || 0) === sendStartedAt) {
       item.attempts = Number(item.attempts || 0) + 1;
       const ageMs = Date.now() - Number(item.createdAt || item.msg?.ts || Date.now());
       debugLog('message_send_failed', {
@@ -6357,7 +6429,13 @@ async function sendQueuedItem(item) {
       persistPendingMessages();
     }
   } finally {
-    outgoingInFlight.delete(item.key);
+    const stillOwnsAttempt = Number(item.sendStartedAt || 0) === sendStartedAt;
+    if (!pendingMessageQueue.has(item.key) || stillOwnsAttempt) outgoingInFlight.delete(item.key);
+    if (pendingMessageQueue.has(item.key) && stillOwnsAttempt) {
+      item.sendStartedAt = 0;
+      persistPendingMessages();
+    }
+    scheduleOutgoingWatchdog();
   }
 }
 
@@ -6366,6 +6444,10 @@ function confirmOutgoingMessage(key, remoteMsg=null) {
   if (!item) return;
   pendingMessageQueue.delete(key);
   outgoingInFlight.delete(key);
+  if (outgoingWatchdogTimer && !hasSendingOutgoingMessages()) {
+    clearTimeout(outgoingWatchdogTimer);
+    outgoingWatchdogTimer = null;
+  }
   persistPendingMessages();
   const box = document.getElementById('msg-' + key);
   if (box) {
@@ -6432,8 +6514,8 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       const attemptStart = Date.now();
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
-        const attemptTimeoutMs = /^openai:gpt-5\.6(?:-|$)/i.test(String(attemptModel || ''))
-          ? OPENAI_GPT56_TRANSLATION_TIMEOUT_MS
+        const attemptTimeoutMs = /^openai:(?:gpt-6-astra|gpt-5\.6(?:-|$))/i.test(String(attemptModel || ''))
+          ? OPENAI_PREMIUM_TRANSLATION_TIMEOUT_MS
           : TRANSLATION_TIMEOUT_MS;
         const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), attemptTimeoutMs, modelName(attemptModel));
         const translation = validateTranslationOutput(text, rawTranslation, fromRole);
@@ -6483,7 +6565,19 @@ function providerHasKey(provider) {
 
 function translationModelQueue(baseModel) {
   const base = normalizeChatModel(baseModel || 'openai:gpt-5.6-sol');
-  const queue = [base, 'deepseek:deepseek-v4-pro', 'deepseek:deepseek-v4-flash'];
+  let fallbacks;
+  if (base === 'openai:gpt-6-astra' || /^openai:gpt-5\.6-(?:sol|terra|luna)$/.test(base)) {
+    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
+  } else if (base === 'claude:claude-sonnet-5') {
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+  } else if (base === 'gemini:gemini-3.8-flash' || base === 'gemini:gemini-3.5-flash-lite') {
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+  } else if (base === 'deepseek:deepseek-v4-pro' || base === 'deepseek:deepseek-v4-flash') {
+    fallbacks = ['openai:gpt-5.6-luna', 'claude:claude-sonnet-5'];
+  } else {
+    fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
+  }
+  const queue = [base, ...fallbacks];
   const filtered = [...new Set(queue.map(normalizeChatModel))]
     .filter(model => {
       const provider = String(model || '').split(':')[0] || 'openai';
@@ -6516,7 +6610,7 @@ function parseTranslationStatus(text) {
   catch { return null; }
 }
 
-function retryStatusText(role, failedModel='gemini:gemini-3.7-flash', nextModel='', reason='') {
+function retryStatusText(role, failedModel='gemini:gemini-3.8-flash', nextModel='', reason='') {
   const failedProvider = String(failedModel || '').split(':')[0] || 'gemini';
   const nextProvider = String(nextModel || '').split(':')[0] || failedProvider;
   const failedName = modelName(failedModel) || (failedProvider === 'openai' ? 'OpenAI' : (failedProvider === 'claude' ? 'Claude' : 'Gemini'));
@@ -6915,7 +7009,7 @@ function shortRetryReason(msg, role) {
   return '';
 }
 
-function retryText(role, failedModel='gemini:gemini-3.7-flash', nextModel='', reason='') {
+function retryText(role, failedModel='gemini:gemini-3.8-flash', nextModel='', reason='') {
   return encodeTranslationStatus({ kind: 'retry', failedModel, nextModel, reason: String(reason || '').slice(0, 180) });
 }
 
@@ -6954,7 +7048,7 @@ async function translateText(text, from, modelOverride) {
     ].filter(Boolean).join('\n');
     const generationConfig = {
       maxOutputTokens: 1200,
-      thinkingConfig: { thinkingLevel: model === 'gemini-3.7-flash' ? 'low' : 'minimal' }
+      thinkingConfig: { thinkingLevel: model === 'gemini-3.8-flash' ? 'low' : 'minimal' }
     };
     let r;
     try {
@@ -7029,6 +7123,8 @@ async function translateText(text, from, modelOverride) {
   const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
   const endpoint = 'https://api.openai.com/v1/chat/completions';
+  const isAstra = /^gpt-6-astra$/i.test(String(model || ''));
+  const isGpt56 = /^gpt-5\.6(?:-|$)/i.test(String(model || ''));
   let r;
   try {
     r = await fetch(endpoint, {
@@ -7036,8 +7132,8 @@ async function translateText(text, from, modelOverride) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({
         model,
-        ...(/^gpt-5\.6(?:-|$)/i.test(String(model || '')) ? {
-          reasoning_effort: 'none',
+        ...((isAstra || isGpt56) ? {
+          reasoning_effort: isAstra ? 'low' : 'none',
           max_completion_tokens: 1200
         } : {}),
         messages: [
@@ -8965,10 +9061,11 @@ function openAiSpeechRequest({model,input,voice,instructions,speed,signal,key}) 
 }
 
 const MODEL_NAMES = {
+  'openai:gpt-6-astra': 'GPT-6.0 Astra',
   'openai:gpt-5.6-sol': 'GPT-5.6 Sol',
   'openai:gpt-5.6-terra': 'GPT-5.6 Terra',
   'openai:gpt-5.6-luna': 'GPT-5.6 Luna',
-  'gemini:gemini-3.7-flash': 'Gemini 3.7 Flash',
+  'gemini:gemini-3.8-flash': 'Gemini 3.8 Flash',
   'gemini:gemini-3.5-flash-lite': 'Gemini 3.5 Flash Lite',
   'claude:claude-sonnet-5': 'Sonnet 5',
   'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
@@ -9910,7 +10007,7 @@ async function transcribeVoiceDetailed(blob, sourceOverride) {
 }
 
 async function transcribeVoiceGeminiWithFallback(blob, base64, voiceRole, key) {
-  const models = ['gemini-3.7-flash', 'gemini-3.5-flash-lite'];
+  const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
   let lastErr = null;
   for (const model of models) {
     try {
@@ -11061,6 +11158,7 @@ window.addEventListener('pagehide', () => {
 
 function resumeChatTransport() {
   if (!myRole) return;
+  lastPageHiddenAt = 0;
   recoverInterruptedOutgoingMessages();
   try { saveChatScrollState(); } catch {}
   settleChatVisualViewport();
@@ -11092,17 +11190,28 @@ function resumeChatTransport() {
   }, 180);
 }
 
-function recoverInterruptedOutgoingMessages() {
-  if (!outgoingInFlight.size) return;
-  for (const key of Array.from(outgoingInFlight)) {
-    const item = pendingMessageQueue.get(key);
+function recoverInterruptedOutgoingMessages(force=false) {
+  const now = Date.now();
+  let changed = false;
+  for (const item of pendingMessageQueue.values()) {
     if (!item) continue;
+    const key = item.key;
+    const tracked = outgoingInFlight.has(key) || item.state === 'sending' || Number(item.sendStartedAt || 0) > 0;
+    if (!tracked) continue;
+    const startedAt = Number(item.sendStartedAt || 0);
+    if (!force && startedAt > 0 && now - startedAt < OUTGOING_STUCK_IN_FLIGHT_MS) continue;
     item.state = 'unknown';
     item.nextRetryAt = 0;
+    item.sendStartedAt = 0;
+    outgoingInFlight.delete(key);
+    changed = true;
   }
-  outgoingInFlight.clear();
-  persistPendingMessages();
-  if (hasUnknownOutgoingMessages()) scheduleUnknownOutgoingVerification(300);
+  if (changed) {
+    persistPendingMessages();
+    debugLog('message_send_interrupted_recovered', { count:Array.from(pendingMessageQueue.values()).filter(item => item?.state === 'unknown').length });
+    scheduleUnknownOutgoingVerification(300);
+  }
+  if (hasSendingOutgoingMessages()) scheduleOutgoingWatchdog();
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -11122,11 +11231,12 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pageshow', e => {
   clearUnreadCount();
   settleChatVisualViewport();
-  if (myRole && (e.persisted || lastPageHiddenAt)) resumeChatTransport();
+  if (myRole && (e.persisted || lastPageHiddenAt || pendingMessageQueue.size)) resumeChatTransport();
 });
 window.addEventListener('focus', () => {
   clearUnreadCount();
   settleChatVisualViewport();
+  if (myRole && (lastPageHiddenAt || pendingMessageQueue.size)) resumeChatTransport();
 });
 window.addEventListener('online', () => {
   setConnected(true);

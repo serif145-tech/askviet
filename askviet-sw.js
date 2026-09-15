@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-09-03-message-delivery-fix-1';
+const ASKVIET_SW_VERSION = '2026-09-15-astra-38-durable-send-1';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';
