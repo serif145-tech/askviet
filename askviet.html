@@ -931,7 +931,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-15-astra-38-durable-send-1';
+const APP_VERSION = '2026-09-15-voice-context-reasoning-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -998,6 +998,8 @@ let autoReadEnabledAt = { tr: 0, vi: 0 };
 let theirRole = null;
 let pttTranslationContext = [];
 let pseudoLiveTranslationContext = [];
+const VOICE_TRANSLATION_CONTEXT_MAX = 2;
+const VOICE_TRANSLATION_CONTEXT_MAX_AGE_MS = 5 * 60 * 1000;
 let apiKey = '';
 let geminiApiKey = '';
 let claudeApiKey = '';
@@ -7603,22 +7605,19 @@ function setPttLog(text, beforeLastTurn=false, state='') {
 }
 function roleText(role, tr, vi) { return role === 'vi' ? vi : tr; }
 function liveBi(tr, vi) { return String(tr || '') + ' / ' + String(vi || ''); }
-function usesDeepSeekContext(modelSpec) {
-  const model = normalizeChatModel(modelSpec || selectedModel || '').toLowerCase();
-  return model === 'deepseek:deepseek-v4-pro' || model === 'deepseek:deepseek-v4-flash';
-}
 function trimVoiceContextText(value) {
   const clean = String(value || '').replace(/\s+/g, ' ').trim();
   return clean.length > 240 ? clean.slice(0, 240) : clean;
 }
 function buildVoiceContextPayload(modelSpec, history) {
-  if (!usesDeepSeekContext(modelSpec)) return null;
+  const oldestAllowedAt = Date.now() - VOICE_TRANSLATION_CONTEXT_MAX_AGE_MS;
   return (Array.isArray(history) ? history : [])
-    .slice(-5)
+    .slice(-VOICE_TRANSLATION_CONTEXT_MAX)
+    .filter(item => !item || !item.ts || item.ts >= oldestAllowedAt)
     .map(item => ({
       role: item && item.role === 'vi' ? 'vi' : 'tr',
       text: trimVoiceContextText(item && item.text),
-      translation: trimVoiceContextText(item && item.translation)
+      ts: Number(item && item.ts) || Date.now()
     }))
     .filter(item => item.text);
 }
@@ -7627,8 +7626,8 @@ function rememberVoiceContext(history, role, text, translation) {
   const cleanText = trimVoiceContextText(text);
   const cleanTranslation = trimVoiceContextText(translation);
   if (!cleanText || !cleanTranslation) return;
-  history.push({ role: role === 'vi' ? 'vi' : 'tr', text: cleanText, translation: cleanTranslation });
-  while (history.length > 5) history.shift();
+  history.push({ role: role === 'vi' ? 'vi' : 'tr', text: cleanText, ts: Date.now() });
+  while (history.length > VOICE_TRANSLATION_CONTEXT_MAX) history.shift();
 }
 function voiceContextRequestFields(modelSpec, history, source) {
   const context = buildVoiceContextPayload(modelSpec, history);
