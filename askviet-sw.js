@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-09-15-voice-context-reasoning-1';
+const ASKVIET_SW_VERSION = '2026-09-22-translation-ime-fix-1';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';
