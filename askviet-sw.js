@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-09-22-translation-ime-fix-1';
+const ASKVIET_SW_VERSION = '2026-09-22-sticker-gif-fix-2';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';

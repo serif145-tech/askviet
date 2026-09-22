@@ -931,7 +931,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-22-translation-ime-fix-1';
+const APP_VERSION = '2026-09-22-sticker-gif-fix-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 
@@ -5788,12 +5788,15 @@ async function handleStickerInput(event) {
   renderStickerPanel();
 }
 async function importStickerFile(file) {
-  if (!file || !/^image\/(webp|gif)$/i.test(file.type || '')) {
+  const stickerMime = /^image\/(webp|gif)$/i.test(file?.type || '') ? file.type.toLowerCase()
+    : /\.gif$/i.test(file?.name || '') ? 'image/gif'
+    : /\.webp$/i.test(file?.name || '') ? 'image/webp' : '';
+  if (!stickerMime) {
     alert(uiText('Sadece WEBP veya GIF sticker ekleyebilirsin.', 'Chỉ có thể thêm sticker WEBP hoặc GIF.'));
     return;
   }
-  if (file.size > 1800000) {
-    alert(uiText('Sticker çok büyük. 1.8 MB altı seç.', 'Sticker quá lớn. Hãy chọn dưới 1.8 MB.'));
+  if (file.size > 5000000) {
+    alert(uiText('Sticker çok büyük. 5 MB altı seç.', 'Sticker quá lớn. Hãy chọn dưới 5 MB.'));
     return;
   }
   const sourceKey = [file.webkitRelativePath || file.name || 'sticker', file.size || 0, file.lastModified || 0].join('|');
@@ -5809,7 +5812,7 @@ async function importStickerFile(file) {
         id: 'st_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
         name: file.name || 'Sticker',
         url,
-        mime: uploaded.mime || file.type || 'image/webp',
+        mime: uploaded.mime || stickerMime,
         sourceKey,
         favorite: false,
         lastUsed: 0
