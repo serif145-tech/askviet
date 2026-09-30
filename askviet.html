@@ -365,6 +365,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .chat-model-picker-display{position:absolute;inset:0;padding:0 18px 0 8px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;pointer-events:none}
 .chat-model-picker::after{content:'⌄';position:absolute;right:6px;top:50%;transform:translateY(-56%);font-size:12px;color:var(--muted);pointer-events:none}
 .chat-model-picker .chat-model-select{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;padding:0;opacity:0;cursor:pointer}
+.browser-mode-btn{display:none;height:30px;max-width:92px;padding:0 8px;border-radius:10px;background:rgba(18,13,28,.72);border:1px solid #7c3aed;color:#eadcff;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.browser-mode-modal{position:fixed;inset:0;z-index:10020;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.72);backdrop-filter:blur(5px)}
+.browser-mode-modal.open{display:flex}
+.browser-mode-card{width:min(340px,100%);padding:14px;border-radius:12px;background:#12111a;border:1px solid #7c3aed;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+.browser-mode-title{font-size:15px;font-weight:900;color:#fff;margin-bottom:10px}
+.browser-mode-options{display:grid;gap:7px}
+.browser-mode-option{min-height:42px;padding:8px 12px;border-radius:9px;border:1px solid #34303f;background:#1c1924;color:#eee;text-align:left;font-size:13px;font-weight:800;cursor:pointer}
+.browser-mode-option.active{border-color:#a78bfa;background:rgba(124,58,237,.25);color:#fff}
+.browser-mode-cancel{width:100%;min-height:40px;margin-top:10px;border-radius:9px;border:1px solid #484351;background:#25222d;color:#d6d3dc;font-weight:800;cursor:pointer}
 .status-pill{font-size:11px;padding:5px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);white-space:nowrap;cursor:pointer;font-weight:800}
 .status-pill.on{border-color:var(--tr);color:var(--tr2)}
 .status-pill.mode-toggle{min-width:78px;border-color:#7c3aed;background:rgba(18,13,28,.64);color:#eadcff;box-shadow:inset 0 0 0 1px rgba(167,139,250,.14),0 4px 14px rgba(0,0,0,.18)}
@@ -632,9 +641,8 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <select class="model-select" id="modelSelect">
         <optgroup label="OpenAI Resmi">
           <option value="openai:gpt-6-astra">GPT-6.0 Astra</option>
-          <option value="openai:gpt-5.6-sol">GPT-5.6 Sol</option>
-          <option value="openai:gpt-5.6-terra">GPT-5.6 Terra</option>
-          <option value="openai:gpt-5.6-luna">GPT-5.6 Luna</option>
+          <option value="openai:gpt-6-sol">GPT-6.0 Sol</option>
+          <option value="openai:gpt-6-luna">GPT-6.0 Luna</option>
         </optgroup>
         <optgroup label="Claude">
           <option value="claude:claude-sonnet-5">Sonnet 5</option>
@@ -646,6 +654,12 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <optgroup label="DeepSeek">
           <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro</option>
           <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash</option>
+        </optgroup>
+        <optgroup label="Bilgisayar">
+          <option value="browser:deepseek">DeepSeek</option>
+          <option value="browser:gemini">Gemini</option>
+          <option value="browser:chatgpt">ChatGPT</option>
+          <option value="browser:claude">Claude</option>
         </optgroup>
       </select>
     </div>
@@ -692,6 +706,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
       <div class="presence-status" id="presenceStatus"></div>
     </div>
     <div class="mode-row" id="modeRow" style="display:none"></div>
+    <div id="browserWorkerStatus" style="display:none;font-size:10px;line-height:18px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
     <div id="settingsBtnArea" class="settings-controls">
       <div class="control-row">
         <div class="left-controls">
@@ -701,19 +716,23 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <div class="right-controls">
           <div class="conn-dot off" id="connDot"></div>
           <div class="chat-model-picker" id="chatModelPicker" title="Model seçimi">
-            <span class="chat-model-picker-display" id="chatModelPickerDisplay">GPT-5.6 Sol</span>
+            <span class="chat-model-picker-display" id="chatModelPickerDisplay">GPT-6.0 Sol</span>
             <select class="chat-model-select" id="chatModelSelect" title="Model seçimi" aria-label="Model seçimi">
               <option value="openai:gpt-6-astra">GPT-6.0 Astra  🔴🔴🔴</option>
-              <option value="openai:gpt-5.6-sol">GPT-5.6 Sol  🔴🔴</option>
-              <option value="openai:gpt-5.6-terra">GPT-5.6 Terra  🔴</option>
-              <option value="openai:gpt-5.6-luna">GPT-5.6 Luna  🟡</option>
+              <option value="openai:gpt-6-sol">GPT-6.0 Sol  🔴🔴</option>
+              <option value="openai:gpt-6-luna">GPT-6.0 Luna  🟡</option>
               <option value="claude:claude-sonnet-5">Sonnet 5  🔴</option>
               <option value="gemini:gemini-3.8-flash">Gemini 3.8 Flash  🟡</option>
               <option value="gemini:gemini-3.5-flash-lite">Gemini 3.5 Flash Lite  🟢</option>
               <option value="deepseek:deepseek-v4-pro">DeepSeek V4 Pro  🟢</option>
               <option value="deepseek:deepseek-v4-flash">DeepSeek V4 Flash  🟢</option>
+              <option value="browser:deepseek">DeepSeek  🟢</option>
+              <option value="browser:gemini">Gemini  🟢</option>
+              <option value="browser:chatgpt">ChatGPT  🟢</option>
+              <option value="browser:claude">Claude  🟢</option>
             </select>
           </div>
+          <button class="browser-mode-btn" id="browserModeBtn" type="button" onclick="openBrowserModePicker()">Ayar</button>
           <button class="status-pill own-voice" id="ownAutoReadStatus" onclick="toggleOwnAutoRead()" title="Kendi otomatik sesin">🔇 TR</button>
           <button class="notify-toggle" id="notifySoundBtn" onclick="toggleNotifySound()" title="Bildirim sesi">✓ Bildirim sesi</button>
           <div class="mic-refresh-slot"><button class="mic-refresh-btn" id="micRefreshBtn" onclick="manualMicRefresh()" title="Mikrofonu yenile" aria-label="Mikrofonu yenile"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/><rect x="10.6" y="6.4" width="2.8" height="6" rx="1.4"/><path d="M8.6 10.6a3.4 3.4 0 0 0 6.8 0"/></svg></button></div>
@@ -788,6 +807,14 @@ img,svg,video,canvas{max-width:100%;height:auto}
         <button class="confirm-no" id="confirmNoBtn">Hayır</button>
         <button class="confirm-yes" id="confirmYesBtn">Evet</button>
       </div>
+    </div>
+  </div>
+
+  <div class="browser-mode-modal" id="browserModeModal" onclick="if(event.target===this)closeBrowserModePicker()">
+    <div class="browser-mode-card">
+      <div class="browser-mode-title" id="browserModeTitle">Bilgisayar modeli ayarı</div>
+      <div class="browser-mode-options" id="browserModeOptions"></div>
+      <button class="browser-mode-cancel" type="button" onclick="closeBrowserModePicker()">Vazgeç</button>
     </div>
   </div>
 
@@ -922,6 +949,7 @@ const MSGS_PATH = '/rooms/' + ROOM + '/messages';
 const TYPING_PATH = '/rooms/' + ROOM + '/typing';
 const CONFIG_PATH = '/rooms/' + ROOM + '/config';
 const MODEL_PATH = CONFIG_PATH + '/models/tr';
+const BROWSER_WORKER_CONFIG_PATH = '/rooms/' + ROOM + '/browserWorker/config';
 const AUTO_READ_PATH = CONFIG_PATH + '/autoRead';
 const TTS_SETTINGS_PATH = CONFIG_PATH + '/sharedSettings';
 const PRESENCE_PATH = CONFIG_PATH + '/presence';
@@ -931,9 +959,33 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-22-sticker-gif-fix-2';
+const APP_VERSION = '2026-09-30-browser-recovery-gpt6-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
+const BROWSER_MODE_OPTIONS = {
+  deepseek: [
+    { value:'normal', label:'Normal' },
+    { value:'deepthink', label:'DeepThink' }
+  ],
+  gemini: [
+    { value:'flash-lite', label:'3.5 Flash-Lite' },
+    { value:'flash', label:'3.8 Flash' },
+    { value:'pro', label:'3.1 Pro' },
+    { value:'extended', label:'Genişletilmiş düşünme' }
+  ],
+  chatgpt: [
+    { value:'low', label:'Düşük' },
+    { value:'medium', label:'Orta' },
+    { value:'high', label:'Yüksek' }
+  ],
+  claude: [
+    { value:'low', label:'Düşük' },
+    { value:'medium', label:'Orta' },
+    { value:'high', label:'Yüksek' },
+    { value:'xhigh', label:'Ekstra' },
+    { value:'max', label:'Maksimum' }
+  ]
+};
 
 // ── Soft "pop" click feedback + haptic ──────────────────────────────────
 let clickFeedbackCtx = null;
@@ -1006,7 +1058,7 @@ let claudeApiKey = '';
 let liveRecognizer = null;
 let geminiLiveWs = null, geminiLiveStream = null, geminiLiveCtx = null, geminiLiveSource = null, geminiLiveProcessor = null, geminiLiveMuteGain = null, geminiLiveDirection = 'tr', liveOutputMuteUntil = 0;
 let lastLiveReadErrorAt = 0, liveStarting = false, liveManualStop = false, liveActiveModel = '';
-let selectedModel = 'openai:gpt-5.6-sol';
+let selectedModel = 'openai:gpt-6-sol';
 let typingTimer = null;
 let remoteTypingHideTimer = null;
 let lastTypingSignalAt = 0;
@@ -1015,6 +1067,9 @@ let isTyping = false;
 let unsubMessages = null;
 let unsubTyping = null;
 let unsubModel = null;
+let unsubBrowserWorker = null;
+let browserWorkerStatusTimer = null;
+let browserWorkerSnapshot = null;
 let unsubAutoRead = null;
 let unsubPresence = null;
 let unsubTextLists = null;
@@ -1901,14 +1956,17 @@ function normalizeChatModel(model) {
     'gemini:gemini-3.7-flash': 'gemini:gemini-3.8-flash'
   };
   const oldOpenAi = {
-    'openai:gpt-4o': 'openai:gpt-5.6-sol',
-    'openai:gpt-5.5': 'openai:gpt-5.6-sol',
-    'openai:gpt-4o-mini': 'openai:gpt-5.6-sol',
-    'codex:gpt-5.5': 'openai:gpt-5.6-sol',
-    'openai:gpt-5.4': 'openai:gpt-5.6-sol',
-    'openai:gpt-5.4-mini': 'openai:gpt-5.6-sol',
-    'codex:gpt-5.4': 'openai:gpt-5.6-sol',
-    'codex:gpt-5.4-mini': 'openai:gpt-5.6-sol'
+    'openai:gpt-4o': 'openai:gpt-6-sol',
+    'openai:gpt-5.5': 'openai:gpt-6-sol',
+    'openai:gpt-4o-mini': 'openai:gpt-6-sol',
+    'codex:gpt-5.5': 'openai:gpt-6-sol',
+    'openai:gpt-5.4': 'openai:gpt-6-sol',
+    'openai:gpt-5.4-mini': 'openai:gpt-6-sol',
+    'codex:gpt-5.4': 'openai:gpt-6-sol',
+    'codex:gpt-5.4-mini': 'openai:gpt-6-sol',
+    'openai:gpt-5.6-sol': 'openai:gpt-6-sol',
+    'openai:gpt-5.6-terra': 'openai:gpt-6-sol',
+    'openai:gpt-5.6-luna': 'openai:gpt-6-luna'
   };
   const oldClaude = {
     'claude:claude-opus-4.8': 'claude:claude-sonnet-5',
@@ -1928,18 +1986,18 @@ function normalizeChatModel(model) {
     'deepseek:v4-pro': 'deepseek:deepseek-v4-pro'
   };
   const removedModels = {
-    'openrouter:moonshotai/kimi-k3': 'openai:gpt-5.6-luna',
-    'openrouter:x-ai/grok-4.5': 'openai:gpt-5.6-luna',
-    'qwen:qwen3.7-max': 'openai:gpt-5.6-luna',
-    'qwen:qwen3.7-plus': 'openai:gpt-5.6-luna',
-    'qwen:qwen-mt-plus': 'openai:gpt-5.6-luna',
-    'Kimi K3': 'openai:gpt-5.6-luna',
-    'Grok 4.5': 'openai:gpt-5.6-luna',
-    'Qwen 3.7 Max': 'openai:gpt-5.6-luna',
-    'Qwen 3.7 Plus': 'openai:gpt-5.6-luna',
-    'Qwen MT Plus': 'openai:gpt-5.6-luna'
+    'openrouter:moonshotai/kimi-k3': 'openai:gpt-6-luna',
+    'openrouter:x-ai/grok-4.5': 'openai:gpt-6-luna',
+    'qwen:qwen3.7-max': 'openai:gpt-6-luna',
+    'qwen:qwen3.7-plus': 'openai:gpt-6-luna',
+    'qwen:qwen-mt-plus': 'openai:gpt-6-luna',
+    'Kimi K3': 'openai:gpt-6-luna',
+    'Grok 4.5': 'openai:gpt-6-luna',
+    'Qwen 3.7 Max': 'openai:gpt-6-luna',
+    'Qwen 3.7 Plus': 'openai:gpt-6-luna',
+    'Qwen MT Plus': 'openai:gpt-6-luna'
   };
-  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || removedModels[model] || model || 'openai:gpt-5.6-sol';
+  return oldGemini[model] || oldOpenAi[model] || oldClaude[model] || oldDeepSeek[model] || removedModels[model] || model || 'openai:gpt-6-sol';
 }
 
 function toggleTtsSettings(force) {
@@ -2314,7 +2372,7 @@ async function start(role) {
     document.getElementById('pwscreen').style.display = 'flex';
     return;
   }
-  selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-5.6-sol');
+  selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-6-sol');
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
   myRole = role;
@@ -2375,6 +2433,7 @@ async function start(role) {
 }
 
 function goBack() {
+  stopBrowserWorkerStatus();
   cancelReply();
   stopAutoRefreshTimer();
   if (remoteTypingHideTimer) { clearTimeout(remoteTypingHideTimer); remoteTypingHideTimer = null; }
@@ -4655,7 +4714,7 @@ async function retryMessageTranslation(key, btn) {
     btn.textContent = '...';
   }
   try {
-    const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
+    const manualModel = normalizeChatModel(selectedModel || 'openai:gpt-6-sol');
     debugLog('manual_retry_button_clicked', { key, model: manualModel });
     const exists = await ensureOutgoingMessageExistsForTranslation(key);
     if (!exists) {
@@ -6125,7 +6184,7 @@ function queueOutgoingMessage(msg) {
   if (!canQueueOutgoingMessage()) return null;
   markChatUserActivity();
   const key = createMessageKey();
-  const messageModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
+  const messageModel = normalizeChatModel(selectedModel || 'openai:gpt-6-sol');
   const item = {
     key,
     msg: Object.assign({}, msg, { translationModel: messageModel }),
@@ -6507,7 +6566,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
   translationRunTokens.set(key, runId);
   const stillCurrent = () => translationRunTokens.get(key) === runId;
   const targetRole = fromRole === 'tr' ? 'vi' : 'tr';
-  const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-5.6-sol');
+  const baseModel = normalizeChatModel(modelForTranslation || selectedModel || 'openai:gpt-6-sol');
   const modelsToTry = translationModelQueue(baseModel);
   const startedAt = Date.now();
   debugLog('start', { key, fromRole, runId, queue: modelsToTry, force: !!options.force, userTriggered: !!options.userTriggered });
@@ -6519,7 +6578,7 @@ async function translateAndUpdate(key, text, fromRole, modelForTranslation=selec
       const attemptStart = Date.now();
       try {
         await setTranslationStatus(key, tryingText(attemptModel));
-        const attemptTimeoutMs = /^openai:(?:gpt-6-astra|gpt-5\.6(?:-|$))/i.test(String(attemptModel || ''))
+        const attemptTimeoutMs = /^openai:gpt-6-(?:astra|sol|luna)$/i.test(String(attemptModel || ''))
           ? OPENAI_PREMIUM_TRANSLATION_TIMEOUT_MS
           : TRANSLATION_TIMEOUT_MS;
         const rawTranslation = await withTimeout(translateText(text, fromRole, attemptModel), attemptTimeoutMs, modelName(attemptModel));
@@ -6560,6 +6619,7 @@ function isGeminiProChatModel(model) {
 }
 
 function providerHasKey(provider) {
+  if (provider === 'browser') return true;
   if (provider === 'openai') return !!(apiKey || localStorage.getItem('askviet_key'));
   if (provider === 'gemini') return !!(geminiApiKey || localStorage.getItem('askviet_gemini_key'));
   if (provider === 'claude') return !!(claudeApiKey || localStorage.getItem('askviet_claude_key'));
@@ -6569,16 +6629,17 @@ function providerHasKey(provider) {
 }
 
 function translationModelQueue(baseModel) {
-  const base = normalizeChatModel(baseModel || 'openai:gpt-5.6-sol');
+  const base = normalizeChatModel(baseModel || 'openai:gpt-6-sol');
+  if (base.startsWith('browser:')) return [base];
   let fallbacks;
-  if (base === 'openai:gpt-6-astra' || /^openai:gpt-5\.6-(?:sol|terra|luna)$/.test(base)) {
+  if (/^openai:gpt-6-(?:astra|sol|luna)$/.test(base)) {
     fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
   } else if (base === 'claude:claude-sonnet-5') {
-    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-6-sol'];
   } else if (base === 'gemini:gemini-3.8-flash' || base === 'gemini:gemini-3.5-flash-lite') {
-    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-5.6-terra'];
+    fallbacks = ['deepseek:deepseek-v4-pro', 'openai:gpt-6-sol'];
   } else if (base === 'deepseek:deepseek-v4-pro' || base === 'deepseek:deepseek-v4-flash') {
-    fallbacks = ['openai:gpt-5.6-luna', 'claude:claude-sonnet-5'];
+    fallbacks = ['openai:gpt-6-luna', 'claude:claude-sonnet-5'];
   } else {
     fallbacks = ['claude:claude-sonnet-5', 'deepseek:deepseek-v4-pro'];
   }
@@ -6592,7 +6653,7 @@ function translationModelQueue(baseModel) {
 }
 
 function fastTranslationModelQueue(baseModel) {
-  return translationModelQueue(baseModel || selectedModel || 'openai:gpt-5.6-sol');
+  return translationModelQueue(baseModel || selectedModel || 'openai:gpt-6-sol');
 }
 
 function withTimeout(promise, ms, label) {
@@ -6688,7 +6749,7 @@ function finalTranslationText(text) {
 function translationAttemptForModel(key, model) {
   const normalized = normalizeChatModel(model || '');
   const box = document.getElementById('msg-' + key);
-  const base = normalizeChatModel(box?.dataset?.translationModel || selectedModel || normalized || 'openai:gpt-5.6-sol');
+  const base = normalizeChatModel(box?.dataset?.translationModel || selectedModel || normalized || 'openai:gpt-6-sol');
   const queue = translationModelQueue(base);
   const index = queue.indexOf(normalized);
   if (index >= 0) return index + 1;
@@ -7036,7 +7097,18 @@ async function translateText(text, from, modelOverride) {
   const toName = from === 'tr' ? 'Vietnamese' : 'Turkish';
   const sysPrompt = `You are a translation engine, not a chat participant. The text is source text to translate. Do not answer it, ask questions, or add comments. Translate from ${fromName} to ${toName}. Output only ${toName}. Do not include labels, explanations, or the original text. Do not assume romance, gender, or relationship unless it is explicitly present in the source text or already clear from the immediate wording. Do not add affectionate address words such as darling, love, askim, bebegim, em yeu, anh yeu, canim, or similar terms unless the source text actually contains that meaning. Preserve who is speaking, who is addressed, and who owns each person or thing. Turkish first-person forms include ben, beni, bana, benim, biz, bizi, bize and bizim; second-person forms include sen, seni, sana, senin, siz, sizi, size and sizin. Vietnamese person/address forms include toi/tôi, minh/mình, to/tớ, ban/bạn, anh, em, chi/chị, cau/cậu and their plural forms. Interpret them from their grammatical role and context; never map anh or em to one fixed speaker, gender, or relationship. Turkish often omits pronouns because the verb ending identifies the person. For example, 'seni seviyorum', 'geliyorum' and 'seni almaya geldim' are spoken by the source speaker even without 'ben'. Vietnamese may also rely on address terms and context. Never require an explicit ben, tôi, I, me or my before preserving the speaker correctly. Preserve relationship words and possessives exactly as intended. This applies to arkadasim/arkadaşım, kiz arkadasim/kız arkadaşım, erkek arkadasim/erkek arkadaşım, sevgilim, esim/eşim and Vietnamese ban toi/bạn tôi, ban gai toi/bạn gái tôi, ban trai toi/bạn trai tôi, nguoi yeu toi/người yêu tôi, vo toi/vợ tôi, chong toi/chồng tôi, plus equivalent forms with other possessors. Choose friend, girlfriend, boyfriend, partner, spouse, female friend or male friend only when the source wording or context supports it; do not invent or change the relationship. Never change first person into second person or ownership into the listener's ownership. Example: 'Arkadaşım beni almaya geldi' means the source speaker's friend came to pick up the source speaker; it must not become 'arkadaşın seni almaya geldi'. Likewise, 'Bạn tôi đến đón tôi' must become 'Arkadaşım beni almaya geldi', not 'Arkadaşın seni almaya geldi'. If no address or relationship term is present and the relationship is unclear, use a natural neutral translation rather than inventing romance, gender, or intimacy. Preserve tone, intimacy, slang, profanity, emojis, and meaning without censoring. Important: the whole answer must be ${toName}; no ${fromName} words should remain.`;
 
-  let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-5.6-sol').split(':');
+  let [provider, model] = normalizeChatModel(modelOverride || selectedModel || 'openai:gpt-6-sol').split(':');
+  if (provider === 'browser') {
+    const result = await askVietServer('translate', {
+      text,
+      fromRole: from,
+      model: 'browser:' + model,
+      roomId: ROOM
+    });
+    const translation = String(result?.translation || '').trim();
+    if (!translation) throw new Error('Bilgisayar çeviri motoru boş cevap döndürdü');
+    return translation;
+  }
   if (provider === 'gemini') {
     const key = extractApiKey(geminiApiKey || localStorage.getItem('askviet_gemini_key') || '', 'gemini');
     if (!key) throw new Error('Gemini API key gerekli');
@@ -7138,13 +7210,13 @@ async function translateText(text, from, modelOverride) {
 
   if (provider !== 'openai') {
     provider = 'openai';
-    model = 'gpt-5.6-sol';
+    model = 'gpt-6-sol';
   }
   const key = extractApiKey(apiKey || localStorage.getItem('askviet_key') || '', 'openai');
   if (!key) throw new Error('OpenAI API key gerekli');
   const endpoint = 'https://api.openai.com/v1/chat/completions';
   const isAstra = /^gpt-6-astra$/i.test(String(model || ''));
-  const isGpt56 = /^gpt-5\.6(?:-|$)/i.test(String(model || ''));
+  const isGpt6 = /^gpt-6-(?:sol|luna)$/i.test(String(model || ''));
   let r;
   try {
     r = await fetch(endpoint, {
@@ -7152,7 +7224,7 @@ async function translateText(text, from, modelOverride) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({
         model,
-        ...((isAstra || isGpt56) ? {
+        ...((isAstra || isGpt6) ? {
           reasoning_effort: isAstra ? 'low' : 'none',
           max_completion_tokens: 1200
         } : {}),
@@ -7666,7 +7738,7 @@ async function pttTranslate(text, from, transcribeNotice='') {
     setPttLog(uiText('Kara listeye takıldı, atlandı.', 'Đã khớp danh sách chặn, đã bỏ qua.'), false, 'error');
     return;
   }
-  const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-5.6-sol');
+  const baseModel = normalizeChatModel(selectedModel || 'openai:gpt-6-sol');
   setPttLog((transcribeNotice || '') + roleText(from, modelName(baseModel) + ' çeviriyor...', modelName(baseModel) + ' đang dịch...'), false, 'working');
   const data = await askVietServer('translate', {
     text,
@@ -9079,14 +9151,17 @@ function openAiSpeechRequest({model,input,voice,instructions,speed,signal,key}) 
 
 const MODEL_NAMES = {
   'openai:gpt-6-astra': 'GPT-6.0 Astra',
-  'openai:gpt-5.6-sol': 'GPT-5.6 Sol',
-  'openai:gpt-5.6-terra': 'GPT-5.6 Terra',
-  'openai:gpt-5.6-luna': 'GPT-5.6 Luna',
+  'openai:gpt-6-sol': 'GPT-6.0 Sol',
+  'openai:gpt-6-luna': 'GPT-6.0 Luna',
   'gemini:gemini-3.8-flash': 'Gemini 3.8 Flash',
   'gemini:gemini-3.5-flash-lite': 'Gemini 3.5 Flash Lite',
   'claude:claude-sonnet-5': 'Sonnet 5',
   'deepseek:deepseek-v4-flash': 'DeepSeek V4 Flash',
-  'deepseek:deepseek-v4-pro': 'DeepSeek V4 Pro'
+  'deepseek:deepseek-v4-pro': 'DeepSeek V4 Pro',
+  'browser:deepseek': 'DeepSeek',
+  'browser:gemini': 'Gemini',
+  'browser:chatgpt': 'ChatGPT',
+  'browser:claude': 'Claude'
 };
 
 function modelName(model) {
@@ -9096,6 +9171,84 @@ function modelName(model) {
 function syncChatModelPickerDisplay() {
   const display = document.getElementById('chatModelPickerDisplay');
   if (display) display.textContent = modelName(selectedModel);
+  syncBrowserModeButton();
+}
+
+function browserProvider(model=selectedModel) {
+  const value = String(model || '');
+  return value.startsWith('browser:') ? value.slice(8) : '';
+}
+
+function browserModeDefault(provider) {
+  if (provider === 'deepseek') return 'normal';
+  if (provider === 'gemini') return 'flash';
+  return 'medium';
+}
+
+function browserModeValue(provider) {
+  return localStorage.getItem('askviet_browser_mode_' + provider) || browserModeDefault(provider);
+}
+
+function browserModeLabel(provider, mode) {
+  const option = (BROWSER_MODE_OPTIONS[provider] || []).find(item => item.value === mode);
+  return option ? option.label : mode;
+}
+
+function syncBrowserModeButton() {
+  const btn = document.getElementById('browserModeBtn');
+  const provider = browserProvider();
+  if (!btn) return;
+  const visible = myRole === 'tr' && !!provider;
+  btn.style.display = visible ? 'inline-flex' : 'none';
+  if (visible) btn.textContent = browserModeLabel(provider, browserModeValue(provider));
+}
+
+async function openBrowserModePicker() {
+  const provider = browserProvider();
+  if (myRole !== 'tr' || !provider) return;
+  try {
+    const remote = await fbGet(BROWSER_WORKER_CONFIG_PATH + '/' + provider, true);
+    const remoteMode = typeof remote === 'string' ? remote : remote?.mode;
+    if (remoteMode && (BROWSER_MODE_OPTIONS[provider] || []).some(item => item.value === remoteMode)) {
+      localStorage.setItem('askviet_browser_mode_' + provider, remoteMode);
+    }
+  } catch (_) {}
+  const modal = document.getElementById('browserModeModal');
+  const title = document.getElementById('browserModeTitle');
+  const options = document.getElementById('browserModeOptions');
+  if (!modal || !title || !options) return;
+  const current = browserModeValue(provider);
+  title.textContent = modelName(selectedModel) + ' ayarı';
+  options.innerHTML = '';
+  (BROWSER_MODE_OPTIONS[provider] || []).forEach(item => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'browser-mode-option' + (item.value === current ? ' active' : '');
+    button.textContent = item.label;
+    button.onclick = () => setBrowserMode(provider, item.value);
+    options.appendChild(button);
+  });
+  modal.classList.add('open');
+}
+
+function closeBrowserModePicker() {
+  document.getElementById('browserModeModal')?.classList.remove('open');
+}
+
+async function setBrowserMode(provider, mode) {
+  if (myRole !== 'tr') return;
+  localStorage.setItem('askviet_browser_mode_' + provider, mode);
+  syncBrowserModeButton();
+  closeBrowserModePicker();
+  try {
+    await fbSet(BROWSER_WORKER_CONFIG_PATH + '/' + provider, {
+      mode,
+      updatedAt: { '.sv':'timestamp' },
+      source: SESSION_ID
+    });
+  } catch (error) {
+    recordConnectionEvent('browser-mode-sync-error', error?.message || error);
+  }
 }
 
 function parseRemoteModelConfig(data) {
@@ -9139,6 +9292,48 @@ function setSelectedModel(model, fromRemote=false) {
     theirBadge.classList.add('active');
   }
   if (myRole === 'tr' && !fromRemote) syncMyModel(model);
+  watchBrowserWorkerStatus();
+}
+
+function stopBrowserWorkerStatus() {
+  if (unsubBrowserWorker) { unsubBrowserWorker(); unsubBrowserWorker = null; }
+  if (browserWorkerStatusTimer) { clearInterval(browserWorkerStatusTimer); browserWorkerStatusTimer = null; }
+  browserWorkerSnapshot = null;
+}
+
+function updateBrowserWorkerStatus() {
+  const label = document.getElementById('browserWorkerStatus');
+  if (!label) return;
+  label.style.display = selectedModel.startsWith('browser:') ? '' : 'none';
+  if (!selectedModel.startsWith('browser:')) return;
+  const vi = myRole === 'vi';
+  const status = browserWorkerSnapshot;
+  if (status == null) {
+    label.textContent = vi ? 'Đang kết nối máy tính...' : 'Bilgisayar bağlantısı bekleniyor...';
+    label.style.color = '#facc15';
+  } else if (status.state !== 'online' || Date.now() - Number(status.updatedAt || 0) > 150000) {
+    label.textContent = vi ? 'Máy tính ngoại tuyến' : 'Bilgisayar çevrimdışı';
+    label.style.color = '#ef4444';
+  } else {
+    label.textContent = vi ? (status.active ? 'Máy tính đang dịch' : 'Máy tính sẵn sàng')
+      : (status.active ? 'Bilgisayar çeviriyi işliyor' : 'Bilgisayar hazır');
+    label.style.color = '#22c55e';
+  }
+}
+
+function watchBrowserWorkerStatus() {
+  if (!selectedModel.startsWith('browser:')) {
+    stopBrowserWorkerStatus(); updateBrowserWorkerStatus(); return;
+  }
+  if (!unsubBrowserWorker && myRole) {
+    unsubBrowserWorker = fbListen('/rooms/' + ROOM + '/browserWorker/status', event => {
+      if (event.path === '/') browserWorkerSnapshot = event.data || {};
+      else if (browserWorkerSnapshot) browserWorkerSnapshot[event.path.slice(1)] = event.data;
+      updateBrowserWorkerStatus();
+    }, { onerror: () => { browserWorkerSnapshot = {}; updateBrowserWorkerStatus(); } });
+    browserWorkerStatusTimer = setInterval(updateBrowserWorkerStatus, 15000);
+  }
+  updateBrowserWorkerStatus();
 }
 
 function setupChatControls() {
@@ -9156,7 +9351,12 @@ function setupChatControls() {
     chatSelect.value = selectedModel;
     chatSelect.style.display = '';
     chatSelect.disabled = myRole !== 'tr';
-    chatSelect.onchange = () => setSelectedModel(chatSelect.value);
+    chatSelect.onchange = () => {
+      setSelectedModel(chatSelect.value);
+      if (myRole === 'tr' && browserProvider()) {
+        setTimeout(openBrowserModePicker, 120);
+      }
+    };
   }
   if (chatPicker) chatPicker.style.display = myRole === 'tr' ? '' : 'none';
   syncChatModelPickerDisplay();
@@ -9354,7 +9554,7 @@ function updateNotifySoundUI() {
 }
 function syncMyModel(model) {
   if (myRole !== 'tr') return;
-  const normalized = normalizeChatModel(model || selectedModel || 'openai:gpt-5.6-sol');
+  const normalized = normalizeChatModel(model || selectedModel || 'openai:gpt-6-sol');
   fbSet(MODEL_PATH, {
     model: normalized,
     updatedAt: { '.sv':'timestamp' },
@@ -9376,7 +9576,7 @@ function applyRemoteModelConfig(data) {
 async function reconcileModelConfig() {
   try {
     const remote = parseRemoteModelConfig(await fbGet(MODEL_PATH, true));
-    const local = normalizeChatModel(selectedModel || localStorage.getItem('askviet_model') || 'openai:gpt-5.6-sol');
+    const local = normalizeChatModel(selectedModel || localStorage.getItem('askviet_model') || 'openai:gpt-6-sol');
     const localTs = localModelUpdatedAt();
     if (myRole === 'tr') {
       if (remote.model && (!localTs || (remote.ts && remote.ts >= localTs))) {
