@@ -959,7 +959,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-30-browser-recovery-gpt6-1';
+const APP_VERSION = '2026-09-30-browser-recovery-gpt6-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -2896,9 +2896,10 @@ async function runMessageSearch(query, generation) {
   let scanned = messageSearchCache.size;
   while (generation === messageSearchGeneration && scanned < 10000) {
     const page = await fbGetQuery(MSGS_PATH, Object.assign({orderBy:'ts',limitToLast:250}, endAt == null ? {} : {endAt}), true).catch(() => null);
+    if (generation !== messageSearchGeneration) return;
     if (!page || typeof page !== 'object') break;
     const entries = Object.entries(page).filter(([,v]) => v && typeof v === 'object');
-    if (!entries.length) break;
+    if (!entries.length) { messageSearchFullyLoaded = true; break; }
     let oldest = Infinity;
     for (const [key,msg] of entries) {
       messageSearchCache.set(key,msg);
@@ -2912,6 +2913,9 @@ async function runMessageSearch(query, generation) {
     if (entries.length < 250) messageSearchFullyLoaded = true;
     if (entries.length < 250 || !Number.isFinite(oldest) || found >= 100) break;
     endAt = oldest - 1;
+  }
+  if (generation === messageSearchGeneration) {
+    status.textContent = `${viMode() ? 'K\u1ebft qu\u1ea3' : 'Sonu\u00e7'}: ${found}`;
   }
 }
 
