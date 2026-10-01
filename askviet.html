@@ -959,7 +959,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-10-01-session-retention-2';
+const APP_VERSION = '2026-10-01-fresh-chat-recovery';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -5848,6 +5848,10 @@ function toggleStickerPanel(force) {
   document.getElementById('stickerTools')?.classList.remove('open');
   if (open) {
     toggleAttachMenu(false);
+    window.stickerSearchText = '';
+    window.stickerEmojiFilter = '';
+    const search = document.getElementById('stickerSearchInput');
+    if (search) search.value = '';
     const stickers = loadStickers();
     window.currentStickerTab = stickers.some(s => Number(s.lastUsed || 0) > 0) ? 'recent'
       : (stickers.some(s => !!s.favorite) ? 'fav' : 'all');
@@ -9384,6 +9388,9 @@ function updateBrowserWorkerStatus() {
   } else if (status.state !== 'online' || Date.now() - Number(status.updatedAt || 0) > 150000) {
     label.textContent = vi ? 'Máy tính ngoại tuyến' : 'Bilgisayar çevrimdışı';
     label.style.color = '#ef4444';
+  } else if (Array.isArray(status.recovering) && status.recovering.includes(selectedModel.slice(8))) {
+    label.textContent = vi ? 'Dịch lỗi, đang thử lại trong cuộc trò chuyện mới...' : 'Çeviri hatası, yeni sohbette tekrar deneniyor...';
+    label.style.color = '#facc15';
   } else {
     label.textContent = vi ? (status.active ? 'Máy tính đang dịch' : 'Máy tính sẵn sàng')
       : (status.active ? 'Bilgisayar çeviriyi işliyor' : 'Bilgisayar hazır');
