@@ -959,7 +959,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-10-01-worker-reconnect-speed-1';
+const APP_VERSION = '2026-10-01-session-retention-2';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -1401,6 +1401,49 @@ let firebaseAuthRefreshInFlight = null;
 let firebaseAuthRefreshInFlightRole = null;
 let firebaseAuthRefreshFailures = 0;
 let firebaseAuthRefreshRetryAt = 0;
+let sessionResumeRetryTimer = null;
+let sessionResumeRetryRole = '';
+let sessionResumeRetryAttempts = 0;
+let sessionResumeRetryRunning = false;
+
+function isPermanentFirebaseSessionError(error) {
+  return /INVALID_REFRESH_TOKEN|TOKEN_EXPIRED|USER_DISABLED|USER_NOT_FOUND/.test(String(error && error.message || '').toUpperCase());
+}
+
+function setSessionResumePending(pending) {
+  const box = document.querySelector('#pwscreen .pw-box');
+  if (box) box.style.display = pending ? 'none' : '';
+}
+
+function cancelSessionResumeRetry() {
+  if (sessionResumeRetryTimer) clearTimeout(sessionResumeRetryTimer);
+  sessionResumeRetryTimer = null;
+  sessionResumeRetryRole = '';
+  sessionResumeRetryAttempts = 0;
+}
+
+function scheduleSessionResumeRetry(role) {
+  if (sessionResumeRetryTimer) clearTimeout(sessionResumeRetryTimer);
+  sessionResumeRetryRole = role;
+  sessionResumeRetryAttempts = Math.min(5, sessionResumeRetryAttempts + 1);
+  const delay = Math.max(1000, firebaseAuthRefreshRetryAt - Date.now(), Math.min(30000, 2000 * (2 ** (sessionResumeRetryAttempts - 1))));
+  sessionResumeRetryTimer = setTimeout(retryPendingSessionResume, delay);
+}
+
+function retryPendingSessionResume() {
+  const role = sessionResumeRetryRole;
+  if (!role || sessionResumeRetryRunning) return;
+  if (sessionResumeRetryTimer) clearTimeout(sessionResumeRetryTimer);
+  sessionResumeRetryTimer = null;
+  if (selectedLoginRole !== role || !loadStoredFirebaseAuth(role)) {
+    cancelSessionResumeRetry();
+    setSessionResumePending(false);
+    return;
+  }
+  sessionResumeRetryRunning = true;
+  start(role).catch(() => {}).finally(() => { sessionResumeRetryRunning = false; });
+}
+
 async function refreshFirebaseAuth(force=false) {
   const expectedRole = myRole || selectedLoginRole || localStorage.getItem('askviet_last_role');
   if (expectedRole && firebaseAuth && firebaseAuth.role !== expectedRole) firebaseAuth = null;
@@ -1460,8 +1503,7 @@ async function refreshFirebaseAuth(force=false) {
     firebaseAuthRefreshRetryAt = 0;
     return session;
   } catch (error) {
-    const message = String(error && error.message || '').toUpperCase();
-    if (message.includes('INVALID_REFRESH_TOKEN') || message.includes('USER_DISABLED')) {
+    if (isPermanentFirebaseSessionError(error)) {
       clearFirebaseAuth();
       throw error;
     }
@@ -1631,6 +1673,8 @@ function updateLoginRoleUI() {
 }
 
 function selectLoginRole(role) {
+  cancelSessionResumeRetry();
+  setSessionResumePending(false);
   selectedLoginRole = role === 'vi' ? 'vi' : 'tr';
   localStorage.setItem('askviet_last_role', selectedLoginRole);
   updateLoginRoleUI();
@@ -1651,10 +1695,10 @@ async function checkPw() {
     await signInFirebaseRole(selectedLoginRole, val);
     document.getElementById('pwscreen').style.display = 'none';
     document.getElementById('setup').style.display = 'none';
-    loadSaved();
+    loadSaved(false);
     await start(selectedLoginRole);
   } catch (e) {
-    clearFirebaseAuth();
+    if (isPermanentFirebaseSessionError(e)) clearFirebaseAuth();
     const err = document.getElementById('pwErr');
     err.textContent = selectedLoginRole === 'vi' ? 'Sai mật khẩu' : 'Şifre hatalı';
     err.style.display = 'block';
@@ -1662,7 +1706,7 @@ async function checkPw() {
   }
 }
 // Daha once giris yapildiysa sifreyi atla
-if (loadStoredFirebaseAuth()) {
+if (loadStoredFirebaseAuth(selectedLoginRole)) {
   startFirebaseAuthRefreshTimer();
   document.getElementById('pwscreen').style.display = 'none';
   document.getElementById('setup').style.display = 'none';
@@ -2010,7 +2054,7 @@ function toggleTtsSettings(force) {
   if (open) refreshTtsSettingsFromRemote(false);
 }
 
-function loadSaved() {
+function loadSaved(resume=true) {
   ensureFreshAppVersion();
   let savedModel = normalizeChatModel(localStorage.getItem('askviet_model'));
   if (savedModel) {
@@ -2025,7 +2069,7 @@ function loadSaved() {
   }
   const setupModelSelect = document.getElementById('modelSelect');
   if (setupModelSelect) setupModelSelect.onchange = () => setSelectedModel(setupModelSelect.value);
-  resumeSavedSession();
+  if (resume) resumeSavedSession();
 }
 
 function resumeSavedSession() {
@@ -2361,6 +2405,23 @@ async function start(role) {
   try {
     await ensureFirebaseAuth(role);
   } catch (e) {
+    const saved = loadStoredFirebaseAuth(role);
+    if (saved && saved.localId === ROLE_UIDS[role] && !isPermanentFirebaseSessionError(e)) {
+      const err = document.getElementById('pwErr');
+      if (err) {
+        err.textContent = role === 'vi' ? 'Đang kết nối lại. Không cần nhập lại mật khẩu.' : 'Bağlantı yeniden kuruluyor. Şifreyi tekrar girmen gerekmiyor.';
+        err.style.display = 'block';
+      }
+      setSessionResumePending(true);
+      if (!myRole) {
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('pwscreen').style.display = 'flex';
+      }
+      scheduleSessionResumeRetry(role);
+      return;
+    }
+    cancelSessionResumeRetry();
+    setSessionResumePending(false);
     clearFirebaseAuth();
     const err = document.getElementById('pwErr');
     if (err) {
@@ -2372,6 +2433,10 @@ async function start(role) {
     document.getElementById('pwscreen').style.display = 'flex';
     return;
   }
+  cancelSessionResumeRetry();
+  setSessionResumePending(false);
+  document.getElementById('pwErr').style.display = 'none';
+  document.getElementById('pwscreen').style.display = 'none';
   selectedModel = normalizeChatModel(document.getElementById('modelSelect')?.value || localStorage.getItem('askviet_model') || 'openai:gpt-6-sol');
   localStorage.setItem('askviet_model', selectedModel);
   saveTtsSettings();
@@ -5077,7 +5142,7 @@ async function syncWebPushSubscription(subscription) {
   await Promise.all(['tr', 'vi']
     .filter(role => role !== myRole)
     .map(role => fbRemove(PUSH_SUBS_PATH + '/' + role + '/' + id).catch(()=>{})));
-  await fbSet(PUSH_SUBS_PATH + '/' + myRole + '/' + id, {
+  const saved = await fbSet(PUSH_SUBS_PATH + '/' + myRole + '/' + id, {
     endpoint: json.endpoint,
     keys: json.keys,
     role: myRole,
@@ -5085,6 +5150,7 @@ async function syncWebPushSubscription(subscription) {
     standalone: isStandalonePwa(),
     updatedAt: { '.sv':'timestamp' }
   }, Math.min(FIREBASE_REQUEST_TIMEOUT_MS, 3500));
+  if (!saved) throw new Error('Push subscription could not be saved');
   localStorage.setItem('askviet_web_push_role', myRole);
   localStorage.setItem('askviet_web_push_id', id);
   return true;
@@ -11442,6 +11508,7 @@ function recoverInterruptedOutgoingMessages(force=false) {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    retryPendingSessionResume();
     clearUnreadCount();
     settleChatVisualViewport();
     if (myRole) resumeChatTransport();
@@ -11455,6 +11522,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('pageshow', e => {
+  retryPendingSessionResume();
   clearUnreadCount();
   settleChatVisualViewport();
   if (myRole && (e.persisted || lastPageHiddenAt || pendingMessageQueue.size)) resumeChatTransport();
@@ -11465,6 +11533,7 @@ window.addEventListener('focus', () => {
   if (myRole && (lastPageHiddenAt || pendingMessageQueue.size)) resumeChatTransport();
 });
 window.addEventListener('online', () => {
+  retryPendingSessionResume();
   setConnected(true);
   if (myRole) {
     resumeChatTransport();
