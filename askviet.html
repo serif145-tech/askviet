@@ -959,7 +959,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-09-30-browser-recovery-gpt6-2';
+const APP_VERSION = '2026-10-01-worker-reconnect-speed-1';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -9334,8 +9334,13 @@ function watchBrowserWorkerStatus() {
       if (event.path === '/') browserWorkerSnapshot = event.data || {};
       else if (browserWorkerSnapshot) browserWorkerSnapshot[event.path.slice(1)] = event.data;
       updateBrowserWorkerStatus();
-    }, { onerror: () => { browserWorkerSnapshot = {}; updateBrowserWorkerStatus(); } });
-    browserWorkerStatusTimer = setInterval(updateBrowserWorkerStatus, 15000);
+    }, { onerror: () => { browserWorkerSnapshot = null; updateBrowserWorkerStatus(); } });
+    browserWorkerStatusTimer = setInterval(() => {
+      if (browserWorkerSnapshot == null || Date.now() - Number(browserWorkerSnapshot.updatedAt || 0) > 150000) {
+        stopBrowserWorkerStatus();
+        watchBrowserWorkerStatus();
+      } else updateBrowserWorkerStatus();
+    }, 15000);
   }
   updateBrowserWorkerStatus();
 }

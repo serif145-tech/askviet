@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-09-30-browser-recovery-gpt6-2';
+const ASKVIET_SW_VERSION = '2026-10-01-worker-reconnect-speed-1';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';
