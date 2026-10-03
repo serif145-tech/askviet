@@ -959,7 +959,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-10-01-fresh-chat-recovery';
+const APP_VERSION = '2026-10-03-read-receipt-queue';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -1191,6 +1191,7 @@ let firebaseTransportRecoverTimer = null;
 let messageReconcileTimer = null;
 let lastMessageReconcileAt = 0;
 let readReceiptFlushRunning = false;
+let readReceiptFailureCount = 0;
 let readReceiptRetryTimer = null;
 let resumeSyncTimer = null;
 let pendingReadReceipts = new Set();
@@ -1236,7 +1237,7 @@ const OUTGOING_UNKNOWN_RESEND_GAP_MS = 15000;
 const OUTGOING_UNKNOWN_VERIFY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const OUTGOING_STUCK_IN_FLIGHT_MS = 12000;
 const OUTGOING_WATCHDOG_INTERVAL_MS = 4000;
-const READ_RECEIPT_RETRY_DELAY_MS = 12000;
+const READ_RECEIPT_RETRY_DELAY_MS = 3000;
 const CHAT_STREAM_STALE_MS = 50000;
 const MAX_PERSISTED_PENDING_MESSAGES = 30;
 const MAX_PERSISTED_READ_RECEIPTS = 120;
@@ -2141,7 +2142,7 @@ function isFirebaseNetworkError(err) {
 
 async function firebaseFetch(path, options={}, extra='', timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS, retryOptions={}) {
   const method = String(options.method || 'GET').toUpperCase();
-  const canRetryTimeout = retryOptions.retryTimeout === true || method === 'GET' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const canRetryTimeout = retryOptions.retryTimeout !== false && (retryOptions.retryTimeout === true || method === 'GET' || method === 'PUT' || method === 'PATCH' || method === 'DELETE');
   const buildUrl = async () => await dbUrl(path, extra);
   try {
     let r = await fetchWithTimeout(await buildUrl(), options, timeoutMs);
@@ -2240,7 +2241,7 @@ async function fbPatch(path, data, timeoutMs=FIREBASE_REQUEST_TIMEOUT_MS, reques
     body: JSON.stringify(data)
   };
   if (requestOptions.keepalive) options.keepalive = true;
-  const r = await firebaseFetch(path, options, '&print=silent', timeoutMs);
+  const r = await firebaseFetch(path, options, '&print=silent', timeoutMs, { retryTimeout: requestOptions.retryTimeout });
   if (!r.ok) console.warn('Firebase toplu kaydetme hatasi:', r.status, path);
   return r.ok;
 }
@@ -2520,6 +2521,7 @@ function goBack() {
   outgoingUnknownVerifying = false;
   if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
   if (readReceiptRetryTimer) { clearTimeout(readReceiptRetryTimer); readReceiptRetryTimer = null; }
+  readReceiptFailureCount = 0;
   if (resumeSyncTimer) { clearTimeout(resumeSyncTimer); resumeSyncTimer = null; }
   chatReloading = false;
   if (autoReadPollTimer) { clearInterval(autoReadPollTimer); autoReadPollTimer = null; }
@@ -3071,6 +3073,15 @@ function applyMessagesPatch(data) {
   let incomingWhileAway = 0;
   for (const [key, msg] of Object.entries(data)) {
     if (!key) continue;
+    const readPath = key.split('/');
+    if (readPath.length === 3 && readPath[1] === 'read' && (readPath[2] === 'tr' || readPath[2] === 'vi')) {
+      const box = document.getElementById('msg-' + readPath[0]);
+      if (box) {
+        box.dataset[readPath[2] === 'tr' ? 'readTr' : 'readVi'] = msg || '';
+        updateReadStatus(readPath[0]);
+      }
+      continue;
+    }
     if (msg === null) {
       deletedMessageKeys.add(key);
       markMessageDeleted(key);
@@ -4885,6 +4896,8 @@ async function flushPendingReadReceipts() {
   if (!canWriteReadReceipt()) return;
   if (readReceiptFlushRunning || !myRole || !pendingReadReceipts.size) return;
   readReceiptFlushRunning = true;
+  let failed = false;
+  const startedAt = Date.now();
   try {
     const keys = [];
     const updates = {};
@@ -4900,7 +4913,9 @@ async function flushPendingReadReceipts() {
     persistPendingReads();
     if (keys.length) {
       const stamp = Date.now();
-      const ok = await fbPatch(MSGS_PATH, updates, 6500);
+      // Keep a confirmed visible read alive when iOS suspends the PWA. The
+      // queue owns retries; a second hidden retry must not block new receipts.
+      const ok = await fbPatch(MSGS_PATH, updates, 6500, { keepalive:true, retryTimeout:false });
       if (!ok) throw new Error('Firebase okundu bilgisini kaydetmedi');
       for (const key of keys) {
         pendingReadReceipts.delete(key);
@@ -4912,12 +4927,16 @@ async function flushPendingReadReceipts() {
       }
       persistPendingReads();
     }
+    readReceiptFailureCount = 0;
   } catch (e) {
-    debugLog('read_batch_error', { count: pendingReadReceipts.size, err: String(e && e.message || e).slice(0, 200) });
+    failed = true;
+    readReceiptFailureCount++;
+    debugLog('read_batch_error', { count: pendingReadReceipts.size, durationMs:Date.now()-startedAt, visibility:document.visibilityState, err: String(e && e.message || e).slice(0, 200) });
     recordConnectionEvent('read-receipt-error', e?.message || e);
   } finally {
     readReceiptFlushRunning = false;
-    if (pendingReadReceipts.size && myRole) scheduleReadReceiptFlush(READ_RECEIPT_RETRY_DELAY_MS);
+    const retryDelay = failed ? Math.min(12000, READ_RECEIPT_RETRY_DELAY_MS * Math.pow(2, Math.min(2, readReceiptFailureCount - 1))) : 0;
+    if (pendingReadReceipts.size && myRole) scheduleReadReceiptFlush(retryDelay);
   }
 }
 
