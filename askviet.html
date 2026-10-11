@@ -591,10 +591,11 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .msg.theirs .voice-host{background:#e02d7f!important}
 .voice-bubble-row{display:flex;align-items:center;gap:8px;min-height:44px}
 .voice-bubble button{flex:none;width:36px;height:36px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:inherit;display:grid;place-items:center;cursor:pointer}
-.voice-bubble button,.voice-bubble button:active,.voice-bubble button.pressed{transform:none;rotate:none;box-shadow:none;backdrop-filter:none;filter:none}
+.voice-bubble button,.voice-bubble button:active,.voice-bubble button.pressed,.voice-bubble button.flash{transform:none;rotate:none;box-shadow:none;backdrop-filter:none;filter:none;animation:none}
 .voice-bubble button:disabled{opacity:.4;cursor:default}
 .voice-bubble .voice-play{position:relative;width:36px;height:36px;border:0;background:transparent}
-.voice-bubble .voice-play::before{content:'';position:absolute;inset:4px;border:2px solid rgba(255,255,255,.92);border-radius:50%;pointer-events:none}
+.voice-bubble .voice-play::before{content:'';position:absolute;inset:4px;border:2.45px solid rgba(255,255,255,.92);border-radius:50%;pointer-events:none}
+.voice-bubble .voice-play svg{width:28px;height:28px;display:block;flex:none}
 .voice-bubble .voice-translation-toggle{border-radius:0;border:0;background:transparent}
 .voice-text-separator{flex:none;width:1px;height:28px;background:rgba(255,255,255,.35)}
 .voice-bubble-middle{flex:1;min-width:0}
@@ -4992,10 +4993,15 @@ const voiceMessagePlayback=new VoiceMessagePlayback({
   error:error=>{debugLog('voice_bubble_tts_error',{error:String(error?.message||error||'TTS failed')});alert(uiText('Ses oynatılamadı. Telefon sesini kontrol et.','Không phát được. Kiểm tra giọng đọc.'));}
 });
 function voiceBubbleClock(seconds) {const n=Math.max(0,Math.floor(seconds));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
+function voicePlaybackIcon(state) {
+  const shape=state==='loading'?'<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>'
+    :state==='playing'?'<path d="M8 6h3v12H8zM14 6h3v12h-3z"/>' :'<path d="M8 5l11 7-11 7z"/>';
+  return '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">'+shape+'</svg>';
+}
 function voiceTranslationIcon(expanded=false) {
   return expanded
     ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>'
-    : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-5 3V6a4 4 0 0 1 4-4h11a4 4 0 0 1 4 4z"/><path d="M7 7h10M7 11h7"/></svg>';
+    : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.45" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-5 3V6a4 4 0 0 1 4-4h11a4 4 0 0 1 4 4z"/><path d="M7 7h10M7 11h7"/></svg>';
 }
 function refreshVoicePlaybackUi() {
   document.querySelectorAll('.voice-bubble').forEach(bubble=>{
@@ -5003,7 +5009,8 @@ function refreshVoicePlaybackUi() {
     const playing=active&&voiceMessagePlayback.state==='playing';
     bubble.classList.toggle('playing',playing);
     const play=bubble.querySelector('.voice-play');
-    play.textContent=active&&voiceMessagePlayback.state==='loading'?'…':(playing?'Ⅱ':'▶');
+    const icon=active&&voiceMessagePlayback.state==='loading'?'loading':playing?'playing':'idle';
+    if(play.dataset.icon!==icon){play.innerHTML=voicePlaybackIcon(icon);play.dataset.icon=icon;}
     play.title=playing?uiText('Duraklat','Tạm dừng'):uiText('Oynat','Phát');play.setAttribute('aria-label',play.title);
     const time=bubble.querySelector('.voice-bubble-time');
     const fraction=active?(voiceMessagePlayback.audio||!voiceMessagePlayback.boundaries?voiceMessagePlayback.seconds/voiceMessagePlayback.duration:voiceMessagePlayback.charIndex/Math.max(1,voiceMessagePlayback.text.length)):0;
@@ -5048,7 +5055,7 @@ function renderVoiceMessageBubble(key,box,msg,orig,trans) {
   bubble.dataset.key=key;bubble.dataset.text=shown;bubble.dataset.ready=ready?'1':'0';
   bubble.dataset.estimate=String(Math.max(1,shown.length/12));
   const row=document.createElement('div');row.className='voice-bubble-row';
-  const play=document.createElement('button');play.type='button';play.className='voice-play';play.disabled=!ready;play.textContent='▶';
+  const play=document.createElement('button');play.type='button';play.className='voice-play';play.disabled=!ready;play.innerHTML=voicePlaybackIcon('idle');play.dataset.icon='idle';
   const middle=document.createElement('div');middle.className='voice-bubble-middle';
   const wave=document.createElement('div');wave.className='voice-wave';wave.setAttribute('aria-hidden','true');
   let seed=0;for(const letter of key)seed=(seed*31+letter.charCodeAt(0))|0;
