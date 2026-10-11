@@ -609,6 +609,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .voice-bubble input[type=range]::-moz-range-thumb{background:currentColor;width:8px;height:8px;border-radius:50%;border:0}
 .voice-bubble-text{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.4);font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
 .voice-bubble-text[hidden]{display:none}
+#micBtn{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 @keyframes voiceWave{to{transform:scaleY(.8)}}
 @media(prefers-reduced-motion:reduce){.voice-bubble.playing .voice-wave i{animation:none}}
 </style>
@@ -985,7 +986,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-10-11-message-voice-bubbles';
+const APP_VERSION = '2026-10-11-voice-manual-and-hold';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -10213,7 +10214,7 @@ function listenPresence() {
 }
 
 let rec=null,recChunks=[],recStream=null,recNode=null,recAnalyser=null,recData=null;
-let recPcmProcessor=null,recPcmGain=null,recPcmChunks=[],recPcmSampleRate=48000,recPcmLastAt=0;
+let recPcmProcessor=null,recPcmGain=null,recPcmChunks=[],recPcmSampleRate=48000,recPcmLastAt=0,recPcmSamples=0,recFileLimitReached=false;
 let recCurrentVoiceRunMs=0,recLongestVoiceRunMs=0,recStrongVoiceMs=0,recPeakLevel=0,recKind='mic',recListenText='';
 let recTimer=null,recHadSpeech=false,recSilentSince=0,recStarted=0,recButton=null,recAudioCtx=null,recVoiceMs=0,recConsecutiveVoiceMs=0;
 let lastLiveText='', lastLiveTarget='vi';
@@ -10229,6 +10230,7 @@ const MIC_NO_SPEECH_MS = 4500;
 const MIC_SILENCE_MS = 2000;
 const PTT_SILENCE_MS = 2000;
 const MIN_AUDIO_BLOB_SIZE = 700;
+const MESSAGE_VOICE_MAX_AUDIO_BYTES = 7 * 1024 * 1024;
 const PRESENCE_STALE_MS = 75000;
 function noteNoSpeechStop() {
   const now = Date.now();
@@ -10311,6 +10313,7 @@ function silenceCountdownText(start, now, silenceMs=REC_SILENCE_MS) {
   return String(left);
 }
 function showRecCountdown(btn, start, now, kind) {
+  if (kind === 'mic') return;
   const left = silenceCountdownText(start, now, kind === 'ptt' ? PTT_SILENCE_MS : REC_SILENCE_MS);
   if (!left) return;
   if (kind === 'ptt') {
@@ -10410,7 +10413,7 @@ function stopRec(){if(rec&&rec.state==='recording'){try{rec.stop()}catch{}}else{
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 function resetRecSpeechMetrics(kind='mic',listenText='') {
-  recPcmChunks=[]; recPcmLastAt=Date.now(); recCurrentVoiceRunMs=0; recLongestVoiceRunMs=0;
+  recPcmChunks=[];recPcmSamples=0;recFileLimitReached=false; recPcmLastAt=Date.now(); recCurrentVoiceRunMs=0; recLongestVoiceRunMs=0;
   recStrongVoiceMs=0; recPeakLevel=0; recVoiceMs=0; recConsecutiveVoiceMs=0; recHadSpeech=false;
   recSilentSince=0; recKind=kind; recListenText=listenText;
 }
@@ -10427,8 +10430,15 @@ function startRecPcmCapture(ctx) {
     if (!rec) return;
     const input=event?.inputBuffer?.getChannelData(0);
     if (!input?.length) return;
-    const pcm=new Float32Array(input);
+    let pcm=new Float32Array(input);
+    if(recKind==='mic'){
+      const maxSourceSamples=Math.floor((MESSAGE_VOICE_MAX_AUDIO_BYTES-44)/2)*recPcmSampleRate/16000;
+      const remaining=Math.max(0,Math.floor(maxSourceSamples-recPcmSamples));
+      if(pcm.length>remaining)pcm=pcm.slice(0,remaining);
+      recFileLimitReached=recPcmSamples+pcm.length>=Math.floor(maxSourceSamples);
+    }
     recPcmChunks.push(pcm);
+    recPcmSamples+=pcm.length;
     const now=Date.now();
     const elapsed=recPcmLastAt ? Math.max(1,Math.min(250,now-recPcmLastAt)) : 1;
     recPcmLastAt=now;
@@ -10450,14 +10460,17 @@ function startRecPcmCapture(ctx) {
     } else if (recHadSpeech) {
       recCurrentVoiceRunMs=0;
       if (!recSilentSince) recSilentSince=now;
-      showRecCountdown(recButton,recSilentSince,now,recKind);
-      const limit=recKind==='ptt'?PTT_SILENCE_MS:(recKind==='mic'?30000:MIC_SILENCE_MS);
-      if (now-recSilentSince>limit) stopRec();
+      if(recKind!=='mic'){
+        showRecCountdown(recButton,recSilentSince,now,recKind);
+        const limit=recKind==='ptt'?PTT_SILENCE_MS:MIC_SILENCE_MS;
+        if (now-recSilentSince>limit) stopRec();
+      }
     } else {
       recCurrentVoiceRunMs=0;
-      if (now-recStarted>MIC_NO_SPEECH_MS) stopRec();
+      if (recKind!=='mic' && now-recStarted>MIC_NO_SPEECH_MS) stopRec();
     }
-    if (now-recStarted>30000) stopRec();
+    if (recKind!=='mic' && now-recStarted>30000) stopRec();
+    if (recKind==='mic' && recFileLimitReached) stopRec();
   };
 }
 
@@ -10527,12 +10540,14 @@ async function startVoice() {
         const blob=makePseudoLiveWav(pcmChunks,pcmRate);
         if(!recHadSpeech||recVoiceMs<MIC_MIN_VOICE_MS||blob.size<1200||pcmChunks.length===0){btn.innerHTML=MIC_ICON;noteNoSpeechStop();return;}
         resetNoSpeechStops();
+        if(recFileLimitReached)showTransientNotice(uiText('Dosya sınırına ulaşıldı. Mesaj gönderiliyor.','Đã đạt giới hạn tệp. Đang gửi tin nhắn.'),3000);
         const text=await transcribeVoice(blob);
         if(text) sendMessage(text);
       }catch(e){console.error(uiText('Ses hatası:', 'Lỗi âm thanh:'),e);}
       btn.innerHTML=MIC_ICON;
     };
     rec.start(120);
+    return rec;
   }catch(e){
     btn.classList.remove('mic-recording');
      btn.innerHTML=MIC_ICON;
@@ -10543,6 +10558,35 @@ async function startVoice() {
     alert(micPermissionMessage() + (e.message ? '\n' + e.message : ''));
   }
 }
+
+function installVoiceMessageMicGestures(button) {
+  if(!button)return;
+  let gesture=null,pending=null,suppressClickUntil=0;
+  button.onclick=event=>{if(Date.now()<suppressClickUntil){event.preventDefault();return;}startVoice();};
+  button.addEventListener('pointerdown',event=>{
+    if(event.button!==0 || !event.isPrimary || gesture)return;
+    event.preventDefault();
+    const current={id:event.pointerId,at:Date.now(),wasRecording:!!rec||!!pending,released:false,finish:false};
+    gesture=current;suppressClickUntil=Date.now()+1000;
+    try{button.setPointerCapture(event.pointerId);}catch{}
+    const operation=current.wasRecording?(pending||Promise.resolve(rec)):startVoice();
+    if(!current.wasRecording){pending=operation;operation.finally(()=>{if(pending===operation)pending=null;});}
+    operation.then(recording=>{if(current.released&&current.finish&&recording&&rec===recording)stopRec();});
+  });
+  const release=event=>{
+    if(!gesture||event.pointerId!==gesture.id)return;
+    event.preventDefault();
+    const current=gesture;gesture=null;current.released=true;
+    current.finish=current.wasRecording||Date.now()-current.at>=350||event.type==='pointercancel';
+    suppressClickUntil=Date.now()+700;
+    try{button.releasePointerCapture(event.pointerId);}catch{}
+    if(current.finish&&rec)stopRec();
+  };
+  button.addEventListener('pointerup',release);
+  button.addEventListener('pointercancel',release);
+  button.addEventListener('contextmenu',event=>event.preventDefault());
+}
+installVoiceMessageMicGestures(document.getElementById('micBtn'));
 
 async function transcribeVoice(blob, sourceOverride) {
   const result=await transcribeVoiceDetailed(blob,sourceOverride);
