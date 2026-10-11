@@ -1,4 +1,4 @@
-const ASKVIET_SW_VERSION = '2026-10-03-read-receipt-queue';
+const ASKVIET_SW_VERSION = '2026-10-11-message-voice-bubbles';
 const ASKVIET_BADGE_DB = 'askviet_badge_state';
 const ASKVIET_BADGE_STORE = 'kv';
 const ASKVIET_BADGE_KEY = 'unreadCount';

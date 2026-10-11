@@ -585,6 +585,31 @@ img,svg,video,canvas{max-width:100%;height:auto}
 @media (min-width: 900px){
   #chat{width:100%;max-width:900px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--border);border-right:1px solid var(--border);box-shadow:0 0 0 1px rgba(255,255,255,.02)}
 }
+.voice-bubble{width:248px;max-width:100%;box-sizing:border-box;font-style:normal}
+.msg .voice-host{transform:none!important;rotate:none!important;box-shadow:none!important;backdrop-filter:none!important;border:0;font-style:normal;border-radius:16px;padding:10px 12px;color:#fff}
+.msg.mine .voice-host{background:#783cf2!important}
+.msg.theirs .voice-host{background:#e02d7f!important}
+.voice-bubble-row{display:flex;align-items:center;gap:8px;min-height:44px}
+.voice-bubble button{flex:none;width:36px;height:36px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:inherit;display:grid;place-items:center;cursor:pointer}
+.voice-bubble button,.voice-bubble button:active,.voice-bubble button.pressed{transform:none;rotate:none;box-shadow:none;backdrop-filter:none;filter:none}
+.voice-bubble button:disabled{opacity:.4;cursor:default}
+.voice-bubble .voice-play{position:relative;width:36px;height:36px;border:0;background:transparent}
+.voice-bubble .voice-play::before{content:'';position:absolute;inset:4px;border:2px solid rgba(255,255,255,.92);border-radius:50%;pointer-events:none}
+.voice-bubble .voice-translation-toggle{border-radius:0;border:0;background:transparent}
+.voice-text-separator{flex:none;width:1px;height:28px;background:rgba(255,255,255,.35)}
+.voice-bubble-middle{flex:1;min-width:0}
+.voice-wave{height:24px;display:flex;gap:2px;align-items:center;overflow:hidden}
+.voice-wave i{display:block;flex:1;min-width:2px;max-width:4px;background:currentColor;border-radius:2px;opacity:.45}
+.voice-wave i.past{opacity:1}
+.voice-bubble.playing .voice-wave i{animation:voiceWave .7s ease-in-out infinite alternate}
+.voice-bubble-time{display:block;font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.voice-bubble input[type=range]{display:block;width:100%;height:3px;margin:4px 0;appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.28);border:0;border-radius:2px;cursor:pointer}
+.voice-bubble input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;background:currentColor;width:8px;height:8px;border-radius:50%;border:0}
+.voice-bubble input[type=range]::-moz-range-thumb{background:currentColor;width:8px;height:8px;border-radius:50%;border:0}
+.voice-bubble-text{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.4);font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
+.voice-bubble-text[hidden]{display:none}
+@keyframes voiceWave{to{transform:scaleY(.8)}}
+@media(prefers-reduced-motion:reduce){.voice-bubble.playing .voice-wave i{animation:none}}
 </style>
 <link rel="manifest" id="pwaManifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./witch.png">
@@ -959,7 +984,7 @@ const PUSH_SUBS_PATH = '/rooms/' + ROOM + '/pushSubscriptions';
 const TRANSLATION_REQUESTS_PATH = '/rooms/' + ROOM + '/translationRequests';
 const MEDIA_UPLOAD_URL = 'https://wonb.de/upload.php';
 const MEDIA_UPLOAD_TOKEN = localStorage.getItem('askviet_media_upload_token') || 'ask2026';
-const APP_VERSION = '2026-10-03-read-receipt-queue';
+const APP_VERSION = '2026-10-11-message-voice-bubbles';
 const WEB_PUSH_PUBLIC_KEY = 'BMopP9i_3Af0yCGr2jvp_N7nsNMQD8hYNEuV5TupZDeFOek6R4U_vzikhpm1_GjQv2U92VHQH6Uj8X6geQlB6SA';
 const MODEL_LOCAL_TS_KEY = 'askviet_model_updated_at';
 const BROWSER_MODE_OPTIONS = {
@@ -4164,6 +4189,7 @@ function ensureMessageReactionButton(key) {
 function setMessageLanguageExpanded(key, expanded, automatic=false) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
+  if (box.dataset.type === 'voice') return;
   if (automatic && box.dataset.languageUser === '1') return;
   expanded = !!expanded;
   if (!automatic) box.dataset.languageUser = expanded ? '1' : '';
@@ -4842,6 +4868,210 @@ async function copyOriginalMessage(key, btn) {
   flashCopyButton(btn, '⧉');
 }
 
+// Voice bubbles own playback separately from ordinary message/PTT/Live TTS.
+class VoiceMessagePlayback {
+  constructor(deps) {
+    this.deps=deps; this.key=''; this.text=''; this.state='idle'; this.sequence=0;
+    this.offset=0; this.charIndex=0; this.seconds=0; this.duration=0; this.timer=null;
+    this.audio=null; this.url=null; this.boundaries=false;
+  }
+  notify() { this.deps.changed(this); }
+  clearTimers() { clearInterval(this.timer); clearTimeout(this.watchdog); this.timer=null; this.watchdog=null; }
+  stop() {
+    const hadSpeech=!!this.utterance;
+    this.sequence++; this.clearTimers(); this.utterance=null;
+    if(hadSpeech) this.deps.synth?.cancel();
+    if(this.audio){this.audio.pause();this.audio.src='';this.audio=null;}
+    if(this.url){URL.revokeObjectURL(this.url);this.url=null;}
+    this.restartOnResume=false;this.state='idle';this.key='';this.notify();
+  }
+  async start(key,text,target) {
+    this.stop(); this.key=key;this.text=text;this.target=target;this.charIndex=0;this.offset=0;this.seconds=0;
+    this.boundaries=false;this.state='loading';this.settings=this.deps.settings();
+    this.duration=Math.max(1,text.length/(12*(parseFloat(this.settings.speed)||1)));
+    this.notify(); const seq=this.sequence;
+    try {
+      if(this.settings.model && this.settings.model!=='phone-tts' && this.settings.model!=='samsung-phone-tts') {
+        const blob=await this.deps.prepareAudio(text,target,this.settings);
+        if(seq!==this.sequence)return;
+        this.url=URL.createObjectURL(blob);this.audio=this.deps.audio();this.audio.src=this.url;
+        this.audio.onloadedmetadata=()=>{if(seq===this.sequence){this.duration=this.audio.duration;this.notify();}};
+        this.audio.onended=()=>{if(seq===this.sequence)this.finish();};
+        this.audio.onerror=()=>{if(seq===this.sequence)this.fail();};
+        this.audio.ontimeupdate=()=>{if(seq===this.sequence){this.seconds=this.audio.currentTime;this.notify();}};
+        await this.audio.play();if(seq!==this.sequence)return;this.state='playing';this.notify();
+      } else this.speakFrom(0);
+    } catch(error) {if(seq===this.sequence)this.fail(error);}
+  }
+  finish() {
+    this.clearTimers();this.state='ended';this.seconds=this.duration;this.charIndex=this.text.length;
+    this.utterance=null;this.notify();
+  }
+  fail(error) {
+    this.stop();this.deps.error(error);
+  }
+  armWatchdog() {
+    clearTimeout(this.watchdog);
+    this.watchdog=setTimeout(()=>this.fail(new Error('TTS timeout')),Math.max(20000,(this.text.length-this.charIndex)*350+10000));
+  }
+  runClock() {
+    clearInterval(this.timer);let previous=this.deps.now();
+    this.timer=setInterval(()=>{
+      const now=this.deps.now();
+      if(this.state==='playing')this.seconds=Math.min(this.duration*.99,this.seconds+(now-previous)/1000);
+      previous=now;this.notify();
+    },100);
+  }
+  speakFrom(offset) {
+    const synth=this.deps.synth;
+    if(!synth || !this.deps.Utterance){this.fail(new Error('TTS unavailable'));return;}
+    this.sequence++;const seq=this.sequence;this.clearTimers();
+    if(this.utterance)synth.cancel();
+    this.offset=offset;this.charIndex=offset;this.state='loading';
+    const u=new this.deps.Utterance(this.text.slice(offset));this.utterance=u;
+    u.lang=this.target==='vi'?'vi-VN':'tr-TR';
+    u.rate=this.target==='vi'?.95:(parseFloat(this.settings.speed)||1);
+    const voice=this.deps.voice(this.target,this.target==='vi'?this.settings.voiceVi:this.settings.voiceTr);
+    if(voice)u.voice=voice;
+    u.onstart=()=>{if(seq!==this.sequence)return;clearTimeout(this.watchdog);this.state='playing';this.armWatchdog();this.runClock();this.notify();};
+    u.onboundary=e=>{
+      if(seq!==this.sequence)return;
+      this.boundaries=true;this.charIndex=Math.min(this.text.length,offset+Math.max(0,e.charIndex||0));
+      if(Number.isFinite(e.elapsedTime)&&e.elapsedTime>=0)this.seconds=this.duration*offset/this.text.length+e.elapsedTime;
+      this.notify();
+    };
+    u.onend=()=>{if(seq===this.sequence)this.finish();};
+    u.onerror=e=>{if(seq===this.sequence && !/interrupted|canceled/.test(e.error||''))this.fail(e);};
+    this.watchdog=setTimeout(()=>{if(seq===this.sequence && this.state==='loading')this.fail(new Error('TTS did not start'));},8000);
+    try {if(synth.paused)synth.resume();synth.speak(u);}catch(error){this.fail(error);}
+    this.notify();
+  }
+  toggle() {
+    if(this.state==='playing') {
+      if(this.audio)this.audio.pause();else this.deps.synth.pause();
+      this.clearTimers();this.state='paused';this.notify();
+    } else if(this.state==='paused') {
+      if(this.restartOnResume){this.restartOnResume=false;this.speakFrom(this.offset);return;}
+      if(this.audio) {
+        const seq=this.sequence;
+        this.audio.play().then(()=>{if(seq===this.sequence){this.state='playing';this.notify();}}).catch(e=>{if(seq===this.sequence)this.fail(e);});
+      } else {
+        this.deps.synth.resume();this.state='playing';this.armWatchdog();this.runClock();this.notify();
+      }
+    }
+  }
+  seek(fraction) {
+    fraction=Math.max(0,Math.min(1,Number(fraction)||0));
+    if(this.audio){this.audio.currentTime=fraction*this.duration;this.seconds=this.audio.currentTime;this.notify();return;}
+    // No pretend second-accurate seeking. Restart at a whole-word text boundary.
+    if(!this.boundaries || !['playing','paused','ended'].includes(this.state))return;
+    let offset=Math.floor(fraction*this.text.length);
+    while(offset>0 && offset<this.text.length && !/\s/.test(this.text[offset-1]))offset--;
+    while(offset<this.text.length && /\s/.test(this.text[offset]))offset++;
+    const paused=this.state==='paused';this.seconds=this.duration*offset/this.text.length;
+    if(offset>=this.text.length){this.stop();return;}
+    if(paused){this.sequence++;this.clearTimers();this.deps.synth.cancel();this.utterance=null;this.offset=offset;this.charIndex=offset;this.restartOnResume=true;this.notify();return;}
+    this.speakFrom(offset);
+  }
+}
+
+const voiceMessagePlayback=new VoiceMessagePlayback({
+  synth:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,
+  now:()=>performance.now(),settings:()=>getTtsSettings(),voice:(target,name)=>pickPhoneTtsVoice(target,name),
+  audio:()=>new Audio(),
+  prepareAudio:async(text,target,settings)=>{
+    const voice=target==='vi'?settings.voiceVi:settings.voiceTr;
+    const key=cacheKey(text,target,settings.model,voice,settings.speed);
+    if(ttsCache.has(key))return ttsCache.get(key);
+    const data=await askVietServer('speak',{text,targetRole:target,settings});
+    const blob=new Blob([base64ToBytes(data.audioBase64||'')],{type:data.mime||'audio/mpeg'});
+    ttsCache.set(key,blob);if(ttsCache.size>40)ttsCache.delete(ttsCache.keys().next().value);
+    return blob;
+  },
+  changed:()=>refreshVoicePlaybackUi(),
+  error:error=>{debugLog('voice_bubble_tts_error',{error:String(error?.message||error||'TTS failed')});alert(uiText('Ses oynatılamadı. Telefon sesini kontrol et.','Không phát được. Kiểm tra giọng đọc.'));}
+});
+function voiceBubbleClock(seconds) {const n=Math.max(0,Math.floor(seconds));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
+function voiceTranslationIcon(expanded=false) {
+  return expanded
+    ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-5 3V6a4 4 0 0 1 4-4h11a4 4 0 0 1 4 4z"/><path d="M7 7h10M7 11h7"/></svg>';
+}
+function refreshVoicePlaybackUi() {
+  document.querySelectorAll('.voice-bubble').forEach(bubble=>{
+    const active=bubble.dataset.key===voiceMessagePlayback.key;
+    const playing=active&&voiceMessagePlayback.state==='playing';
+    bubble.classList.toggle('playing',playing);
+    const play=bubble.querySelector('.voice-play');
+    play.textContent=active&&voiceMessagePlayback.state==='loading'?'…':(playing?'Ⅱ':'▶');
+    play.title=playing?uiText('Duraklat','Tạm dừng'):uiText('Oynat','Phát');play.setAttribute('aria-label',play.title);
+    const time=bubble.querySelector('.voice-bubble-time');
+    const fraction=active?(voiceMessagePlayback.audio||!voiceMessagePlayback.boundaries?voiceMessagePlayback.seconds/voiceMessagePlayback.duration:voiceMessagePlayback.charIndex/Math.max(1,voiceMessagePlayback.text.length)):0;
+    if(bubble.dataset.ready==='1')time.textContent=active?voiceBubbleClock(voiceMessagePlayback.seconds)+' / '+(voiceMessagePlayback.audio?'':'~')+voiceBubbleClock(voiceMessagePlayback.duration):'~'+voiceBubbleClock(Number(bubble.dataset.estimate));
+    const seek=bubble.querySelector('input');
+    seek.disabled=!active || !(voiceMessagePlayback.audio || voiceMessagePlayback.boundaries);
+    if(document.activeElement!==seek)seek.value=String(Math.round(fraction*1000));
+    bubble.querySelectorAll('.voice-wave i').forEach((bar,i)=>bar.classList.toggle('past',i/32<fraction));
+  });
+}
+function renderVoiceMessageBubble(key,box,msg,orig,trans) {
+  const mine=msg.role===myRole;
+  const text=finalTranslationText(msg.translation||'');
+  const ready=!!text;
+  const shown=text||displayTranslationText(msg.translation)||uiText('Çeviriliyor…','Đang dịch…');
+  const host=mine?orig:trans;
+  host.classList.add('voice-host');
+  const languageToggle=box.querySelector('.msg-language-toggle');
+  let originalPanel=box.querySelector('.voice-original-panel');
+  if(!originalPanel){
+    originalPanel=document.createElement('div');originalPanel.className='msg-translation voice-original-panel';originalPanel.hidden=true;
+    originalPanel.style.display='none';
+    const languageRow=box.querySelector('.msg-language-row');
+    if(languageRow)languageRow.insertAdjacentElement('afterend',originalPanel);else box.appendChild(originalPanel);
+  }
+  appendLinkedText(originalPanel,msg.text||'');
+  if(languageToggle){
+    languageToggle.style.display='';
+    const flag=msg.role==='tr'?'🇹🇷':'🇻🇳';
+    const label=()=>flag+' '+(originalPanel.hidden?uiText('Orijinali göster','Xem bản gốc'):uiText('Orijinali gizle','Ẩn bản gốc'));
+    languageToggle.textContent=label();
+    languageToggle.onclick=e=>{e.stopPropagation();originalPanel.hidden=!originalPanel.hidden;originalPanel.style.display=originalPanel.hidden?'none':'';languageToggle.textContent=label();};
+  }
+  const previous=host.querySelector('.voice-bubble');
+  const expanded=previous?.querySelector('.voice-bubble-text')?.hidden===false;
+  if(previous?.dataset.text===shown && previous.dataset.ready===String(ready?'1':'0')){refreshVoicePlaybackUi();return;}
+  const reaction=host.querySelector('.msg-react-btn');
+  host.textContent='';host.classList.remove('language-collapsed');host.style.display='';
+  if(!mine){orig.style.display='none';orig.classList.add('language-collapsed');}
+  else{trans.style.display='none';}
+  const bubble=document.createElement('div');bubble.className='voice-bubble';
+  bubble.dataset.key=key;bubble.dataset.text=shown;bubble.dataset.ready=ready?'1':'0';
+  bubble.dataset.estimate=String(Math.max(1,shown.length/12));
+  const row=document.createElement('div');row.className='voice-bubble-row';
+  const play=document.createElement('button');play.type='button';play.className='voice-play';play.disabled=!ready;play.textContent='▶';
+  const middle=document.createElement('div');middle.className='voice-bubble-middle';
+  const wave=document.createElement('div');wave.className='voice-wave';wave.setAttribute('aria-hidden','true');
+  let seed=0;for(const letter of key)seed=(seed*31+letter.charCodeAt(0))|0;
+  for(let i=0;i<32;i++){const bar=document.createElement('i');bar.style.height=(8+14*Math.abs(Math.sin(i*1.71+seed%17)))+'px';bar.style.animationDelay=(i%7*.07)+'s';wave.appendChild(bar);}
+  const time=document.createElement('span');time.className='voice-bubble-time';time.textContent=ready?'~'+voiceBubbleClock(shown.length/12):shown;
+  const seek=document.createElement('input');seek.type='range';seek.min='0';seek.max='1000';seek.value='0';seek.disabled=true;
+  seek.setAttribute('aria-label',uiText('Okuma konumu','Vị trí đọc'));
+  middle.append(wave,seek,time);
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='voice-translation-toggle';toggle.innerHTML=voiceTranslationIcon(expanded);toggle.title=uiText('Çeviriyi göster/gizle','Xem/ẩn bản dịch');toggle.setAttribute('aria-label',toggle.title);
+  const transcript=document.createElement('div');transcript.className='voice-bubble-text';transcript.textContent=shown;transcript.hidden=!expanded;
+  toggle.onclick=e=>{e.stopPropagation();transcript.hidden=!transcript.hidden;toggle.innerHTML=voiceTranslationIcon(!transcript.hidden);};
+  play.onclick=e=>{
+    e.stopPropagation();
+    if(rec)return;
+    if(voiceMessagePlayback.key===key && ['playing','paused','loading'].includes(voiceMessagePlayback.state)){voiceMessagePlayback.toggle();return;}
+    interruptAudioForRecording();stopAudio();voiceMessagePlayback.start(key,text,msg.role==='tr'?'vi':'tr');
+  };
+  seek.onchange=e=>{e.stopPropagation();voiceMessagePlayback.seek(Number(seek.value)/1000);};
+  const separator=document.createElement('span');separator.className='voice-text-separator';separator.setAttribute('aria-hidden','true');
+  row.append(play,middle,separator,toggle);bubble.append(row,transcript);host.appendChild(bubble);if(reaction)host.appendChild(reaction);
+  refreshVoicePlaybackUi();
+}
+
 function refreshMessageText(key) {
   const box = document.getElementById('msg-' + key);
   if (!box) return;
@@ -4859,6 +5089,12 @@ function refreshMessageText(key) {
   const orig = document.getElementById('orig-' + key);
   const trans = document.getElementById('trans-' + key);
   syncMessageReplyContext(box, msg.replyTo);
+  if (msg.type === 'voice' && !msg.deleted) {
+    renderVoiceMessageBubble(key, box, msg, orig, trans);
+    ensureMessageReactionButton(key);
+    updateReactions(key);
+    return;
+  }
   if (orig) setMessageContent(orig, msg);
   if (trans) {
     if (msg.deleted) {
@@ -6631,20 +6867,21 @@ function retryOutgoingMessage(key) {
   flushOutgoingQueue();
 }
 
-function sendMessage() {
+function sendMessage(voiceText=null) {
   markChatUserActivity();
   const input = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
-  const text = input.value.trim();
+  const text = typeof voiceText === 'string' ? voiceText.trim() : input.value.trim();
   if (!text) return;
   if (!canQueueOutgoingMessage()) return;
-  input.value = '';
+  if (typeof voiceText !== 'string') input.value = '';
   resizeMessageInput(input, true);
   updateComposerActionState();
   if (sendBtn) sendBtn.disabled = false;
   setMyTyping(false);
   const bypassTranslation = isTranslationBypassText(text);
   const msg = { role: myRole, text, ts: Date.now(), translation: bypassTranslation ? text : null, translationBypass: bypassTranslation || null };
+  if (typeof voiceText === 'string') msg.type = 'voice';
   const replyTo = replyPayloadForSend();
   if (replyTo) msg.replyTo = replyTo;
   const key = queueOutgoingMessage(msg);
@@ -8797,6 +9034,7 @@ function setActiveSpeakButton(btn) {
   if (btn) setSpeakBtn(btn, true);
 }
 function stopAudio(){
+  voiceMessagePlayback.stop();
   ttsToken++;
   pendingBlockedAudio=null;
   pendingPhoneTts=null;
@@ -10206,7 +10444,7 @@ function startRecPcmCapture(ctx) {
       recCurrentVoiceRunMs=0;
       if (!recSilentSince) recSilentSince=now;
       showRecCountdown(recButton,recSilentSince,now,recKind);
-      const limit=recKind==='ptt'?PTT_SILENCE_MS:MIC_SILENCE_MS;
+      const limit=recKind==='ptt'?PTT_SILENCE_MS:(recKind==='mic'?30000:MIC_SILENCE_MS);
       if (now-recSilentSince>limit) stopRec();
     } else {
       recCurrentVoiceRunMs=0;
@@ -10283,7 +10521,7 @@ async function startVoice() {
         if(!recHadSpeech||recVoiceMs<MIC_MIN_VOICE_MS||blob.size<1200||pcmChunks.length===0){btn.innerHTML=MIC_ICON;noteNoSpeechStop();return;}
         resetNoSpeechStops();
         const text=await transcribeVoice(blob);
-        if(text){document.getElementById('msgInput').value=text;sendMessage();}
+        if(text) sendMessage(text);
       }catch(e){console.error(uiText('Ses hatası:', 'Lỗi âm thanh:'),e);}
       btn.innerHTML=MIC_ICON;
     };
